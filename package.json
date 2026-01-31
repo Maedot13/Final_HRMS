@@ -1,0 +1,19 @@
+{
+  "name": "hrms",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bahir Dar University HRMS - Human Resource Management System",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace=packages/frontend",
+    "dev:backend": "npm run dev --workspace=packages/backend",
+    "build:frontend": "npm run build --workspace=packages/frontend",
+    "build:backend": "npm run build --workspace=packages/backend",
+    "build": "npm run build:backend && npm run build:frontend"
+  },
+  "keywords": ["hrms", "hr", "management", "university"],
+  "author": "Bahir Dar University Team",
+  "license": "MIT"
+}
