@@ -20,6 +20,27 @@ export interface User {
     updatedAt: string;
 }
 
+// Auth DTOs
+export interface LoginRequest {
+    email: string;
+    password: string;
+}
+
+export interface RegisterRequest {
+    email: string;
+    password: string;
+    name: string;
+    employeeId: string;
+    department: string;
+    role?: UserRole; // Optional, defaults to EMPLOYEE usually, but handy for seeding
+}
+
+export interface AuthResponse {
+    token: string;
+    refreshToken?: string;
+    user: User;
+}
+
 // Employee Interface
 export interface Employee {
     id: number;

@@ -29,7 +29,12 @@ app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', message: 'Backend is running' });
 });
 
-// Routes (Placeholder)
+// Routes
+import authRoutes from './routes/auth.routes';
+
+app.use('/api/v1', authRoutes);
+
+// Placeholder Route
 app.get('/', (req, res) => {
     res.send('HRMS API is running. Access endpoints at /api/v1');
 });
