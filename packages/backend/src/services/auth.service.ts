@@ -2,7 +2,7 @@
 import { PrismaClient, User, Employee } from '@prisma/client';
 import { LoginRequest, RegisterRequest, AuthResponse, UserRole } from '@hrms/types';
 import { hashPassword, comparePassword } from '../utils/password';
-import { generateToken } from '../utils/token';
+import { generateToken, generateRefreshToken, verifyRefreshToken } from '../utils/token';
 
 const prisma = new PrismaClient();
 
@@ -123,3 +123,50 @@ export const getMe = async (userId: number): Promise<any> => {
         role: user.role as UserRole
     };
 }
+
+export const refreshToken = async (token: string): Promise<AuthResponse> => {
+    const payload = verifyRefreshToken(token);
+
+    // In a production system, we would check a token version or blacklist here using Redis/DB
+    // For now, we verify the user still exists and is active
+
+    const user = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        include: { employee: true }
+    });
+
+    if (!user || !user.isActive) {
+        throw new Error('User not found or inactive');
+    }
+
+    const newAccessToken = generateToken({
+        userId: user.id,
+        role: user.role as UserRole,
+        employeeId: user.employeeId
+    });
+
+    const newRefreshToken = generateRefreshToken({
+        userId: user.id,
+        role: user.role as UserRole,
+        employeeId: user.employeeId
+    });
+
+    const { passwordHash, ...userWithoutPassword } = user;
+    const userResponse: any = {
+        ...userWithoutPassword,
+        role: user.role as UserRole
+    };
+
+    return {
+        token: newAccessToken,
+        refreshToken: newRefreshToken,
+        user: userResponse
+    };
+};
+
+export const logout = async (token: string): Promise<{ message: string }> => {
+    // In a stateful system, we would invalidate the token (blacklist)
+    // For stateless JWT, the client discards the token. 
+    // We can implement a Redis blacklist later if strictly required.
+    return { message: 'Logged out successfully' };
+};
