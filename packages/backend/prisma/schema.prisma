@@ -7,64 +7,36 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  ADMIN
-  HR_OFFICER
-  DEPARTMENT_HEAD
-  FINANCE_OFFICER
-  RECRUITMENT_COMMITTEE
-  EMPLOYEE
-}
-
 model User {
   id            Int            @id @default(autoincrement())
-  email         String         @unique
   passwordHash  String
   role          UserRole
-  employeeId    String?        @unique
+  employeeId    String         @unique
   isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
-  
   employee      Employee?
-  notifications Notification[]
   jobPostings   JobPosting[]   @relation("JobCreator")
+  notifications Notification[]
 }
 
 model Employee {
-  id                Int       @id @default(autoincrement())
-  userId            Int       @unique
-  employeeId        String    @unique
-  name              String
-  department        String
-  position          String
-  hireDate          DateTime
-  serviceYears      Int       @default(0)
-  contactInfo       Json      // { phone, address, emergencyContact }
-  
-  user              User      @relation(fields: [userId], references: [id])
-  
-  leaveRequests     LeaveRequest[]
-  leaveBalances     LeaveBalance[]
+  id                 Int                 @id @default(autoincrement())
+  userId             Int                 @unique
+  employeeId         String              @unique
+  name               String
+  department         String
+  position           String
+  hireDate           DateTime
+  serviceYears       Int                 @default(0)
+  contactInfo        Json
+  clearanceRequests  ClearanceRequest[]
+  user               User                @relation(fields: [userId], references: [id])
+  jobApplications    JobApplication[]
+  leaveBalances      LeaveBalance[]
+  leaveRequests      LeaveRequest[]
+  payrollTransfers   PayrollTransfer[]
   sabbaticalRequests SabbaticalRequest[]
-  clearanceRequests ClearanceRequest[]
-  payrollTransfers  PayrollTransfer[]
-  jobApplications   JobApplication[]
-}
-
-enum LeaveType {
-  ANNUAL
-  SICK
-  MATERNITY
-  PATERNITY
-  UNPAID
-}
-
-enum LeaveStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  CANCELLED
 }
 
 model LeaveRequest {
@@ -81,21 +53,19 @@ model LeaveRequest {
   approverComment String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
-  
   employee        Employee    @relation(fields: [employeeId], references: [id])
 }
 
 model LeaveBalance {
-  id              Int       @id @default(autoincrement())
-  employeeId      Int
-  year            Int
-  annualBalance   Int       @default(0)
-  sickBalance     Int       @default(0)
+  id               Int      @id @default(autoincrement())
+  employeeId       Int
+  year             Int
+  annualBalance    Int      @default(0)
+  sickBalance      Int      @default(0)
   maternityBalance Int      @default(0)
   paternityBalance Int      @default(0)
-  
-  employee        Employee  @relation(fields: [employeeId], references: [id])
-  
+  employee         Employee @relation(fields: [employeeId], references: [id])
+
   @@unique([employeeId, year])
 }
 
@@ -113,8 +83,115 @@ model SabbaticalRequest {
   approverComment String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
-  
   employee        Employee    @relation(fields: [employeeId], references: [id])
+}
+
+model ClearanceRequest {
+  id              Int                   @id @default(autoincrement())
+  employeeId      Int
+  reason          String
+  lastWorkingDay  DateTime
+  status          ClearanceStatus       @default(PENDING)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  departments     ClearanceDepartment[]
+  employee        Employee              @relation(fields: [employeeId], references: [id])
+  payrollTransfer PayrollTransfer?
+}
+
+model ClearanceDepartment {
+  id          Int              @id @default(autoincrement())
+  clearanceId Int
+  department  DepartmentType
+  status      ClearanceStatus  @default(PENDING)
+  approverId  Int?
+  approvedAt  DateTime?
+  comment     String?
+  clearance   ClearanceRequest @relation(fields: [clearanceId], references: [id])
+
+  @@unique([clearanceId, department])
+}
+
+model PayrollTransfer {
+  id            Int              @id @default(autoincrement())
+  employeeId    Int
+  clearanceId   Int              @unique
+  reason        String
+  effectiveDate DateTime
+  status        String
+  createdBy     Int
+  createdAt     DateTime         @default(now())
+  clearance     ClearanceRequest @relation(fields: [clearanceId], references: [id])
+  employee      Employee         @relation(fields: [employeeId], references: [id])
+}
+
+model JobPosting {
+  id           Int              @id @default(autoincrement())
+  title        String
+  description  String
+  requirements String
+  department   String
+  position     String
+  deadline     DateTime
+  status       JobStatus        @default(OPEN)
+  createdBy    Int
+  createdAt    DateTime         @default(now())
+  applications JobApplication[]
+  creator      User             @relation("JobCreator", fields: [createdBy], references: [id])
+}
+
+model JobApplication {
+  id            Int               @id @default(autoincrement())
+  jobPostingId  Int
+  employeeId    Int
+  coverLetter   String
+  cvUrl         String
+  status        ApplicationStatus @default(SUBMITTED)
+  reviewedBy    Int?
+  reviewComment String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  employee      Employee          @relation(fields: [employeeId], references: [id])
+  jobPosting    JobPosting        @relation(fields: [jobPostingId], references: [id])
+
+  @@unique([jobPostingId, employeeId])
+}
+
+model Notification {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  type        String
+  title       String
+  message     String
+  relatedId   Int?
+  relatedType String?
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+enum UserRole {
+  ADMIN
+  HR_OFFICER
+  DEPARTMENT_HEAD
+  FINANCE_OFFICER
+  RECRUITMENT_COMMITTEE
+  EMPLOYEE
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  MATERNITY
+  PATERNITY
+  UNPAID
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
 }
 
 enum ClearanceStatus {
@@ -131,67 +208,9 @@ enum DepartmentType {
   DEPARTMENT_HEAD
 }
 
-model ClearanceRequest {
-  id              Int       @id @default(autoincrement())
-  employeeId      Int
-  reason          String
-  lastWorkingDay  DateTime
-  status          ClearanceStatus @default(PENDING)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  employee        Employee  @relation(fields: [employeeId], references: [id])
-  departments     ClearanceDepartment[]
-  payrollTransfer PayrollTransfer?
-}
-
-model ClearanceDepartment {
-  id              Int             @id @default(autoincrement())
-  clearanceId     Int
-  department      DepartmentType
-  status          ClearanceStatus @default(PENDING)
-  approverId      Int?
-  approvedAt      DateTime?
-  comment         String?
-  
-  clearance       ClearanceRequest @relation(fields: [clearanceId], references: [id])
-  
-  @@unique([clearanceId, department])
-}
-
-model PayrollTransfer {
-  id              Int       @id @default(autoincrement())
-  employeeId      Int
-  clearanceId     Int       @unique
-  reason          String
-  effectiveDate   DateTime
-  status          String    // e.g., SENT_TO_FINANCE
-  createdBy       Int
-  createdAt       DateTime  @default(now())
-  
-  employee        Employee  @relation(fields: [employeeId], references: [id])
-  clearance       ClearanceRequest @relation(fields: [clearanceId], references: [id])
-}
-
 enum JobStatus {
   OPEN
   CLOSED
-}
-
-model JobPosting {
-  id            Int           @id @default(autoincrement())
-  title         String
-  description   String
-  requirements  String
-  department    String
-  position      String
-  deadline      DateTime
-  status        JobStatus     @default(OPEN)
-  createdBy     Int
-  createdAt     DateTime      @default(now())
-  
-  creator       User          @relation("JobCreator", fields: [createdBy], references: [id])
-  applications  JobApplication[]
 }
 
 enum ApplicationStatus {
@@ -199,36 +218,4 @@ enum ApplicationStatus {
   UNDER_REVIEW
   SHORTLISTED
   REJECTED
-}
-
-model JobApplication {
-  id            Int               @id @default(autoincrement())
-  jobPostingId  Int
-  employeeId    Int
-  coverLetter   String
-  cvUrl         String
-  status        ApplicationStatus @default(SUBMITTED)
-  reviewedBy    Int?
-  reviewComment String?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  
-  jobPosting    JobPosting        @relation(fields: [jobPostingId], references: [id])
-  employee      Employee          @relation(fields: [employeeId], references: [id])
-  
-  @@unique([jobPostingId, employeeId])
-}
-
-model Notification {
-  id          Int      @id @default(autoincrement())
-  userId      Int
-  type        String
-  title       String
-  message     String
-  relatedId   Int?
-  relatedType String?
-  isRead      Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  
-  user        User     @relation(fields: [userId], references: [id])
 }

@@ -11,7 +11,6 @@ export enum UserRole {
 // User Interface
 export interface User {
     id: number;
-    email: string;
     name: string;
     role: UserRole;
     employeeId?: string;
@@ -22,12 +21,11 @@ export interface User {
 
 // Auth DTOs
 export interface LoginRequest {
-    email: string;
+    employeeId: string;
     password: string;
 }
 
 export interface RegisterRequest {
-    email: string;
     password: string;
     name: string;
     employeeId: string;

@@ -2,12 +2,11 @@ import { z } from 'zod';
 import { UserRole } from '@hrms/types';
 
 export const loginSchema = z.object({
-    email: z.string().email('Invalid email format'),
+    employeeId: z.string().min(1, 'Employee ID is required'),
     password: z.string().min(1, 'Password is required')
 });
 
 export const registerSchema = z.object({
-    email: z.string().email('Invalid email format'),
     password: z.string().min(8, 'Password must be at least 8 characters'),
     name: z.string().min(2, 'Name must be at least 2 characters'),
     employeeId: z.string().min(1, 'Employee ID is required'),

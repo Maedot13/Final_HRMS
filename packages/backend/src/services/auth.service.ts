@@ -7,10 +7,10 @@ import { generateToken, generateRefreshToken, verifyRefreshToken } from '../util
 const prisma = new PrismaClient();
 
 export const login = async (data: LoginRequest): Promise<AuthResponse> => {
-    const { email, password } = data;
+    const { employeeId, password } = data;
 
     const user = await prisma.user.findUnique({
-        where: { email },
+        where: { employeeId },
         include: { employee: true } // Include employee details
     });
 
@@ -34,6 +34,12 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
         employeeId: user.employeeId
     });
 
+    const refreshToken = generateRefreshToken({
+        userId: user.id,
+        role: user.role as UserRole,
+        employeeId: user.employeeId
+    });
+
     // Remove passwordHash from response
     const { passwordHash, ...userWithoutPassword } = user;
 
@@ -45,17 +51,13 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
 
     return {
         token,
+        refreshToken,
         user: userResponse
     };
 };
 
 export const register = async (data: RegisterRequest): Promise<AuthResponse> => {
-    const { email, password, name, employeeId, department, role } = data;
-
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-        throw new Error('Email already in use');
-    }
+    const { password, name, employeeId, department, role } = data;
 
     const existingEmployeeId = await prisma.employee.findUnique({ where: { employeeId } });
     if (existingEmployeeId) {
@@ -68,7 +70,6 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
     const result = await prisma.$transaction(async (tx) => {
         const newUser = await tx.user.create({
             data: {
-                email,
                 passwordHash: hashedPassword,
                 role: role || UserRole.EMPLOYEE,
                 employeeId,
@@ -96,6 +97,12 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
         employeeId: result.newUser.employeeId
     });
 
+    const refreshToken = generateRefreshToken({
+        userId: result.newUser.id,
+        role: result.newUser.role as UserRole,
+        employeeId: result.newUser.employeeId
+    });
+
     const { passwordHash, ...userWithoutPassword } = result.newUser;
 
     const userResponse: any = {
@@ -105,6 +112,7 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
 
     return {
         token,
+        refreshToken,
         user: userResponse
     };
 };
