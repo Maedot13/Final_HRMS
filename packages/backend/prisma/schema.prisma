@@ -18,6 +18,7 @@ model User {
   employee      Employee?
   jobPostings   JobPosting[]   @relation("JobCreator")
   notifications Notification[]
+  refreshTokens RefreshToken[]
 }
 
 model Employee {
@@ -28,7 +29,10 @@ model Employee {
   department         String
   position           String
   hireDate           DateTime
+
   serviceYears       Int                 @default(0)
+  grossSalary        Float               @default(0)
+  salaryType         SalaryType          @default(MONTHLY)
   contactInfo        Json
   clearanceRequests  ClearanceRequest[]
   user               User                @relation(fields: [userId], references: [id])
@@ -51,6 +55,8 @@ model LeaveRequest {
   status          LeaveStatus @default(PENDING)
   approverId      Int?
   approverComment String?
+  resolvedAt      DateTime?
+  lastDecisionAt  DateTime?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   employee        Employee    @relation(fields: [employeeId], references: [id])
@@ -81,6 +87,8 @@ model SabbaticalRequest {
   status          LeaveStatus @default(PENDING)
   approverId      Int?
   approverComment String?
+  resolvedAt      DateTime?
+  lastDecisionAt  DateTime?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   employee        Employee    @relation(fields: [employeeId], references: [id])
@@ -94,22 +102,33 @@ model ClearanceRequest {
   status          ClearanceStatus       @default(PENDING)
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
-  departments     ClearanceDepartment[]
-  employee        Employee              @relation(fields: [employeeId], references: [id])
+
+  checks          ClearanceCheck[]
+  employee        Employee         @relation(fields: [employeeId], references: [id])
   payrollTransfer PayrollTransfer?
 }
 
-model ClearanceDepartment {
+model ClearanceUnit {
   id          Int              @id @default(autoincrement())
-  clearanceId Int
-  department  DepartmentType
-  status      ClearanceStatus  @default(PENDING)
-  approverId  Int?
-  approvedAt  DateTime?
-  comment     String?
-  clearance   ClearanceRequest @relation(fields: [clearanceId], references: [id])
+  name        String           @unique
+  description String?
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  checks      ClearanceCheck[]
+}
 
-  @@unique([clearanceId, department])
+model ClearanceCheck {
+  id              Int              @id @default(autoincrement())
+  clearanceId     Int
+  unitId          Int
+  status          ClearanceStatus  @default(PENDING)
+  approverId      Int?
+  approvedAt      DateTime?
+  comment         String?
+  clearance       ClearanceRequest @relation(fields: [clearanceId], references: [id])
+  unit            ClearanceUnit    @relation(fields: [unitId], references: [id])
+
+  @@unique([clearanceId, unitId])
 }
 
 model PayrollTransfer {
@@ -170,6 +189,18 @@ model Notification {
   user        User     @relation(fields: [userId], references: [id])
 }
 
+model RefreshToken {
+  id          Int      @id @default(autoincrement())
+  token       String   @unique
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  expiresAt   DateTime
+  revoked     Boolean  @default(false)
+  replacedBy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 enum UserRole {
   ADMIN
   HR_OFFICER
@@ -200,14 +231,6 @@ enum ClearanceStatus {
   REJECTED
 }
 
-enum DepartmentType {
-  HR
-  FINANCE
-  IT
-  LIBRARY
-  DEPARTMENT_HEAD
-}
-
 enum JobStatus {
   OPEN
   CLOSED
@@ -218,4 +241,9 @@ enum ApplicationStatus {
   UNDER_REVIEW
   SHORTLISTED
   REJECTED
+}
+
+enum SalaryType {
+  MONTHLY
+  DAILY
 }

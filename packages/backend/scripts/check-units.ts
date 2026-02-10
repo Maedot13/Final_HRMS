@@ -1,0 +1,1 @@
+import { PrismaClient } from '@prisma/client'; const prisma = new PrismaClient(); async function main() { const count = await prisma.clearanceUnit.count(); console.log('ClearanceUnit count:', count); const activeCount = await prisma.clearanceUnit.count({ where: { isActive: true } }); console.log('Active ClearanceUnit count:', activeCount); } main();

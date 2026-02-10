@@ -3,15 +3,26 @@ import { PrismaClient, User, Employee } from '@prisma/client';
 import { LoginRequest, RegisterRequest, AuthResponse, UserRole } from '@hrms/types';
 import { hashPassword, comparePassword } from '../utils/password';
 import { generateToken, generateRefreshToken, verifyRefreshToken } from '../utils/token';
+import jwt from 'jsonwebtoken';
 
 const prisma = new PrismaClient();
+
+// Helper to get expiration date from JWT token
+const getTokenExpiration = (token: string): Date => {
+    // SECURITY: Use verifyToken instead of decode to ensure the token is valid before reading claims
+    const decoded = verifyRefreshToken(token);
+    if (!decoded || !decoded.exp) {
+        throw new Error('Invalid token format or signature');
+    }
+    return new Date(decoded.exp * 1000);
+};
 
 export const login = async (data: LoginRequest): Promise<AuthResponse> => {
     const { employeeId, password } = data;
 
     const user = await prisma.user.findUnique({
         where: { employeeId },
-        include: { employee: true } // Include employee details
+        include: { employee: true }
     });
 
     if (!user) {
@@ -34,16 +45,22 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
         employeeId: user.employeeId
     });
 
-    const refreshToken = generateRefreshToken({
+    const refreshTokenString = generateRefreshToken({
         userId: user.id,
         role: user.role as UserRole,
         employeeId: user.employeeId
     });
 
-    // Remove passwordHash from response
-    const { passwordHash, ...userWithoutPassword } = user;
+    // Save refresh token to DB
+    await prisma.refreshToken.create({
+        data: {
+            token: refreshTokenString,
+            userId: user.id,
+            expiresAt: getTokenExpiration(refreshTokenString)
+        }
+    });
 
-    // Cast to User type from shared types (which matches Prisma user mostly, but has role as enum)
+    const { passwordHash, ...userWithoutPassword } = user;
     const userResponse: any = {
         ...userWithoutPassword,
         role: user.role as UserRole
@@ -51,7 +68,7 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
 
     return {
         token,
-        refreshToken,
+        refreshToken: refreshTokenString,
         user: userResponse
     };
 };
@@ -59,9 +76,14 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
 export const register = async (data: RegisterRequest): Promise<AuthResponse> => {
     const { password, name, employeeId, department, role } = data;
 
-    const existingEmployeeId = await prisma.employee.findUnique({ where: { employeeId } });
-    if (existingEmployeeId) {
-        throw new Error('Employee ID already in use');
+    const existingEmployee = await prisma.employee.findUnique({ where: { employeeId } });
+    if (existingEmployee) {
+        throw new Error('Employee ID already in use (Employee table)');
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { employeeId } });
+    if (existingUser) {
+        throw new Error('Employee ID already in use (User table)');
     }
 
     const hashedPassword = await hashPassword(password);
@@ -82,9 +104,9 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
                 employeeId,
                 name,
                 department,
-                position: 'TBD', // Default or add to registration payload
-                hireDate: new Date(), // Default to now
-                contactInfo: {}, // Default empty or add to payload
+                position: 'TBD',
+                hireDate: new Date(),
+                contactInfo: {},
             }
         });
 
@@ -97,22 +119,31 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
         employeeId: result.newUser.employeeId
     });
 
-    const refreshToken = generateRefreshToken({
+    const refreshTokenString = generateRefreshToken({
         userId: result.newUser.id,
         role: result.newUser.role as UserRole,
         employeeId: result.newUser.employeeId
     });
 
-    const { passwordHash, ...userWithoutPassword } = result.newUser;
+    // Save refresh token
+    await prisma.refreshToken.create({
+        data: {
+            token: refreshTokenString,
+            userId: result.newUser.id,
+            expiresAt: getTokenExpiration(refreshTokenString)
+        }
+    });
 
+    const { passwordHash, ...userWithoutPassword } = result.newUser;
     const userResponse: any = {
         ...userWithoutPassword,
-        role: result.newUser.role as UserRole
+        role: result.newUser.role as UserRole,
+        employee: result.newEmployee
     };
 
     return {
         token,
-        refreshToken,
+        refreshToken: refreshTokenString,
         user: userResponse
     };
 };
@@ -133,31 +164,70 @@ export const getMe = async (userId: number): Promise<any> => {
 }
 
 export const refreshToken = async (token: string): Promise<AuthResponse> => {
+    // 1. Verify signature
     const payload = verifyRefreshToken(token);
 
-    // In a production system, we would check a token version or blacklist here using Redis/DB
-    // For now, we verify the user still exists and is active
-
-    const user = await prisma.user.findUnique({
-        where: { id: payload.userId },
-        include: { employee: true }
+    // 2. Check DB for token status
+    const dbToken = await prisma.refreshToken.findUnique({
+        where: { token },
+        include: { user: { include: { employee: true } } }
     });
 
-    if (!user || !user.isActive) {
-        throw new Error('User not found or inactive');
+    // Token reuse detection or simply not found
+    if (!dbToken) {
+        // If verifyRefreshToken succeeded but token not in DB, it might be a reused token that was deleted or never saved?
+        // Or if we implemented rotation by deletion. But we use revoked flag.
+        // If not found, suspicious.
+        throw new Error('Refresh token not found in database');
     }
 
+    if (dbToken.revoked) {
+        // Token reuse detected!
+        // Security Action: Revoke all tokens for this user family?
+        // For now, just deny.
+        throw new Error('Refresh token revoked');
+    }
+
+    const now = new Date();
+    if (dbToken.expiresAt < now) {
+        throw new Error('Refresh token expired');
+    }
+
+    const user = dbToken.user;
+    if (!user.isActive) {
+        throw new Error('User inactive');
+    }
+
+    // 3. Rotation: Revoke old, Issue new
     const newAccessToken = generateToken({
         userId: user.id,
         role: user.role as UserRole,
         employeeId: user.employeeId
     });
 
-    const newRefreshToken = generateRefreshToken({
+    const newRefreshTokenString = generateRefreshToken({
         userId: user.id,
         role: user.role as UserRole,
         employeeId: user.employeeId
     });
+
+    // Transaction to revoke old and save new
+    await prisma.$transaction([
+        prisma.refreshToken.update({
+            where: { id: dbToken.id },
+            data: {
+                revoked: true,
+                replacedBy: newRefreshTokenString
+            }
+        }),
+        prisma.refreshToken.create({
+            data: {
+                token: newRefreshTokenString,
+                userId: user.id,
+                expiresAt: getTokenExpiration(newRefreshTokenString)
+            }
+        })
+    ]);
 
     const { passwordHash, ...userWithoutPassword } = user;
     const userResponse: any = {
@@ -167,14 +237,19 @@ export const refreshToken = async (token: string): Promise<AuthResponse> => {
 
     return {
         token: newAccessToken,
-        refreshToken: newRefreshToken,
+        refreshToken: newRefreshTokenString,
         user: userResponse
     };
 };
 
 export const logout = async (token: string): Promise<{ message: string }> => {
-    // In a stateful system, we would invalidate the token (blacklist)
-    // For stateless JWT, the client discards the token. 
-    // We can implement a Redis blacklist later if strictly required.
+    // Revoke the specific refresh token
+    await prisma.refreshToken.update({
+        where: { token },
+        data: { revoked: true }
+    }).catch(() => {
+        // Ignore if token not found (already deleted or invalid)
+    });
+
     return { message: 'Logged out successfully' };
 };

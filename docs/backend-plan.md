@@ -202,8 +202,11 @@ The Node.js + Express backend provides:
 **ClearanceRequests**:
 - id, employee_id (FK), reason, last_working_day, status, created_at, updated_at
 
-**ClearanceDepartments**:
-- id, clearance_id (FK), department, status, approver_id (FK), approved_at, comment
+**ClearanceUnits**:
+- id, name, description, is_active, created_at
+
+**ClearanceChecks**:
+- id, clearance_id (FK), clearance_unit_id (FK), status, approver_id (FK), approved_at, comment
 
 **PayrollTransfers**:
 - id, employee_id (FK), clearance_id (FK), reason, effective_date, status, created_by (FK), created_at
@@ -225,8 +228,8 @@ Employees 1:N LeaveRequests
 Employees 1:N LeaveBalances
 Employees 1:N SabbaticalRequests
 Employees 1:N ClearanceRequests
-ClearanceRequests 1:N ClearanceDepartments
-Employees 1:N PayrollTransfers
+ClearanceRequests 1:N ClearanceChecks
+ClearanceUnits 1:N ClearanceChecks
 ClearanceRequests 1:N PayrollTransfers
 Users 1:N JobPostings (created_by)
 JobPostings 1:N JobApplications
@@ -313,28 +316,28 @@ THEN backend MUST:
 
 ### 5.3 Clearance Management Rules
 
-**Rule 1: Multi-Department Approval**
+**Rule 1: Dynamic Multi-Department Approval**
 ```
 WHEN clearance request is submitted
 THEN backend MUST:
-  1. Create clearance record
-  2. Create 5 department approval records (HR, Finance, IT, Library, Dept Head)
+  1. Fetch all ACTIVE ClearanceUnits
+  2. Create ClearanceCheck record for EACH unit
   3. Set all to PENDING status
 ```
 
-**Rule 2: Department Approval Authority**
+**Rule 2: Checkpoint Approval Authority**
 ```
-WHEN department approves clearance
+WHEN department approves clearance check
 THEN backend MUST:
-  1. Verify approver has authority for that department
-  2. Update only that department's status
-  3. Check if all departments approved
+  1. Verify approver has authority for that specific ClearanceUnit
+  2. Update only that check's status
+  3. Verify if ALL checks for this clearance are APPROVED
   4. Update overall clearance status if complete
 ```
 
 **Rule 3: Clearance Completion**
 ```
-WHEN all departments approve
+WHEN all checks approve
 THEN backend MUST:
   1. Set clearance status to COMPLETE
   2. Trigger notification to employee

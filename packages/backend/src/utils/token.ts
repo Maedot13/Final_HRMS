@@ -7,6 +7,7 @@ export interface TokenPayload {
     userId: number;
     role: UserRole;
     employeeId?: string | null;
+    exp?: number;
 }
 
 export const generateToken = (payload: TokenPayload): string => {
@@ -32,7 +33,7 @@ export const generateRefreshToken = (payload: TokenPayload): string => {
 export const verifyRefreshToken = (token: string): TokenPayload => {
     try {
         return jwt.verify(token, env.JWT_REFRESH_SECRET) as TokenPayload;
-    } catch (error) {
-        throw new Error('Invalid refresh token');
+    } catch (error: any) {
+        throw new Error(`Malformed or expired refresh token: ${error.message}`);
     }
 };

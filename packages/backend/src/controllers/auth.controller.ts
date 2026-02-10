@@ -110,9 +110,9 @@ export const refreshToken = async (req: Request, res: Response) => {
 
 export const logout = async (req: Request, res: Response) => {
     try {
-        const token = req.headers.authorization?.split(' ')[1];
-        if (token) {
-            await authService.logout(token);
+        const { refreshToken } = req.body;
+        if (refreshToken) {
+            await authService.logout(refreshToken);
         }
         res.json({ message: 'Logged out successfully' });
     } catch (error: any) {

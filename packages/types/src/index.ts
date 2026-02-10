@@ -17,6 +17,7 @@ export interface User {
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
+    employee?: Employee;
 }
 
 // Auth DTOs
@@ -39,6 +40,12 @@ export interface AuthResponse {
     user: User;
 }
 
+export enum SalaryType {
+    MONTHLY = 'MONTHLY',
+    HOURLY = 'HOURLY',
+    CONTRACT = 'CONTRACT'
+}
+
 // Employee Interface
 export interface Employee {
     id: number;
@@ -49,6 +56,8 @@ export interface Employee {
     position: string;
     hireDate: string;
     serviceYears: number;
+    grossSalary: number;
+    salaryType: SalaryType;
     contactInfo: {
         phone: string;
         address: string;
