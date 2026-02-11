@@ -1,8 +1,8 @@
 
 import { PrismaClient, LeaveStatus } from '@prisma/client';
 import { differenceInYears } from 'date-fns';
+import { prisma } from '../lib/prisma';
 
-const prisma = new PrismaClient();
 
 export const checkOverlappingRequests = async (employeeId: number, startDate: Date, endDate: Date): Promise<void> => {
     // Check LeaveRequests

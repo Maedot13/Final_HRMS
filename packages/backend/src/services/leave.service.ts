@@ -1,8 +1,8 @@
 
 import { PrismaClient, LeaveRequest, LeaveStatus, LeaveType } from '@prisma/client';
 import { checkOverlappingRequests } from './timeoff.service';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
+import { LEAVE_BALANCES } from '../config/constants';
 
 // Helper to get duration in days (excluding weekends/holidays - simplified for now to just diff)
 const calculateDays = (start: Date, end: Date): number => {
@@ -33,10 +33,10 @@ export const createLeaveRequest = async (
         create: {
             employeeId,
             year,
-            annualBalance: 20, // Default annual leave
-            sickBalance: 15,
-            maternityBalance: 90,
-            paternityBalance: 5
+            annualBalance: LEAVE_BALANCES.ANNUAL,
+            sickBalance: LEAVE_BALANCES.SICK,
+            maternityBalance: LEAVE_BALANCES.MATERNITY,
+            paternityBalance: LEAVE_BALANCES.PATERNITY
         }
     });
 
@@ -104,40 +104,49 @@ export const approveRequest = async (requestId: number, approverId: number, comm
         if (!request) throw new Error('Request not found');
         if (request.status !== LeaveStatus.PENDING) throw new Error('Request is not pending');
 
-        // Deduct Balance
         const year = request.startDate.getFullYear();
-        const balance = await tx.leaveBalance.findUnique({
-            where: { employeeId_year: { employeeId: request.employeeId, year } }
-        });
 
-        if (!balance) throw new Error('Leave balance record missing');
+        // Determine which balance field to update based on leave type
+        const balanceFieldMap: Partial<Record<LeaveType, string>> = {
+            [LeaveType.ANNUAL]: 'annualBalance',
+            [LeaveType.SICK]: 'sickBalance',
+            [LeaveType.MATERNITY]: 'maternityBalance',
+            [LeaveType.PATERNITY]: 'paternityBalance',
+        };
 
-        // Re-check balance atomic
-        let updateData = {};
-        switch (request.leaveType) {
-            case LeaveType.ANNUAL:
-                if (balance.annualBalance < request.days) throw new Error('Insufficient balance');
-                updateData = { annualBalance: { decrement: request.days } };
-                break;
-            case LeaveType.SICK:
-                if (balance.sickBalance < request.days) throw new Error('Insufficient balance');
-                updateData = { sickBalance: { decrement: request.days } };
-                break;
-            case LeaveType.MATERNITY:
-                if (balance.maternityBalance < request.days) throw new Error('Insufficient balance');
-                updateData = { maternityBalance: { decrement: request.days } };
-                break;
-            case LeaveType.PATERNITY:
-                if (balance.paternityBalance < request.days) throw new Error('Insufficient balance');
-                updateData = { paternityBalance: { decrement: request.days } };
-                break;
+        const balanceField = balanceFieldMap[request.leaveType];
+
+        // UNPAID leave doesn't require balance deduction
+        if (!balanceField) {
+            return tx.leaveRequest.update({
+                where: { id: requestId },
+                data: {
+                    status: LeaveStatus.APPROVED,
+                    approverId,
+                    approverComment: comment,
+                    resolvedAt: new Date(),
+                    lastDecisionAt: new Date(),
+                    updatedAt: new Date()
+                }
+            });
         }
 
-        if (Object.keys(updateData).length > 0) {
-            await tx.leaveBalance.update({
-                where: { id: balance.id },
-                data: updateData
-            });
+        // ATOMIC OPERATION: Update balance only if sufficient balance exists
+        // This prevents race conditions by using a WHERE clause
+        const updateResult = await tx.leaveBalance.updateMany({
+            where: {
+                employeeId: request.employeeId,
+                year,
+                [balanceField]: { gte: request.days } // Only update if balance >= days
+            },
+            data: {
+                [balanceField]: { decrement: request.days }
+            }
+        });
+
+        // If no rows were updated, it means insufficient balance
+        if (updateResult.count === 0) {
+            throw new Error('Insufficient leave balance');
         }
 
         // Update Request Status
@@ -152,6 +161,8 @@ export const approveRequest = async (requestId: number, approverId: number, comm
                 updatedAt: new Date()
             }
         });
+    }, {
+        isolationLevel: 'Serializable' // Strongest isolation level for critical operations
     });
 };
 

@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import * as clearanceService from '../services/clearance.service';
 import { UserRole } from '@hrms/types';
 import { z } from 'zod';
+import { sanitizeInput } from '../utils/sanitize';
 
 const initiateSchema = z.object({
     reason: z.string().min(5, 'Reason must be at least 5 characters'),
@@ -24,7 +25,10 @@ export const initiateClearance = async (req: Request, res: Response) => {
         // Parse lastWorkingDay to Date object
         const lastWorkingDay = new Date(validation.data.lastWorkingDay);
 
-        const result = await clearanceService.initiateClearance(employee.id, validation.data.reason, lastWorkingDay);
+        // Sanitize user input
+        const sanitizedReason = sanitizeInput(validation.data.reason);
+
+        const result = await clearanceService.initiateClearance(employee.id, sanitizedReason, lastWorkingDay);
         res.status(201).json(result);
     } catch (error: any) {
         res.status(400).json({ message: error.message });
@@ -78,7 +82,10 @@ export const approveCheck = async (req: Request, res: Response) => {
         const approver = await getEmployeeByUserId(user.userId);
         if (!approver) return res.status(400).json({ message: 'Approver profile not found' });
 
-        const result = await clearanceService.approveCheck(clearanceId, unitId, approver.id, comment);
+        // Sanitize comment if provided
+        const sanitizedComment = comment ? sanitizeInput(comment) : undefined;
+
+        const result = await clearanceService.approveCheck(clearanceId, unitId, approver.id, sanitizedComment);
         res.json(result);
 
     } catch (error: any) {
@@ -110,7 +117,10 @@ export const rejectCheck = async (req: Request, res: Response) => {
         const approver = await getEmployeeByUserId(user.userId);
         if (!approver) return res.status(400).json({ message: 'Approver profile not found' });
 
-        const result = await clearanceService.rejectCheck(clearanceId, unitId, approver.id, comment);
+        // Sanitize comment
+        const sanitizedComment = sanitizeInput(comment);
+
+        const result = await clearanceService.rejectCheck(clearanceId, unitId, approver.id, sanitizedComment);
         res.json(result);
 
     } catch (error: any) {

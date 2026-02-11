@@ -22,13 +22,13 @@ model User {
 }
 
 model Employee {
-  id                 Int                 @id @default(autoincrement())
-  userId             Int                 @unique
-  employeeId         String              @unique
-  name               String
-  department         String
-  position           String
-  hireDate           DateTime
+  id         Int      @id @default(autoincrement())
+  userId     Int      @unique
+  employeeId String   @unique
+  name       String
+  department String
+  position   String
+  hireDate   DateTime
 
   serviceYears       Int                 @default(0)
   grossSalary        Float               @default(0)
@@ -60,6 +60,9 @@ model LeaveRequest {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   employee        Employee    @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, status])
+  @@index([status, createdAt])
 }
 
 model LeaveBalance {
@@ -95,13 +98,13 @@ model SabbaticalRequest {
 }
 
 model ClearanceRequest {
-  id              Int                   @id @default(autoincrement())
-  employeeId      Int
-  reason          String
-  lastWorkingDay  DateTime
-  status          ClearanceStatus       @default(PENDING)
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  id             Int             @id @default(autoincrement())
+  employeeId     Int
+  reason         String
+  lastWorkingDay DateTime
+  status         ClearanceStatus @default(PENDING)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   checks          ClearanceCheck[]
   employee        Employee         @relation(fields: [employeeId], references: [id])
@@ -118,17 +121,19 @@ model ClearanceUnit {
 }
 
 model ClearanceCheck {
-  id              Int              @id @default(autoincrement())
-  clearanceId     Int
-  unitId          Int
-  status          ClearanceStatus  @default(PENDING)
-  approverId      Int?
-  approvedAt      DateTime?
-  comment         String?
-  clearance       ClearanceRequest @relation(fields: [clearanceId], references: [id])
-  unit            ClearanceUnit    @relation(fields: [unitId], references: [id])
+  id          Int              @id @default(autoincrement())
+  clearanceId Int
+  unitId      Int
+  status      ClearanceStatus  @default(PENDING)
+  approverId  Int?
+  approvedAt  DateTime?
+  comment     String?
+  clearance   ClearanceRequest @relation(fields: [clearanceId], references: [id])
+  unit        ClearanceUnit    @relation(fields: [unitId], references: [id])
 
   @@unique([clearanceId, unitId])
+  @@index([unitId, status])
+  @@index([clearanceId, status])
 }
 
 model PayrollTransfer {
@@ -190,15 +195,52 @@ model Notification {
 }
 
 model RefreshToken {
-  id          Int      @id @default(autoincrement())
-  token       String   @unique
-  userId      Int
-  user        User     @relation(fields: [userId], references: [id])
-  expiresAt   DateTime
-  revoked     Boolean  @default(false)
-  replacedBy  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         Int      @id @default(autoincrement())
+  token      String   @unique
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  expiresAt  DateTime
+  revoked    Boolean  @default(false)
+  replacedBy String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId, revoked])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id         Int         @id @default(autoincrement())
+  userId     Int?
+  action     AuditAction
+  entityType String
+  entityId   Int?
+  changes    Json?
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime    @default(now())
+
+  @@index([userId, timestamp])
+  @@index([action, timestamp])
+  @@index([entityType, entityId])
+}
+
+enum AuditAction {
+  USER_LOGIN
+  USER_LOGOUT
+  USER_REGISTER
+  LEAVE_REQUEST_CREATE
+  LEAVE_REQUEST_APPROVE
+  LEAVE_REQUEST_REJECT
+  CLEARANCE_INITIATE
+  CLEARANCE_APPROVE
+  CLEARANCE_REJECT
+  SABBATICAL_REQUEST_CREATE
+  SABBATICAL_APPROVE
+  SABBATICAL_REJECT
+  EMPLOYEE_CREATE
+  EMPLOYEE_UPDATE
+  PAYROLL_TRANSFER_CREATE
 }
 
 enum UserRole {

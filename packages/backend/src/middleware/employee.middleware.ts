@@ -1,8 +1,8 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { PrismaClient, Employee } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 
-const prisma = new PrismaClient();
 
 declare global {
     namespace Express {

@@ -1,7 +1,7 @@
 
 import { PrismaClient, ClearanceStatus } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 
-const prisma = new PrismaClient();
 
 // 1. Initiate Clearance
 export const initiateClearance = async (employeeId: number, reason: string, lastWorkingDay: Date) => {

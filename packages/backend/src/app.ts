@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { rateLimit } from 'express-rate-limit';
+import { RATE_LIMITS } from './config/constants';
+import requestId from 'express-request-id';
 
 const app = express();
 
@@ -13,20 +15,68 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
+app.use(requestId()); // Add request ID to all requests
 app.use(morgan('dev'));
 
 // Rate Limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    limit: 100, // Limit each IP to 100 requests per windowMs
+const globalLimiter = rateLimit({
+    windowMs: RATE_LIMITS.GLOBAL.WINDOW_MS,
+    limit: RATE_LIMITS.GLOBAL.MAX_REQUESTS,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
 });
-app.use(limiter);
+
+const authLimiter = rateLimit({
+    windowMs: RATE_LIMITS.AUTH.WINDOW_MS,
+    limit: RATE_LIMITS.AUTH.MAX_REQUESTS,
+    skipSuccessfulRequests: true,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: {
+        error: {
+            code: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many authentication attempts. Please try again later.',
+            timestamp: new Date().toISOString()
+        }
+    }
+});
+
+app.use(globalLimiter);
 
 // Health Check
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'OK', message: 'Backend is running' });
+app.get('/health', async (req, res) => {
+    const health: any = {
+        status: 'OK',
+        message: 'Backend is running',
+        timestamp: new Date().toISOString(),
+        services: {
+            database: 'unknown',
+            redis: 'unknown'
+        }
+    };
+
+    try {
+        // Check database connection
+        const { prisma } = await import('./lib/prisma');
+        await prisma.$queryRaw`SELECT 1`;
+        health.services.database = 'connected';
+    } catch (error) {
+        health.services.database = 'disconnected';
+        health.status = 'DEGRADED';
+    }
+
+    try {
+        // Check Redis connection
+        const { redis } = await import('./lib/redis');
+        await redis.ping();
+        health.services.redis = 'connected';
+    } catch (error) {
+        health.services.redis = 'disconnected';
+        health.status = 'DEGRADED';
+    }
+
+    const statusCode = health.status === 'OK' ? 200 : 503;
+    res.status(statusCode).json(health);
 });
 
 // Routes
@@ -36,6 +86,11 @@ import leaveRoutes from './routes/leave.routes';
 import sabbaticalRoutes from './routes/sabbatical.routes';
 import clearanceRoutes from './routes/clearance.routes';
 import payrollRoutes from './routes/payroll.routes';
+
+// Apply stricter rate limiting to auth routes
+app.use('/api/v1/auth/login', authLimiter);
+app.use('/api/v1/auth/register', authLimiter);
+app.use('/api/v1/auth/refresh', authLimiter);
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/employees', employeeRoutes);

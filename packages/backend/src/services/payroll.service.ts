@@ -1,8 +1,8 @@
 
 import { PrismaClient, UserRole } from '@prisma/client';
 import { startOfMonth, endOfMonth, differenceInDays, isSameMonth, parseISO } from 'date-fns';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
+import { PAYROLL_CONSTANTS } from '../config/constants';
 
 interface PayrollDataParams {
     month?: number; // 0-11 (JS Date style) or 1-12? Let's use 1-12 for API, convert internally
@@ -69,7 +69,7 @@ export const getPayrollData = async (params: PayrollDataParams) => {
 
     // Map to result format
     const results = allEmployees.map(emp => {
-        let payableDays = 30; // Default Standard
+        let payableDays = PAYROLL_CONSTANTS.STANDARD_MONTH_DAYS; // Default Standard
         const daysInMonth = endPeriod.getDate(); // 28, 29, 30, 31
 
         // Case A: New Hire this month?
@@ -94,13 +94,13 @@ export const getPayrollData = async (params: PayrollDataParams) => {
 
         // Cap payable days just in case
         if (payableDays < 0) payableDays = 0;
-        if (payableDays > daysInMonth) payableDays = daysInMonth; // Or standard 30? Finance rule: usually 30 unless partial.
+        if (payableDays > daysInMonth) payableDays = daysInMonth;
 
         // Standardize 31st day handling? "HR provides days".
         // Rule: If worked full month -> 30.
         // If partial -> Actual calendar days.
-        if (payableDays >= 28 && payableDays === daysInMonth) {
-            payableDays = 30; // Standardize full month to 30
+        if (payableDays >= PAYROLL_CONSTANTS.MINIMUM_FULL_MONTH_DAYS && payableDays === daysInMonth) {
+            payableDays = PAYROLL_CONSTANTS.STANDARD_MONTH_DAYS; // Standardize full month to 30
         }
 
         return {

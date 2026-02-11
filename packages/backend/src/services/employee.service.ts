@@ -1,7 +1,7 @@
 
 import { PrismaClient, Employee } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 
-const prisma = new PrismaClient();
 
 export const getEmployeeById = async (id: number): Promise<Employee | null> => {
     return prisma.employee.findUnique({

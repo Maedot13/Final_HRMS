@@ -4,8 +4,8 @@ import { LoginRequest, RegisterRequest, AuthResponse, UserRole } from '@hrms/typ
 import { hashPassword, comparePassword } from '../utils/password';
 import { generateToken, generateRefreshToken, verifyRefreshToken } from '../utils/token';
 import jwt from 'jsonwebtoken';
+import { prisma } from '../lib/prisma';
 
-const prisma = new PrismaClient();
 
 // Helper to get expiration date from JWT token
 const getTokenExpiration = (token: string): Date => {
@@ -242,14 +242,26 @@ export const refreshToken = async (token: string): Promise<AuthResponse> => {
     };
 };
 
-export const logout = async (token: string): Promise<{ message: string }> => {
+export const logout = async (refreshToken: string, accessToken?: string): Promise<{ message: string }> => {
     // Revoke the specific refresh token
     await prisma.refreshToken.update({
-        where: { token },
+        where: { token: refreshToken },
         data: { revoked: true }
     }).catch(() => {
         // Ignore if token not found (already deleted or invalid)
     });
+
+    // Blacklist the access token if provided
+    if (accessToken) {
+        const { blacklistToken } = await import('../utils/tokenBlacklist');
+        try {
+            // Access tokens expire in 1 hour (3600 seconds)
+            await blacklistToken(accessToken, 3600);
+        } catch (error) {
+            console.error('Failed to blacklist access token:', error);
+            // Continue even if blacklisting fails
+        }
+    }
 
     return { message: 'Logged out successfully' };
 };

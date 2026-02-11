@@ -2,6 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyToken, TokenPayload } from '../utils/token';
 import { UserRole } from '@hrms/types';
+import { isTokenBlacklisted } from '../utils/tokenBlacklist';
 
 // Extend Express Request to include user
 declare global {
@@ -12,7 +13,7 @@ declare global {
     }
 }
 
-export const authenticate = (req: Request, res: Response, next: NextFunction) => {
+export const authenticate = async (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith('Bearer ')) {
@@ -28,6 +29,18 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
     const token = authHeader.split(' ')[1];
 
     try {
+        // Check if token is blacklisted
+        const isBlacklisted = await isTokenBlacklisted(token);
+        if (isBlacklisted) {
+            return res.status(401).json({
+                error: {
+                    code: 'TOKEN_REVOKED',
+                    message: 'Token has been revoked',
+                    timestamp: new Date().toISOString()
+                }
+            });
+        }
+
         const payload = verifyToken(token);
         req.user = payload;
         next();
