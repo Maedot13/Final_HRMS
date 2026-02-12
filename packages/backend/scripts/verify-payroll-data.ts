@@ -131,8 +131,7 @@ async function main() {
 
 
     // 2. Call Service directly (mocking controller call)
-    // We import the specific function from dist to avoid TS issues if running via ts-node on src
-    const { getPayrollData } = require('../src/services/payroll.service');
+    const { getPayrollData } = await import('../src/services/payroll.service');
 
     // Mock params for current month
     const result = await getPayrollData({ month: today.getMonth() + 1, year: today.getFullYear() });

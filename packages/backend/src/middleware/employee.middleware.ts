@@ -1,10 +1,11 @@
 
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient, Employee } from '@prisma/client';
+import { Employee } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 
 
 declare global {
+    // eslint-disable-next-line @typescript-eslint/no-namespace
     namespace Express {
         interface Request {
             employee?: Employee;

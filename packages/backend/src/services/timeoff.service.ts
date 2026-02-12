@@ -1,5 +1,5 @@
 
-import { PrismaClient, LeaveStatus } from '@prisma/client';
+import { LeaveStatus } from '@prisma/client';
 import { differenceInYears } from 'date-fns';
 import { prisma } from '../lib/prisma';
 

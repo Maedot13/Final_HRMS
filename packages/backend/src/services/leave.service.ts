@@ -1,5 +1,5 @@
 
-import { PrismaClient, LeaveRequest, LeaveStatus, LeaveType } from '@prisma/client';
+import { LeaveStatus, LeaveType } from '@prisma/client';
 import { checkOverlappingRequests } from './timeoff.service';
 import { prisma } from '../lib/prisma';
 import { LEAVE_BALANCES } from '../config/constants';

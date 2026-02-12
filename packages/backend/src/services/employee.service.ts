@@ -1,5 +1,5 @@
 
-import { PrismaClient, Employee } from '@prisma/client';
+import { Employee } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 
 
@@ -36,9 +36,14 @@ export const getEmployeeByUserId = async (userId: number): Promise<Employee | nu
 };
 
 export const updateEmployee = async (id: number, data: Partial<Employee>): Promise<Employee> => {
-    const { id: _, userId: __, employeeId: ___, ...updateData } = data;
+    // Exclude sensitive or primary key fields from update
+    const updateData = { ...data };
+    delete (updateData as any).id;
+    delete (updateData as any).userId;
+    delete (updateData as any).employeeId;
+
     return prisma.employee.update({
         where: { id },
-        data: updateData as any
+        data: updateData as any // Prisma partial update type is complex, leaving any here for simplicity
     });
 };

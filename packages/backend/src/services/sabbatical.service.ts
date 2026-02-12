@@ -1,5 +1,5 @@
 
-import { PrismaClient, SabbaticalRequest, LeaveStatus } from '@prisma/client';
+import { LeaveStatus } from '@prisma/client';
 import { differenceInMonths } from 'date-fns';
 import { checkOverlappingRequests, checkSabbaticalEligibility } from './timeoff.service';
 import { prisma } from '../lib/prisma';

@@ -1,9 +1,7 @@
 
-import { PrismaClient, User, Employee } from '@prisma/client';
 import { LoginRequest, RegisterRequest, AuthResponse, UserRole } from '@hrms/types';
 import { hashPassword, comparePassword } from '../utils/password';
 import { generateToken, generateRefreshToken, verifyRefreshToken } from '../utils/token';
-import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 
 
@@ -60,16 +58,23 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
         }
     });
 
-    const { passwordHash, ...userWithoutPassword } = user;
-    const userResponse: any = {
+    const { passwordHash: _, ...userWithoutPassword } = user;
+    const userResponse = {
         ...userWithoutPassword,
-        role: user.role as UserRole
+        name: user.employee?.name || '',
+        role: user.role as UserRole,
+        createdAt: user.createdAt.toISOString(),
+        updatedAt: user.updatedAt.toISOString(),
+        employee: user.employee ? {
+            ...user.employee,
+            hireDate: user.employee.hireDate.toISOString()
+        } : undefined
     };
 
     return {
         token,
         refreshToken: refreshTokenString,
-        user: userResponse
+        user: userResponse as unknown as AuthResponse['user']
     };
 };
 
@@ -93,7 +98,7 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
         const newUser = await tx.user.create({
             data: {
                 passwordHash: hashedPassword,
-                role: role || UserRole.EMPLOYEE,
+                role: (role as any) || UserRole.EMPLOYEE,
                 employeeId,
             }
         });
@@ -134,21 +139,27 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
         }
     });
 
-    const { passwordHash, ...userWithoutPassword } = result.newUser;
-    const userResponse: any = {
+    const { passwordHash: _, ...userWithoutPassword } = result.newUser;
+    const userResponse = {
         ...userWithoutPassword,
+        name: result.newEmployee.name,
         role: result.newUser.role as UserRole,
-        employee: result.newEmployee
+        employee: {
+            ...result.newEmployee,
+            hireDate: result.newEmployee.hireDate.toISOString()
+        },
+        createdAt: result.newUser.createdAt.toISOString(),
+        updatedAt: result.newUser.updatedAt.toISOString()
     };
 
     return {
         token,
         refreshToken: refreshTokenString,
-        user: userResponse
+        user: userResponse as unknown as AuthResponse['user']
     };
 };
 
-export const getMe = async (userId: number): Promise<any> => {
+export const getMe = async (userId: number): Promise<AuthResponse['user']> => {
     const user = await prisma.user.findUnique({
         where: { id: userId },
         include: { employee: true }
@@ -156,16 +167,23 @@ export const getMe = async (userId: number): Promise<any> => {
 
     if (!user) throw new Error('User not found');
 
-    const { passwordHash, ...userWithoutPassword } = user;
+    const { passwordHash: _, ...userWithoutPassword } = user;
     return {
         ...userWithoutPassword,
-        role: user.role as UserRole
-    };
+        name: user.employee?.name || '',
+        role: user.role as UserRole,
+        createdAt: user.createdAt.toISOString(),
+        updatedAt: user.updatedAt.toISOString(),
+        employee: user.employee ? {
+            ...user.employee,
+            hireDate: user.employee.hireDate.toISOString()
+        } : undefined
+    } as unknown as AuthResponse['user'];
 }
 
 export const refreshToken = async (token: string): Promise<AuthResponse> => {
     // 1. Verify signature
-    const payload = verifyRefreshToken(token);
+    verifyRefreshToken(token);
 
     // 2. Check DB for token status
     const dbToken = await prisma.refreshToken.findUnique({
@@ -229,16 +247,23 @@ export const refreshToken = async (token: string): Promise<AuthResponse> => {
         })
     ]);
 
-    const { passwordHash, ...userWithoutPassword } = user;
-    const userResponse: any = {
+    const { passwordHash: _, ...userWithoutPassword } = user;
+    const userResponse = {
         ...userWithoutPassword,
-        role: user.role as UserRole
+        name: user.employee?.name || '',
+        role: user.role as UserRole,
+        createdAt: user.createdAt.toISOString(),
+        updatedAt: user.updatedAt.toISOString(),
+        employee: user.employee ? {
+            ...user.employee,
+            hireDate: user.employee.hireDate.toISOString()
+        } : undefined
     };
 
     return {
         token: newAccessToken,
         refreshToken: newRefreshTokenString,
-        user: userResponse
+        user: userResponse as unknown as AuthResponse['user']
     };
 };
 

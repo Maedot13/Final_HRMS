@@ -1,7 +1,7 @@
-
 import { Request, Response } from 'express';
 import * as employeeService from '../services/employee.service';
 import { UserRole } from '@hrms/types';
+import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 
 export const getEmployee = async (req: Request, res: Response) => {
     try {
@@ -9,18 +9,39 @@ export const getEmployee = async (req: Request, res: Response) => {
         const user = req.user;
 
         if (isNaN(id)) {
-            return res.status(400).json({ message: 'Invalid employee ID. Please provide a numeric database ID.' });
+            return sendError(
+                res,
+                400,
+                ErrorCode.VALIDATION_ERROR,
+                'Invalid employee ID. Please provide a numeric database ID.',
+                null,
+                req
+            );
         }
 
         if (!user) {
-            return res.status(401).json({ message: 'Unauthorized' });
+            return sendError(
+                res,
+                401,
+                ErrorCode.AUTHENTICATION_FAILED,
+                'Unauthorized',
+                null,
+                req
+            );
         }
 
         // Fetch employee
         const employee = await employeeService.getEmployeeById(id);
 
         if (!employee) {
-            return res.status(404).json({ message: 'Employee not found' });
+            return sendError(
+                res,
+                404,
+                ErrorCode.NOT_FOUND,
+                'Employee not found',
+                null,
+                req
+            );
         }
 
         // Authorization:
@@ -30,12 +51,26 @@ export const getEmployee = async (req: Request, res: Response) => {
         const isAdminOrHR = user.role === UserRole.ADMIN || user.role === UserRole.HR_OFFICER;
 
         if (!isSelf && !isAdminOrHR) {
-            return res.status(403).json({ message: 'Forbidden' });
+            return sendError(
+                res,
+                403,
+                ErrorCode.FORBIDDEN,
+                'Forbidden',
+                null,
+                req
+            );
         }
 
-        res.json(employee);
+        sendSuccess(res, employee);
     } catch (error: any) {
-        res.status(500).json({ message: error.message });
+        sendError(
+            res,
+            500,
+            ErrorCode.INTERNAL_ERROR,
+            error.message,
+            null,
+            req
+        );
     }
 };
 
@@ -46,18 +81,39 @@ export const updateEmployee = async (req: Request, res: Response) => {
         const data = req.body;
 
         if (isNaN(id)) {
-            return res.status(400).json({ message: 'Invalid employee ID. Please provide a numeric database ID.' });
+            return sendError(
+                res,
+                400,
+                ErrorCode.VALIDATION_ERROR,
+                'Invalid employee ID. Please provide a numeric database ID.',
+                null,
+                req
+            );
         }
 
         if (!user) {
-            return res.status(401).json({ message: 'Unauthorized' });
+            return sendError(
+                res,
+                401,
+                ErrorCode.AUTHENTICATION_FAILED,
+                'Unauthorized',
+                null,
+                req
+            );
         }
 
         // Fetch employee to check ownership
         const employee = await employeeService.getEmployeeById(id);
 
         if (!employee) {
-            return res.status(404).json({ message: 'Employee not found' });
+            return sendError(
+                res,
+                404,
+                ErrorCode.NOT_FOUND,
+                'Employee not found',
+                null,
+                req
+            );
         }
 
         // Authorization:
@@ -68,18 +124,27 @@ export const updateEmployee = async (req: Request, res: Response) => {
         const isAdminOrHR = user.role === UserRole.ADMIN || user.role === UserRole.HR_OFFICER;
 
         if (!isSelf && !isAdminOrHR) {
-            return res.status(403).json({ message: 'Forbidden' });
+            return sendError(
+                res,
+                403,
+                ErrorCode.FORBIDDEN,
+                'Forbidden',
+                null,
+                req
+            );
         }
 
-        // TODO: Validate input with Zod schema (omitted for brevity in this step, should add later)
-
-        // Prevent critical field updates by non-admins if necessary
-        // For now, passing data through
-
         const updatedEmployee = await employeeService.updateEmployee(id, data);
-        res.json(updatedEmployee);
+        sendSuccess(res, updatedEmployee);
 
     } catch (error: any) {
-        res.status(500).json({ message: error.message });
+        sendError(
+            res,
+            500,
+            ErrorCode.INTERNAL_ERROR,
+            error.message,
+            null,
+            req
+        );
     }
 };

@@ -1,9 +1,9 @@
-
 import { Request, Response } from 'express';
 import * as leaveService from '../services/leave.service';
 import { UserRole } from '@hrms/types';
 import { z } from 'zod';
 import { LeaveType } from '@prisma/client';
+import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 
 const createLeaveSchema = z.object({
     leaveType: z.nativeEnum(LeaveType),
@@ -16,59 +16,68 @@ const createLeaveSchema = z.object({
 export const createLeaveRequest = async (req: Request, res: Response) => {
     try {
         const user = req.user;
-        if (!user || !user.employeeId) return res.status(401).json({ message: 'Unauthorized' });
+        if (!user || !user.employeeId) {
+            return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+        }
 
         const validation = createLeaveSchema.safeParse(req.body);
         if (!validation.success) {
-            return res.status(400).json({ errors: validation.error.format() });
+            return sendError(
+                res,
+                400,
+                ErrorCode.VALIDATION_ERROR,
+                'Invalid input',
+                validation.error.format(),
+                req
+            );
         }
 
-        // Need numeric employee PK, not string ID. 
-        // We know we can get it from db, or if we updated token payload to include it.
-        // For now, let's assume we fetch it or token has it.
-        // Actually token has `userId`. We need `employee.id` (int).
-        // Let's rely on service or helper to get employee PK from userId.
-        // TODO: ideally token should have employee PK or we fetch context middleware.
         const employee = req.employee;
-        if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
+        if (!employee) {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, 'Employee profile not found', null, req);
+        }
 
         const request = await leaveService.createLeaveRequest(employee.id, validation.data);
-        res.status(201).json(request);
+        sendSuccess(res, request, 201);
     } catch (error: any) {
-        res.status(400).json({ message: error.message });
+        sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
 
 export const getMyRequests = async (req: Request, res: Response) => {
     try {
         const user = req.user;
-        if (!user) return res.status(401).json({ message: 'Unauthorized' });
+        if (!user) {
+            return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+        }
 
         const employee = req.employee;
-        if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
+        if (!employee) {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, 'Employee profile not found', null, req);
+        }
 
         const requests = await leaveService.getEmployeeRequests(employee.id);
-        res.json(requests);
+        sendSuccess(res, requests);
     } catch (error: any) {
-        res.status(500).json({ message: error.message });
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
 
 export const getPendingRequests = async (req: Request, res: Response) => {
     try {
-        // Only Dept Head or HR
-        // Simple check for now
         const user = req.user;
-        if (!user) return res.status(401).json({ message: 'Unauthorized' });
+        if (!user) {
+            return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+        }
 
         if (user.role !== UserRole.DEPARTMENT_HEAD && user.role !== UserRole.HR_OFFICER && user.role !== UserRole.ADMIN) {
-            return res.status(403).json({ message: 'Forbidden' });
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
         }
 
         const requests = await leaveService.getPendingRequests();
-        res.json(requests);
+        sendSuccess(res, requests);
     } catch (error: any) {
-        res.status(500).json({ message: error.message });
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
 
@@ -78,18 +87,22 @@ export const approveRequest = async (req: Request, res: Response) => {
         const { comment } = req.body;
         const user = req.user;
 
-        if (!user) return res.status(401).json({ message: 'Unauthorized' });
+        if (!user) {
+            return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+        }
         if (user.role !== UserRole.DEPARTMENT_HEAD) {
-            return res.status(403).json({ message: 'Forbidden' });
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
         }
 
         const approver = req.employee;
-        if (!approver) return res.status(400).json({ message: 'Approver profile not found' });
+        if (!approver) {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Approver profile not found', null, req);
+        }
 
         const result = await leaveService.approveRequest(id, approver.id, comment);
-        res.json(result);
+        sendSuccess(res, result);
     } catch (error: any) {
-        res.status(400).json({ message: error.message });
+        sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
 
@@ -99,17 +112,21 @@ export const rejectRequest = async (req: Request, res: Response) => {
         const { comment } = req.body;
         const user = req.user;
 
-        if (!user) return res.status(401).json({ message: 'Unauthorized' });
+        if (!user) {
+            return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+        }
         if (user.role !== UserRole.DEPARTMENT_HEAD) {
-            return res.status(403).json({ message: 'Forbidden: Only Department Head can reject leave requests' });
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Only Department Head can reject leave requests', null, req);
         }
 
         const approver = req.employee;
-        if (!approver) return res.status(400).json({ message: 'Approver profile not found' });
+        if (!approver) {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Approver profile not found', null, req);
+        }
 
         const result = await leaveService.rejectRequest(id, approver.id, comment);
-        res.json(result);
+        sendSuccess(res, result);
     } catch (error: any) {
-        res.status(400).json({ message: error.message });
+        sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };

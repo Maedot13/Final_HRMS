@@ -91,7 +91,9 @@ async function runTests() {
         const res = await makeRequest('GET', '/health');
         if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
         if (res.body.status !== 'OK') throw new Error('Health check failed');
-        if (!res.body.database) throw new Error('Database status missing');
+        if (!res.body.services || res.body.services.database !== 'connected') {
+            throw new Error(`Database status: ${res.body.services?.database || 'missing'}`);
+        }
     });
 
     // Test 2: Rate Limiting
