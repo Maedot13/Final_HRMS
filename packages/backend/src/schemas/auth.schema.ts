@@ -6,7 +6,7 @@ export const loginSchema = z.object({
     password: z.string().min(1, 'Password is required')
 });
 
-const passwordSchema = z.string()
+export const passwordSchema = z.string()
     .min(8, 'Password must be at least 8 characters')
     .max(128, 'Password must not exceed 128 characters')
     .regex(/[a-z]/, 'Password must contain at least one lowercase letter')

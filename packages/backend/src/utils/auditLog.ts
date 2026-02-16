@@ -1,23 +1,8 @@
+import { AuditAction } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { Request } from 'express';
+export { AuditAction };
 
-export enum AuditAction {
-    USER_LOGIN = 'USER_LOGIN',
-    USER_LOGOUT = 'USER_LOGOUT',
-    USER_REGISTER = 'USER_REGISTER',
-    LEAVE_REQUEST_CREATE = 'LEAVE_REQUEST_CREATE',
-    LEAVE_REQUEST_APPROVE = 'LEAVE_REQUEST_APPROVE',
-    LEAVE_REQUEST_REJECT = 'LEAVE_REQUEST_REJECT',
-    CLEARANCE_INITIATE = 'CLEARANCE_INITIATE',
-    CLEARANCE_APPROVE = 'CLEARANCE_APPROVE',
-    CLEARANCE_REJECT = 'CLEARANCE_REJECT',
-    SABBATICAL_REQUEST_CREATE = 'SABBATICAL_REQUEST_CREATE',
-    SABBATICAL_APPROVE = 'SABBATICAL_APPROVE',
-    SABBATICAL_REJECT = 'SABBATICAL_REJECT',
-    EMPLOYEE_CREATE = 'EMPLOYEE_CREATE',
-    EMPLOYEE_UPDATE = 'EMPLOYEE_UPDATE',
-    PAYROLL_TRANSFER_CREATE = 'PAYROLL_TRANSFER_CREATE',
-}
 
 interface AuditLogParams {
     userId?: number;
@@ -118,6 +103,27 @@ export const auditClearance = async (
         action,
         entityType: 'ClearanceRequest',
         entityId: clearanceId,
+        changes,
+        ...metadata,
+    });
+};
+
+/**
+ * Audit log wrapper for user management actions
+ */
+export const auditUserUpdate = async (
+    action: AuditAction,
+    performerId: number,
+    targetUserId: number,
+    req: Request,
+    changes?: any
+) => {
+    const metadata = getRequestMetadata(req);
+    await createAuditLog({
+        userId: performerId,
+        action,
+        entityType: 'User',
+        entityId: targetUserId,
         changes,
         ...metadata,
     });

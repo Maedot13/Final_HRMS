@@ -1,6 +1,7 @@
 
 import { PrismaClient, ClearanceStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { createNotification, notifyDepartmentHead, notifyRole } from './notification.service';
 
 
 // 1. Initiate Clearance
@@ -27,7 +28,7 @@ export const initiateClearance = async (employeeId: number, reason: string, last
     }
 
     // Create Request + Checks Transactional
-    return prisma.clearanceRequest.create({
+    const clearance = await prisma.clearanceRequest.create({
         data: {
             employeeId,
             reason,
@@ -46,6 +47,51 @@ export const initiateClearance = async (employeeId: number, reason: string, last
             }
         }
     });
+
+    // 2. Notification Logic (Post-Creation)
+    const createdRequest = await prisma.clearanceRequest.findUnique({
+        where: { id: clearance.id },
+        include: {
+            employee: true
+        }
+    });
+
+    if (createdRequest) {
+        // Iterate through units to notify correct people
+        for (const unit of units) {
+            const unitName = unit.name.toUpperCase();
+            const message = `Clearance request from ${createdRequest.employee.name} requires your review.`;
+
+            if (unitName === 'HR' || unitName === 'HUMAN RESOURCES') {
+                await notifyRole('HR_OFFICER', {
+                    type: 'CLEARANCE_REVIEW_REQUIRED',
+                    title: 'Clearance Request: HR',
+                    message,
+                    relatedId: clearance.id,
+                    relatedType: 'CLEARANCE_REQUEST'
+                });
+            } else if (unitName === 'FINANCE') {
+                await notifyRole('FINANCE_OFFICER', {
+                    type: 'CLEARANCE_REVIEW_REQUIRED',
+                    title: 'Clearance Request: Finance',
+                    message,
+                    relatedId: clearance.id,
+                    relatedType: 'CLEARANCE_REQUEST'
+                });
+            } else if (unitName === 'DEPARTMENT HEAD' || unitName === createdRequest.employee.department.toUpperCase()) {
+                // If the unit is specifically "Department Head" or matches the employee's department name
+                await notifyDepartmentHead(createdRequest.employee.department, {
+                    type: 'CLEARANCE_REVIEW_REQUIRED',
+                    title: 'Clearance Request: Department',
+                    message,
+                    relatedId: clearance.id,
+                    relatedType: 'CLEARANCE_REQUEST'
+                });
+            }
+        }
+    }
+
+    return clearance;
 };
 
 // 2. Get Clearance Details
@@ -107,21 +153,56 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
             });
 
             // AUTOMATICALLY CREATE PAYROLL TRANSFER
-            const clearance = await tx.clearanceRequest.findUnique({ where: { id: clearanceId } });
+            const clearance = await tx.clearanceRequest.findUnique({
+                where: { id: clearanceId },
+                include: { employee: true }
+            });
             if (clearance) {
                 await tx.payrollTransfer.create({
                     data: {
                         employeeId: clearance.employeeId,
                         clearanceId: clearance.id,
                         reason: 'Clearance Completed',
-                        effectiveDate: new Date(), // Defaults to completion date
-                        status: 'PENDING', // Payroll officer will process it
-                        createdBy: approverId // The person who approved the last check triggers this
+                        effectiveDate: new Date(),
+                        status: 'PENDING',
+                        createdBy: approverId
+                    }
+                });
+
+                // Trigger Notification: Clearance Completed
+                await tx.notification.create({
+                    data: {
+                        userId: clearance.employee.userId,
+                        type: 'CLEARANCE_COMPLETED',
+                        title: 'Clearance Process Completed',
+                        message: 'All departments have approved your clearance. Payroll transfer has been initiated.',
+                        relatedId: clearance.id,
+                        relatedType: 'CLEARANCE_REQUEST'
                     }
                 });
             }
 
             return { status: 'COMPLETED', message: 'Clearance fully approved and Payroll Transfer initiated' };
+        }
+
+        // Notify employee about unit approval
+        const clearanceWithEmployee = await tx.clearanceRequest.findUnique({
+            where: { id: clearanceId },
+            include: { employee: true }
+        });
+        const unit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
+
+        if (clearanceWithEmployee) {
+            await tx.notification.create({
+                data: {
+                    userId: clearanceWithEmployee.employee.userId,
+                    type: 'CLEARANCE_UNIT_APPROVED',
+                    title: 'Clearance Unit Approved',
+                    message: `Department "${unit?.name || 'Unknown'}" has approved your clearance.`,
+                    relatedId: clearanceId,
+                    relatedType: 'CLEARANCE_REQUEST'
+                }
+            });
         }
 
         return { status: 'PROGRESS', message: 'Unit approved, others pending' };
@@ -157,8 +238,25 @@ export const rejectCheck = async (clearanceId: number, unitId: number, approverI
             }
         });
 
-        // We DO NOT fail the whole clearance request. It stays PENDING until this unit approves.
-        // Optionally, we could set a flag or notification, but for now simple state change is enough.
+        // Notify employee about rejection
+        const clearanceWithEmployee = await tx.clearanceRequest.findUnique({
+            where: { id: clearanceId },
+            include: { employee: true }
+        });
+        const unit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
+
+        if (clearanceWithEmployee) {
+            await tx.notification.create({
+                data: {
+                    userId: clearanceWithEmployee.employee.userId,
+                    type: 'CLEARANCE_UNIT_REJECTED',
+                    title: 'Clearance Unit Rejected',
+                    message: `Department "${unit?.name || 'Unknown'}" has rejected your clearance. Comment: ${comment}`,
+                    relatedId: clearanceId,
+                    relatedType: 'CLEARANCE_REQUEST'
+                }
+            });
+        }
 
         return { status: 'REJECTED', message: 'Clearance check rejected. Employee must resolve issues.' };
     });

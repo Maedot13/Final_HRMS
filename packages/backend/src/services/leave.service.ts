@@ -3,6 +3,7 @@ import { LeaveStatus, LeaveType } from '@prisma/client';
 import { checkOverlappingRequests } from './timeoff.service';
 import { prisma } from '../lib/prisma';
 import { LEAVE_BALANCES } from '../config/constants';
+import { createNotification, notifyDepartmentHead } from './notification.service';
 
 // Helper to get duration in days (excluding weekends/holidays - simplified for now to just diff)
 const calculateDays = (start: Date, end: Date): number => {
@@ -68,7 +69,7 @@ export const createLeaveRequest = async (
     await checkOverlappingRequests(employeeId, start, end);
 
     // 3. Create Request
-    return prisma.leaveRequest.create({
+    const request = await prisma.leaveRequest.create({
         data: {
             employeeId,
             leaveType: data.leaveType,
@@ -78,8 +79,20 @@ export const createLeaveRequest = async (
             reason: data.reason,
             attachmentUrl: data.attachmentUrl,
             status: LeaveStatus.PENDING
-        }
+        },
+        include: { employee: true }
     });
+
+    // NOTIFICATION: Notify Department Head
+    await notifyDepartmentHead(request.employee.department, {
+        type: 'LEAVE_REQUEST_CREATED',
+        title: 'New Leave Request',
+        message: `${request.employee.name} has requested ${request.days} days of ${request.leaveType} leave.`,
+        relatedId: request.id,
+        relatedType: 'LEAVE_REQUEST'
+    });
+
+    return request;
 };
 
 export const getEmployeeRequests = async (employeeId: number) => {
@@ -150,7 +163,7 @@ export const approveRequest = async (requestId: number, approverId: number, comm
         }
 
         // Update Request Status
-        return tx.leaveRequest.update({
+        const updatedRequest = await tx.leaveRequest.update({
             where: { id: requestId },
             data: {
                 status: LeaveStatus.APPROVED,
@@ -159,8 +172,21 @@ export const approveRequest = async (requestId: number, approverId: number, comm
                 resolvedAt: new Date(),
                 lastDecisionAt: new Date(),
                 updatedAt: new Date()
-            }
+            },
+            include: { employee: true }
         });
+
+        // Trigger Notification
+        await createNotification({
+            userId: updatedRequest.employee.userId,
+            type: 'LEAVE_APPROVED',
+            title: 'Leave Request Approved',
+            message: `Your ${updatedRequest.leaveType} leave request for ${updatedRequest.days} days has been approved.`,
+            relatedId: updatedRequest.id,
+            relatedType: 'LEAVE_REQUEST'
+        });
+
+        return updatedRequest;
     }, {
         isolationLevel: 'Serializable' // Strongest isolation level for critical operations
     });
@@ -173,7 +199,7 @@ export const rejectRequest = async (requestId: number, approverId: number, comme
         throw new Error(`Cannot reject leave request. Current status: ${request.status}`);
     }
 
-    return prisma.leaveRequest.update({
+    const updatedRequest = await prisma.leaveRequest.update({
         where: { id: requestId },
         data: {
             status: LeaveStatus.REJECTED,
@@ -182,6 +208,19 @@ export const rejectRequest = async (requestId: number, approverId: number, comme
             resolvedAt: new Date(),
             lastDecisionAt: new Date(),
             updatedAt: new Date()
-        }
+        },
+        include: { employee: true }
     });
+
+    // Trigger Notification
+    await createNotification({
+        userId: updatedRequest.employee.userId,
+        type: 'LEAVE_REJECTED',
+        title: 'Leave Request Rejected',
+        message: `Your ${updatedRequest.leaveType} leave request for ${updatedRequest.days} days has been rejected. Comment: ${comment || 'No comment provided'}`,
+        relatedId: updatedRequest.id,
+        relatedType: 'LEAVE_REQUEST'
+    });
+
+    return updatedRequest;
 };

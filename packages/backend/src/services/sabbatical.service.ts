@@ -3,6 +3,7 @@ import { LeaveStatus } from '@prisma/client';
 import { differenceInMonths } from 'date-fns';
 import { checkOverlappingRequests, checkSabbaticalEligibility } from './timeoff.service';
 import { prisma } from '../lib/prisma';
+import { createNotification, notifyDepartmentHead } from './notification.service';
 
 
 export const createSabbaticalRequest = async (
@@ -27,7 +28,8 @@ export const createSabbaticalRequest = async (
     // Rule 2.5: Overlap check
     await checkOverlappingRequests(employeeId, start, end);
 
-    return prisma.sabbaticalRequest.create({
+    // 3. Create Request
+    const request = await prisma.sabbaticalRequest.create({
         data: {
             employeeId,
             purpose: data.purpose,
@@ -37,8 +39,20 @@ export const createSabbaticalRequest = async (
             plan: data.plan,
             planDocumentUrl: data.planDocumentUrl,
             status: LeaveStatus.PENDING
-        }
+        },
+        include: { employee: true }
     });
+
+    // NOTIFICATION: Notify Department Head
+    await notifyDepartmentHead(request.employee.department, {
+        type: 'SABBATICAL_REQUEST_CREATED',
+        title: 'New Sabbatical Request',
+        message: `${request.employee.name} has requested a ${request.durationMonths}-month sabbatical.`,
+        relatedId: request.id,
+        relatedType: 'SABBATICAL_REQUEST'
+    });
+
+    return request;
 };
 
 export const getSabbaticalRequests = async (employeeId?: number) => {
@@ -63,8 +77,8 @@ export const approveSabbatical = async (requestId: number, approverId: number, c
         throw new Error(`Cannot approve sabbatical request. Current status: ${request.status}`);
     }
 
-    // Rule 3: Approval (Usually HR verifies then Dept Head, simplified here to one step or check role in controller)
-    return prisma.sabbaticalRequest.update({
+    // Rule 3: Approval
+    const updatedRequest = await prisma.sabbaticalRequest.update({
         where: { id: requestId },
         data: {
             status: LeaveStatus.APPROVED,
@@ -73,8 +87,21 @@ export const approveSabbatical = async (requestId: number, approverId: number, c
             resolvedAt: new Date(),
             lastDecisionAt: new Date(),
             updatedAt: new Date()
-        }
+        },
+        include: { employee: true }
     });
+
+    // Trigger Notification
+    await createNotification({
+        userId: updatedRequest.employee.userId,
+        type: 'SABBATICAL_APPROVED',
+        title: 'Sabbatical Request Approved',
+        message: `Your sabbatical request for ${updatedRequest.durationMonths} months has been approved.`,
+        relatedId: updatedRequest.id,
+        relatedType: 'SABBATICAL_REQUEST'
+    });
+
+    return updatedRequest;
 };
 export const rejectSabbatical = async (requestId: number, approverId: number, comment: string) => {
     const request = await prisma.sabbaticalRequest.findUnique({ where: { id: requestId } });
@@ -83,7 +110,7 @@ export const rejectSabbatical = async (requestId: number, approverId: number, co
         throw new Error(`Cannot reject sabbatical request. Current status: ${request.status}`);
     }
 
-    return prisma.sabbaticalRequest.update({
+    const updatedRequest = await prisma.sabbaticalRequest.update({
         where: { id: requestId },
         data: {
             status: LeaveStatus.REJECTED,
@@ -92,6 +119,19 @@ export const rejectSabbatical = async (requestId: number, approverId: number, co
             resolvedAt: new Date(),
             lastDecisionAt: new Date(),
             updatedAt: new Date()
-        }
+        },
+        include: { employee: true }
     });
+
+    // Trigger Notification
+    await createNotification({
+        userId: updatedRequest.employee.userId,
+        type: 'SABBATICAL_REJECTED',
+        title: 'Sabbatical Request Rejected',
+        message: `Your sabbatical request for ${updatedRequest.durationMonths} months has been rejected. Comment: ${comment || 'No comment provided'}`,
+        relatedId: updatedRequest.id,
+        relatedType: 'SABBATICAL_REQUEST'
+    });
+
+    return updatedRequest;
 };

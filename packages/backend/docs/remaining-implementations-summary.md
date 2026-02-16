@@ -138,7 +138,6 @@ await auditAuth(
 ## 📋 Remaining Recommendations (Not Implemented)
 
 ### High Priority
-
 #### Token Blacklist with Redis
 **Why Not Implemented**: Requires Redis installation and configuration
 
@@ -147,7 +146,7 @@ await auditAuth(
 - Create `src/lib/redis.ts` for connection
 - Implement token blacklist in `src/utils/tokenBlacklist.ts`
 - Update logout to add tokens to blacklist
-- Update auth middleware to check blacklist
+- Update auth middleware to check blacklistv
 
 ---
 

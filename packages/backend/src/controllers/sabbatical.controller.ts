@@ -58,7 +58,7 @@ export const approveRequest = async (req: Request, res: Response) => {
 
         if (!user) return res.status(401).json({ message: 'Unauthorized' });
 
-        // Only Dept Head or HR or Admin can approve
+        // Only Dept Head or HR or Admin can approve  
         if (![UserRole.DEPARTMENT_HEAD, UserRole.HR_OFFICER, UserRole.ADMIN].includes(user.role)) {
             return res.status(403).json({ message: 'Forbidden' });
         }

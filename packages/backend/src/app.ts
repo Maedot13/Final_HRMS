@@ -29,7 +29,6 @@ const globalLimiter = rateLimit({
 const authLimiter = rateLimit({
     windowMs: RATE_LIMITS.AUTH.WINDOW_MS,
     limit: RATE_LIMITS.AUTH.MAX_REQUESTS,
-    skipSuccessfulRequests: true,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: {
@@ -86,6 +85,10 @@ import leaveRoutes from './routes/leave.routes';
 import sabbaticalRoutes from './routes/sabbatical.routes';
 import clearanceRoutes from './routes/clearance.routes';
 import payrollRoutes from './routes/payroll.routes';
+import recruitmentRoutes from './routes/recruitment.routes';
+import notificationRoutes from './routes/notification.routes';
+import reportRoutes from './routes/report.routes';
+import userRoutes from './routes/userManagement.routes';
 
 // Apply stricter rate limiting to auth routes
 app.use('/api/v1/auth/login', authLimiter);
@@ -98,6 +101,10 @@ app.use('/api/v1/leave', leaveRoutes);
 app.use('/api/v1/sabbatical', sabbaticalRoutes);
 app.use('/api/v1/clearance', clearanceRoutes);
 app.use('/api/v1/payroll', payrollRoutes);
+app.use('/api/v1/recruitment', recruitmentRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/reports', reportRoutes);
+app.use('/api/v1/users', userRoutes);
 
 // Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
