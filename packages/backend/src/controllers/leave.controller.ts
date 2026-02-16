@@ -13,6 +13,9 @@ const createLeaveSchema = z.object({
     attachmentUrl: z.string().optional()
 });
 
+import { AuditAction } from '@prisma/client';
+import { logAction } from '../services/auditLog.service';
+
 export const createLeaveRequest = async (req: Request, res: Response) => {
     try {
         const user = req.user;
@@ -20,24 +23,27 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
             return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
         }
 
-        const validation = createLeaveSchema.safeParse(req.body);
-        if (!validation.success) {
-            return sendError(
-                res,
-                400,
-                ErrorCode.VALIDATION_ERROR,
-                'Invalid input',
-                validation.error.format(),
-                req
-            );
-        }
-
         const employee = req.employee;
         if (!employee) {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'Employee profile not found', null, req);
         }
 
-        const request = await leaveService.createLeaveRequest(employee.id, validation.data);
+        const attachmentUrl = req.file ? `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}` : req.body.attachmentUrl;
+
+        const request = await leaveService.createLeaveRequest(employee.id, {
+            ...req.body,
+            attachmentUrl
+        });
+
+        await logAction({
+            userId: user.userId,
+            action: AuditAction.LEAVE_REQUEST_CREATE,
+            entityType: 'LeaveRequest',
+            entityId: request.id,
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+        });
+
         sendSuccess(res, request, 201);
     } catch (error: any) {
         sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
@@ -100,6 +106,17 @@ export const approveRequest = async (req: Request, res: Response) => {
         }
 
         const result = await leaveService.approveRequest(id, approver.id, comment);
+
+        await logAction({
+            userId: user.userId,
+            action: AuditAction.LEAVE_REQUEST_APPROVE,
+            entityType: 'LeaveRequest',
+            entityId: result.id,
+            changes: { status: 'APPROVED', comment },
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+        });
+
         sendSuccess(res, result);
     } catch (error: any) {
         sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
@@ -125,6 +142,17 @@ export const rejectRequest = async (req: Request, res: Response) => {
         }
 
         const result = await leaveService.rejectRequest(id, approver.id, comment);
+
+        await logAction({
+            userId: user.userId,
+            action: AuditAction.LEAVE_REQUEST_REJECT,
+            entityType: 'LeaveRequest',
+            entityId: result.id,
+            changes: { status: 'REJECTED', comment },
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+        });
+
         sendSuccess(res, result);
     } catch (error: any) {
         sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);

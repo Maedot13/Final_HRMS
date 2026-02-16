@@ -180,6 +180,18 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
                         relatedType: 'CLEARANCE_REQUEST'
                     }
                 });
+
+                // Send Email
+                const user = await tx.user.findUnique({ where: { id: clearance.employee.userId } });
+                if (user && user.email) {
+                    const { sendEmail } = await import('./email.service');
+                    const { templates } = await import('../utils/emailTemplates');
+                    await sendEmail({
+                        to: user.email,
+                        subject: 'Clearance Process Completed',
+                        html: templates.clearanceCompleted(clearance.employee.name)
+                    });
+                }
             }
 
             return { status: 'COMPLETED', message: 'Clearance fully approved and Payroll Transfer initiated' };

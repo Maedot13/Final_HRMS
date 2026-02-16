@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import * as sabbaticalService from '../services/sabbatical.service';
 import { UserRole } from '@hrms/types';
 import { z } from 'zod';
+import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 
 const createSabbaticalSchema = z.object({
     purpose: z.string().min(10),
@@ -12,41 +13,63 @@ const createSabbaticalSchema = z.object({
     planDocumentUrl: z.string().url().optional()
 });
 
+import { AuditAction } from '@prisma/client';
+import { logAction } from '../services/auditLog.service';
+
 export const createSabbatical = async (req: Request, res: Response) => {
     try {
         const user = req.user;
-        if (!user) return res.status(401).json({ message: 'Unauthorized' });
-
-        const validation = createSabbaticalSchema.safeParse(req.body);
-        if (!validation.success) {
-            return res.status(400).json({ errors: validation.error.format() });
+        if (!user || !user.employeeId) {
+            return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
         }
 
         const employee = req.employee;
-        if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
+        if (!employee) {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, 'Employee profile not found', null, req);
+        }
 
-        const request = await sabbaticalService.createSabbaticalRequest(employee.id, validation.data);
-        res.status(201).json(request);
+        const planDocumentUrl = req.file ? `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}` : req.body.planDocumentUrl;
+
+        // req.body is already validated by middleware
+        const request = await sabbaticalService.createSabbaticalRequest(employee.id, {
+            ...req.body,
+            planDocumentUrl
+        });
+
+        await logAction({
+            userId: user.userId,
+            action: AuditAction.SABBATICAL_REQUEST_CREATE,
+            entityType: 'SabbaticalRequest',
+            entityId: request.id,
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+        });
+
+        sendSuccess(res, request, 201);
     } catch (error: any) {
-        res.status(400).json({ message: error.message });
+        sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
 
 export const getRequests = async (req: Request, res: Response) => {
     try {
         const user = req.user;
-        if (!user) return res.status(401).json({ message: 'Unauthorized' });
+        if (!user) {
+            return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+        }
 
         const employee = req.employee;
-        if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
+        if (!employee) {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, 'Employee profile not found', null, req);
+        }
 
         // If employee, see own. If HR/Admin/Head, see all (or filtered, simplified to all for now)
         const isPrivileged = [UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD].includes(user.role);
 
         const requests = await sabbaticalService.getSabbaticalRequests(isPrivileged ? undefined : employee.id);
-        res.json(requests);
+        sendSuccess(res, requests);
     } catch (error: any) {
-        res.status(500).json({ message: error.message });
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
 
@@ -56,20 +79,35 @@ export const approveRequest = async (req: Request, res: Response) => {
         const { comment } = req.body;
         const user = req.user;
 
-        if (!user) return res.status(401).json({ message: 'Unauthorized' });
+        if (!user) {
+            return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+        }
 
         // Only Dept Head or HR or Admin can approve  
         if (![UserRole.DEPARTMENT_HEAD, UserRole.HR_OFFICER, UserRole.ADMIN].includes(user.role)) {
-            return res.status(403).json({ message: 'Forbidden' });
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
         }
 
         const approver = req.employee;
-        if (!approver) return res.status(400).json({ message: 'Approver profile not found' });
+        if (!approver) {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Approver profile not found', null, req);
+        }
 
         const result = await sabbaticalService.approveSabbatical(id, approver.id, comment);
-        res.json(result);
+
+        await logAction({
+            userId: user.userId,
+            action: AuditAction.SABBATICAL_APPROVE,
+            entityType: 'SabbaticalRequest',
+            entityId: result.id,
+            changes: { status: 'APPROVED', comment }, // Store outcome in changes
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+        });
+
+        sendSuccess(res, result);
     } catch (error: any) {
-        res.status(400).json({ message: error.message });
+        sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
 
@@ -78,22 +116,37 @@ export const rejectRequest = async (req: Request, res: Response) => {
         const id = parseInt(req.params.id);
         const { comment } = req.body;
         const user = req.user;
-        if (!user) return res.status(401).json({ message: 'Unauthorized' });
+        if (!user) {
+            return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+        }
 
         if (!comment || comment.trim().length < 5) {
-            return res.status(400).json({ message: 'Rejection requires a comment (min 5 characters)' });
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Rejection requires a comment (min 5 characters)', null, req);
         }
 
         if (![UserRole.DEPARTMENT_HEAD, UserRole.HR_OFFICER, UserRole.ADMIN].includes(user.role)) {
-            return res.status(403).json({ message: 'Forbidden' });
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
         }
 
         const approver = req.employee;
-        if (!approver) return res.status(400).json({ message: 'Approver profile not found' });
+        if (!approver) {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Approver profile not found', null, req);
+        }
 
         const result = await sabbaticalService.rejectSabbatical(id, approver.id, comment);
-        res.json(result);
+
+        await logAction({
+            userId: user.userId,
+            action: AuditAction.SABBATICAL_REJECT,
+            entityType: 'SabbaticalRequest',
+            entityId: result.id,
+            changes: { status: 'REJECTED', comment },
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+        });
+
+        sendSuccess(res, result);
     } catch (error: any) {
-        res.status(400).json({ message: error.message });
+        sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };

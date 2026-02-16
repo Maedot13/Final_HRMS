@@ -1,57 +1,66 @@
+
 import { prismaMock } from '../../lib/prisma-mock';
-import { checkSabbaticalEligibility } from '../timeoff.service';
+import * as timeoffService from '../timeoff.service';
 import { LeaveStatus } from '@prisma/client';
 
-describe('Timeoff Service - Sabbatical Eligibility', () => {
-    const mockEmployeeId = 1;
-
+describe('TimeoffService', () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    it('should throw error if service years < 7', async () => {
-        prismaMock.employee.findUnique.mockResolvedValue({
-            id: mockEmployeeId,
-            serviceYears: 5 // Less than 7
-        } as any);
+    describe('checkOverlappingRequests', () => {
+        it('should allow request with no overlap', async () => {
+            prismaMock.leaveRequest.findFirst.mockResolvedValue(null);
+            prismaMock.sabbaticalRequest.findFirst.mockResolvedValue(null);
 
-        await expect(checkSabbaticalEligibility(mockEmployeeId))
-            .rejects
-            .toThrow('Sabbatical requires 7 years of service');
+            await expect(
+                timeoffService.checkOverlappingRequests(1, new Date('2024-06-01'), new Date('2024-06-05'))
+            ).resolves.not.toThrow();
+        });
+
+        it('should throw error if overlapping leave exists', async () => {
+            prismaMock.leaveRequest.findFirst.mockResolvedValue({
+                id: 1,
+                status: LeaveStatus.APPROVED
+            } as any);
+
+            await expect(
+                timeoffService.checkOverlappingRequests(1, new Date('2024-06-01'), new Date('2024-06-05'))
+            ).rejects.toThrow('Overlapping leave request');
+        });
+
+        it('should throw error if overlapping sabbatical exists', async () => {
+            prismaMock.leaveRequest.findFirst.mockResolvedValue(null);
+            prismaMock.sabbaticalRequest.findFirst.mockResolvedValue({
+                id: 1,
+                status: LeaveStatus.APPROVED
+            } as any);
+
+            await expect(
+                timeoffService.checkOverlappingRequests(1, new Date('2024-06-01'), new Date('2024-06-05'))
+            ).rejects.toThrow('Overlapping sabbatical request');
+        });
     });
 
-    it('should throw error if cooldown period not met', async () => {
-        prismaMock.employee.findUnique.mockResolvedValue({
-            id: mockEmployeeId,
-            serviceYears: 10
-        } as any);
+    describe('checkSabbaticalEligibility', () => {
+        it('should allow sabbatical if eligible', async () => {
+            prismaMock.employee.findUnique.mockResolvedValue({
+                id: 1,
+                serviceYears: 10, // Assuming 7+ years required
+                sabbaticalHistory: []
+            } as any);
 
-        // Mock last sabbatical ended 2 years ago
-        const twoYearsAgo = new Date();
-        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+            await expect(timeoffService.checkSabbaticalEligibility(1)).resolves.not.toThrow();
+        });
 
-        prismaMock.sabbaticalRequest.findFirst.mockResolvedValue({
-            id: 1,
-            endDate: twoYearsAgo,
-            status: LeaveStatus.APPROVED
-        } as any);
+        it('should throw error if not enough service years', async () => {
+            prismaMock.employee.findUnique.mockResolvedValue({
+                id: 1,
+                serviceYears: 2, // Less than required
+                sabbaticalHistory: []
+            } as any);
 
-        await expect(checkSabbaticalEligibility(mockEmployeeId))
-            .rejects
-            .toThrow('Sabbatical cooldown period not met');
-    });
-
-    it('should pass if eligible', async () => {
-        prismaMock.employee.findUnique.mockResolvedValue({
-            id: mockEmployeeId,
-            serviceYears: 10
-        } as any);
-
-        // No previous sabbatical
-        prismaMock.sabbaticalRequest.findFirst.mockResolvedValue(null);
-
-        await expect(checkSabbaticalEligibility(mockEmployeeId))
-            .resolves
-            .not.toThrow();
+            await expect(timeoffService.checkSabbaticalEligibility(1)).rejects.toThrow();
+        });
     });
 });

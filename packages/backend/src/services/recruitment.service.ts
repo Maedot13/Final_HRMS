@@ -2,6 +2,8 @@
 import { JobStatus, ApplicationStatus, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { createNotification } from './notification.service';
+import { sendEmail } from './email.service';
+import { templates } from '../utils/emailTemplates';
 
 export const createJobPosting = async (data: {
     title: string;
@@ -79,6 +81,18 @@ export const applyForJob = async (employeeId: number, userId: number, userRole: 
         }
     });
     if (existing) throw new Error('You have already applied for this position');
+
+    // Fetch user email to send confirmation
+    const applicantUser = await prisma.user.findUnique({ where: { id: userId }, include: { employee: true } });
+    const appliedJob = await prisma.jobPosting.findUnique({ where: { id: data.jobPostingId } });
+
+    if (applicantUser && applicantUser.email && appliedJob && applicantUser.employee) {
+        await sendEmail({
+            to: applicantUser.email,
+            subject: `Application Received: ${appliedJob.title}`,
+            html: templates.recruitmentApplicationReceived(applicantUser.employee.name, appliedJob.title)
+        });
+    }
 
     return prisma.jobApplication.create({
         data: {

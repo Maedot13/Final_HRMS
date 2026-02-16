@@ -101,6 +101,18 @@ export const approveSabbatical = async (requestId: number, approverId: number, c
         relatedType: 'SABBATICAL_REQUEST'
     });
 
+    // Send Email
+    const user = await prisma.user.findUnique({ where: { id: updatedRequest.employee.userId } });
+    if (user && user.email) {
+        const { sendEmail } = await import('./email.service');
+        const { templates } = await import('../utils/emailTemplates');
+        await sendEmail({
+            to: user.email,
+            subject: 'Sabbatical Request Approved',
+            html: templates.sabbaticalRequestStatusUpdate('Approved', comment)
+        });
+    }
+
     return updatedRequest;
 };
 export const rejectSabbatical = async (requestId: number, approverId: number, comment: string) => {
@@ -132,6 +144,18 @@ export const rejectSabbatical = async (requestId: number, approverId: number, co
         relatedId: updatedRequest.id,
         relatedType: 'SABBATICAL_REQUEST'
     });
+
+    // Send Email
+    const user = await prisma.user.findUnique({ where: { id: updatedRequest.employee.userId } });
+    if (user && user.email) {
+        const { sendEmail } = await import('./email.service');
+        const { templates } = await import('../utils/emailTemplates');
+        await sendEmail({
+            to: user.email,
+            subject: 'Sabbatical Request Rejected',
+            html: templates.sabbaticalRequestStatusUpdate('Rejected', comment)
+        });
+    }
 
     return updatedRequest;
 };

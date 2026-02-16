@@ -5,6 +5,8 @@ import morgan from 'morgan';
 import { rateLimit } from 'express-rate-limit';
 import { RATE_LIMITS } from './config/constants';
 import requestId from 'express-request-id';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger';
 
 const app = express();
 
@@ -41,6 +43,12 @@ const authLimiter = rateLimit({
 });
 
 app.use(globalLimiter);
+
+// Swagger Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// Static Files
+app.use('/uploads', express.static('uploads'));
 
 // Health Check
 app.get('/health', async (req, res) => {

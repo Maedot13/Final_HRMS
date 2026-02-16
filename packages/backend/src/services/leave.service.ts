@@ -4,6 +4,8 @@ import { checkOverlappingRequests } from './timeoff.service';
 import { prisma } from '../lib/prisma';
 import { LEAVE_BALANCES } from '../config/constants';
 import { createNotification, notifyDepartmentHead } from './notification.service';
+import { sendEmail } from './email.service';
+import { templates } from '../utils/emailTemplates';
 
 // Helper to get duration in days (excluding weekends/holidays - simplified for now to just diff)
 const calculateDays = (start: Date, end: Date): number => {
@@ -186,6 +188,21 @@ export const approveRequest = async (requestId: number, approverId: number, comm
             relatedType: 'LEAVE_REQUEST'
         });
 
+        // 3. Send Email
+        if (updatedRequest.employee && updatedRequest.employee.userId) { // Assuming userId links to user with email
+            // We need to fetch the user email. For now, we'll assume we can get it or the employee model has it
+            // Ideally: const user = await prisma.user.findUnique({ where: { id: updatedRequest.employee.userId }});
+            // For this implementation, I'll fetch it to be safe and correct
+            const user = await prisma.user.findUnique({ where: { id: updatedRequest.employee.userId } });
+            if (user && user.email) {
+                await sendEmail({
+                    to: user.email,
+                    subject: `Leave Request Approved`,
+                    html: templates.leaveRequestStatusUpdate('Approved', comment || '')
+                });
+            }
+        }
+
         return updatedRequest;
     }, {
         isolationLevel: 'Serializable' // Strongest isolation level for critical operations
@@ -221,6 +238,16 @@ export const rejectRequest = async (requestId: number, approverId: number, comme
         relatedId: updatedRequest.id,
         relatedType: 'LEAVE_REQUEST'
     });
+
+    // Send Email
+    const user = await prisma.user.findUnique({ where: { id: updatedRequest.employee.userId } });
+    if (user && user.email) {
+        await sendEmail({
+            to: user.email,
+            subject: `Leave Request Rejected`,
+            html: templates.leaveRequestStatusUpdate('Rejected', comment || '')
+        });
+    }
 
     return updatedRequest;
 };
