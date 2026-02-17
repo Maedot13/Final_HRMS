@@ -30,6 +30,18 @@ describe('Leave Workflow Integration', () => {
                 reason: 'Summer break'
             };
 
+            // Mock Employee Attachment (Middleware)
+            prismaMock.employee.findUnique.mockResolvedValue({
+                id: 1,
+                userId: userId,
+                employeeId: 'EMP001',
+                department: 'Engineering',
+                name: 'Test Employee'
+            } as any);
+
+            // Mock Notification (Department Head search)
+            prismaMock.employee.findMany.mockResolvedValue([]);
+
             // Mock Balance Check
             prismaMock.leaveBalance.upsert.mockResolvedValue({
                 id: 1,
@@ -55,7 +67,13 @@ describe('Leave Workflow Integration', () => {
                 days: 5,
                 status: LeaveStatus.PENDING,
                 createdAt: new Date(),
-                updatedAt: new Date()
+                updatedAt: new Date(),
+                employee: {
+                    id: 1,
+                    userId: userId,
+                    name: 'Test Employee',
+                    department: 'Engineering'
+                }
             } as any);
 
             const res = await request(app)

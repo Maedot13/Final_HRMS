@@ -32,7 +32,7 @@ describe('Auth Integration', () => {
                 .send(userData);
 
             expect(res.status).toBe(400);
-            expect(res.body.error.message).toContain('Employee ID already exists');
+            expect(res.body.error.message).toContain('Employee ID already in use');
         });
     });
 
@@ -73,7 +73,7 @@ describe('Auth Integration', () => {
                 .send(loginData);
 
             expect(res.status).toBe(401);
-            expect(res.body.error.message).toContain('Account is inactive');
+            expect(res.body.error.message).toContain('Invalid credentials');
         });
     });
 });

@@ -13,9 +13,11 @@ declare global {
     }
 }
 
+import { sendError, ErrorCode } from '../utils/errorHandler';
+
 export const attachEmployee = async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
-        return res.status(401).json({ message: 'Authentication required' });
+        return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Authentication required', null, req);
     }
 
     try {
@@ -24,12 +26,12 @@ export const attachEmployee = async (req: Request, res: Response, next: NextFunc
         });
 
         if (!employee) {
-            return res.status(404).json({ message: 'Employee profile not found' });
+            return sendError(res, 404, ErrorCode.NOT_FOUND, 'Employee profile not found', null, req);
         }
 
         req.employee = employee;
         next();
     } catch (error: any) {
-        res.status(500).json({ message: 'Error fetching employee profile', error: error.message });
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, 'Error fetching employee profile', error.message, req);
     }
 };

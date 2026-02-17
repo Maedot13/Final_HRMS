@@ -104,8 +104,22 @@ export const getEmployeeRequests = async (employeeId: number) => {
     });
 };
 
-export const getPendingRequests = async () => {
-    // In a real app, filtering by department would happen here based on the Approver's department
+// For Department Heads - filtered by department
+export const getPendingRequests = async (approverDepartment: string) => {
+    return prisma.leaveRequest.findMany({
+        where: {
+            status: LeaveStatus.PENDING,
+            employee: {
+                department: approverDepartment
+            }
+        },
+        include: { employee: true },
+        orderBy: { createdAt: 'asc' }
+    });
+};
+
+// For HR Officers and Admins - see all requests
+export const getAllPendingRequests = async () => {
     return prisma.leaveRequest.findMany({
         where: { status: LeaveStatus.PENDING },
         include: { employee: true },
@@ -113,11 +127,24 @@ export const getPendingRequests = async () => {
     });
 };
 
-export const approveRequest = async (requestId: number, approverId: number, comment?: string) => {
+export const approveRequest = async (requestId: number, approverId: number, approverDepartment: string, comment?: string) => {
     return prisma.$transaction(async (tx) => {
-        const request = await tx.leaveRequest.findUnique({ where: { id: requestId } });
+        const request = await tx.leaveRequest.findUnique({
+            where: { id: requestId },
+            include: { employee: true }
+        });
         if (!request) throw new Error('Request not found');
         if (request.status !== LeaveStatus.PENDING) throw new Error('Request is not pending');
+
+        // Department-scoped authorization check
+        if (request.employee.department !== approverDepartment) {
+            throw new Error('Cannot approve requests from other departments');
+        }
+
+        // Self-approval prevention
+        if (request.employeeId === approverId) {
+            throw new Error('Cannot approve your own request');
+        }
 
         const year = request.startDate.getFullYear();
 
@@ -209,11 +236,24 @@ export const approveRequest = async (requestId: number, approverId: number, comm
     });
 };
 
-export const rejectRequest = async (requestId: number, approverId: number, comment?: string) => {
-    const request = await prisma.leaveRequest.findUnique({ where: { id: requestId } });
+export const rejectRequest = async (requestId: number, approverId: number, approverDepartment: string, comment?: string) => {
+    const request = await prisma.leaveRequest.findUnique({
+        where: { id: requestId },
+        include: { employee: true }
+    });
     if (!request) throw new Error('Request not found');
     if (request.status !== LeaveStatus.PENDING) {
         throw new Error(`Cannot reject leave request. Current status: ${request.status}`);
+    }
+
+    // Department-scoped authorization check
+    if (request.employee.department !== approverDepartment) {
+        throw new Error('Cannot reject requests from other departments');
+    }
+
+    // Self-approval prevention
+    if (request.employeeId === approverId) {
+        throw new Error('Cannot reject your own request');
     }
 
     const updatedRequest = await prisma.leaveRequest.update({

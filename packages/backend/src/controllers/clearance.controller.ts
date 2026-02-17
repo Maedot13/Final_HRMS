@@ -10,6 +10,16 @@ const initiateSchema = z.object({
     lastWorkingDay: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/))
 });
 
+const approveCheckSchema = z.object({
+    unitId: z.number().int().positive('Unit ID must be a positive integer'),
+    comment: z.string().min(1).max(500).optional()
+});
+
+const rejectCheckSchema = z.object({
+    unitId: z.number().int().positive('Unit ID must be a positive integer'),
+    comment: z.string().min(5, 'Comment is required for rejection').max(500)
+});
+
 import { AuditAction } from '@prisma/client';
 import { logAction } from '../services/auditLog.service';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
@@ -122,7 +132,7 @@ export const rejectCheck = async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
 
-        const validation = approveCheckSchema.safeParse(req.body);
+        const validation = rejectCheckSchema.safeParse(req.body);
         if (!validation.success) return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid input', validation.error.format(), req);
         const { unitId, comment } = validation.data;
 
@@ -161,20 +171,20 @@ export const getPendingChecksForUnit = async (req: Request, res: Response) => {
     try {
         const unitId = parseInt(req.params.unitId);
         if (isNaN(unitId)) {
-            return res.status(400).json({ message: 'Invalid unit ID' });
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid unit ID', null, req);
         }
 
         const user = req.user;
-        if (!user) return res.status(401).json({ message: 'Unauthorized' });
+        if (!user) return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
 
         // Authorization: Only ADMIN, DEPARTMENT_HEAD, or HR_OFFICER can view pending checks
         if (![UserRole.ADMIN, UserRole.DEPARTMENT_HEAD, UserRole.HR_OFFICER].includes(user.role)) {
-            return res.status(403).json({ message: 'Forbidden: Insufficient permissions' });
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden: Insufficient permissions', null, req);
         }
 
         const pendingChecks = await clearanceService.getPendingChecksForUnit(unitId);
-        res.json(pendingChecks);
+        sendSuccess(res, pendingChecks);
     } catch (error: any) {
-        res.status(500).json({ message: error.message });
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };

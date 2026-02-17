@@ -70,6 +70,29 @@ export const getSabbaticalRequests = async (employeeId?: number) => {
     });
 };
 
+// For Department Heads - filtered by department
+export const getPendingRequests = async (approverDepartment: string) => {
+    return prisma.sabbaticalRequest.findMany({
+        where: {
+            status: LeaveStatus.PENDING,
+            employee: {
+                department: approverDepartment
+            }
+        },
+        include: { employee: true },
+        orderBy: { createdAt: 'asc' }
+    });
+};
+
+// For HR Officers and Admins - see all requests
+export const getAllPendingRequests = async () => {
+    return prisma.sabbaticalRequest.findMany({
+        where: { status: LeaveStatus.PENDING },
+        include: { employee: true },
+        orderBy: { createdAt: 'asc' }
+    });
+};
+
 export const approveSabbatical = async (requestId: number, approverId: number, comment?: string) => {
     const request = await prisma.sabbaticalRequest.findUnique({ where: { id: requestId } });
     if (!request) throw new Error('Sabbatical request not found');

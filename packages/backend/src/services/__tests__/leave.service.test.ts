@@ -126,6 +126,16 @@ describe('LeaveService - Employee to Department Head Workflow', () => {
 
     describe('approveRequest - Department Head Action', () => {
         it('should approve request and deduct balance', async () => {
+            const mockEmployee = {
+                id: 1,
+                userId: 1,
+                employeeId: 'EMP001',
+                name: 'John Doe',
+                department: 'Engineering',
+                position: 'Software Developer',
+                hireDate: new Date('2020-01-01'),
+            };
+
             const mockRequest = {
                 id: 1,
                 employeeId: 1,
@@ -134,6 +144,7 @@ describe('LeaveService - Employee to Department Head Workflow', () => {
                 endDate: new Date('2024-06-05'),
                 days: 5,
                 status: LeaveStatus.PENDING,
+                employee: mockEmployee, // Include employee relation
             };
 
             prismaMock.$transaction.mockImplementation(async (callback: any) => {
@@ -150,7 +161,8 @@ describe('LeaveService - Employee to Department Head Workflow', () => {
                 employee: { userId: 1, name: 'John Doe' },
             } as any);
 
-            const result = await leaveService.approveRequest(1, 2, 'Approved for vacation');
+            // Pass department parameter (4th argument)
+            const result = await leaveService.approveRequest(1, 2, 'Engineering', 'Approved for vacation');
 
             expect(result.status).toBe(LeaveStatus.APPROVED);
             // We expect logic to handle approver assignment via update data

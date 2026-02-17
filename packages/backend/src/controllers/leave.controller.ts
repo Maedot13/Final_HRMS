@@ -72,7 +72,9 @@ export const getMyRequests = async (req: Request, res: Response) => {
 export const getPendingRequests = async (req: Request, res: Response) => {
     try {
         const user = req.user;
-        if (!user) {
+        const employee = req.employee;
+
+        if (!user || !employee) {
             return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
         }
 
@@ -80,7 +82,11 @@ export const getPendingRequests = async (req: Request, res: Response) => {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
         }
 
-        const requests = await leaveService.getPendingRequests();
+        // Department Heads see only their department, HR/Admin see all
+        const requests = user.role === UserRole.DEPARTMENT_HEAD
+            ? await leaveService.getPendingRequests(employee.department)
+            : await leaveService.getAllPendingRequests();
+
         sendSuccess(res, requests);
     } catch (error: any) {
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
@@ -105,7 +111,7 @@ export const approveRequest = async (req: Request, res: Response) => {
             return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Approver profile not found', null, req);
         }
 
-        const result = await leaveService.approveRequest(id, approver.id, comment);
+        const result = await leaveService.approveRequest(id, approver.id, approver.department, comment);
 
         await logAction({
             userId: user.userId,
@@ -141,7 +147,7 @@ export const rejectRequest = async (req: Request, res: Response) => {
             return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Approver profile not found', null, req);
         }
 
-        const result = await leaveService.rejectRequest(id, approver.id, comment);
+        const result = await leaveService.rejectRequest(id, approver.id, approver.department, comment);
 
         await logAction({
             userId: user.userId,
