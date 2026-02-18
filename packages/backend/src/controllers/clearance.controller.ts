@@ -5,20 +5,11 @@ import { UserRole } from '@hrms/types';
 import { z } from 'zod';
 import { sanitizeInput } from '../utils/sanitize';
 
-const initiateSchema = z.object({
-    reason: z.string().min(5, 'Reason must be at least 5 characters'),
-    lastWorkingDay: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/))
-});
-
-const approveCheckSchema = z.object({
-    unitId: z.number().int().positive('Unit ID must be a positive integer'),
-    comment: z.string().min(1).max(500).optional()
-});
-
-const rejectCheckSchema = z.object({
-    unitId: z.number().int().positive('Unit ID must be a positive integer'),
-    comment: z.string().min(5, 'Comment is required for rejection').max(500)
-});
+import {
+    initiateClearanceSchema,
+    approveCheckSchema,
+    rejectCheckSchema
+} from '../schemas/clearance.schema';
 
 import { AuditAction } from '@prisma/client';
 import { logAction } from '../services/auditLog.service';
@@ -40,7 +31,7 @@ export const initiateClearance = async (req: Request, res: Response) => {
         // Wait, the previous file view showed `res.status(201).json`. Ideally we standardize.
         // I will standardize AND add logs.
 
-        const validation = initiateSchema.safeParse(req.body);
+        const validation = initiateClearanceSchema.safeParse(req.body);
         if (!validation.success) return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid input', validation.error.format(), req);
 
         const { getEmployeeByUserId } = await import('../services/employee.service');
@@ -108,7 +99,7 @@ export const approveCheck = async (req: Request, res: Response) => {
 
         const sanitizedComment = comment ? sanitizeInput(comment) : undefined;
 
-        const result = await clearanceService.approveCheck(clearanceId, unitId, approver.id, sanitizedComment);
+        const result = await clearanceService.approveCheck(clearanceId, unitId, approver.id, user.userId, sanitizedComment);
 
         await logAction({
             userId: user.userId,
@@ -148,7 +139,7 @@ export const rejectCheck = async (req: Request, res: Response) => {
 
         const sanitizedComment = sanitizeInput(comment);
 
-        const result = await clearanceService.rejectCheck(clearanceId, unitId, approver.id, sanitizedComment);
+        const result = await clearanceService.rejectCheck(clearanceId, unitId, approver.id, user.userId, sanitizedComment);
 
         await logAction({
             userId: user.userId,

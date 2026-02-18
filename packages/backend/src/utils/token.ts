@@ -19,7 +19,7 @@ export const generateToken = (payload: TokenPayload): string => {
 export const verifyToken = (token: string): TokenPayload => {
     try {
         return jwt.verify(token, env.JWT_SECRET) as TokenPayload;
-    } catch (error) {
+    } catch {
         throw new Error('Invalid token');
     }
 };
@@ -33,7 +33,8 @@ export const generateRefreshToken = (payload: TokenPayload): string => {
 export const verifyRefreshToken = (token: string): TokenPayload => {
     try {
         return jwt.verify(token, env.JWT_REFRESH_SECRET) as TokenPayload;
-    } catch (error: any) {
-        throw new Error(`Malformed or expired refresh token: ${error.message}`);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        throw new Error(`Malformed or expired refresh token: ${message}`);
     }
 };

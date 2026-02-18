@@ -7,6 +7,8 @@ import { RATE_LIMITS } from './config/constants';
 import requestId from 'express-request-id';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
+import cookieParser from 'cookie-parser';
+import csrf from 'csurf';
 
 const app = express();
 
@@ -17,6 +19,7 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
+app.use(cookieParser());
 app.use(requestId()); // Add request ID to all requests
 app.use(morgan('dev'));
 
@@ -97,6 +100,23 @@ import recruitmentRoutes from './routes/recruitment.routes';
 import notificationRoutes from './routes/notification.routes';
 import reportRoutes from './routes/report.routes';
 import userRoutes from './routes/userManagement.routes';
+import auditRoutes from './routes/audit.routes';
+
+// CSRF Protection
+const csrfProtection = csrf({ cookie: true });
+
+// Endpoint to get CSRF token
+app.get('/api/v1/csrf-token', csrfProtection, (req, res) => {
+    res.json({ csrfToken: req.csrfToken() });
+});
+
+// Apply CSRF protection to state-changing routes except in test environment
+if (process.env.NODE_ENV !== 'test') {
+    app.use('/api/v1/leave', csrfProtection);
+    app.use('/api/v1/sabbatical', csrfProtection);
+    app.use('/api/v1/clearance', csrfProtection);
+    app.use('/api/v1/users', csrfProtection);
+}
 
 // Apply stricter rate limiting to auth routes
 app.use('/api/v1/auth/login', authLimiter);
@@ -113,10 +133,13 @@ app.use('/api/v1/recruitment', recruitmentRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/audit-logs', auditRoutes);
+
+import { logger } from './utils/logger';
 
 // Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error(`[Error] ${req.method} ${req.url}:`, err);
+    logger.error(`[Error] ${req.method} ${req.url}: ${err.message}`, { stack: err.stack });
 
     // Prisma Unique Constraint Error
     if (err.code === 'P2002') {

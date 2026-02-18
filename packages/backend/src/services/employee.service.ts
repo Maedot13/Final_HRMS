@@ -38,12 +38,16 @@ export const getEmployeeByUserId = async (userId: number): Promise<Employee | nu
 export const updateEmployee = async (id: number, data: Partial<Employee>): Promise<Employee> => {
     // Exclude sensitive or primary key fields from update
     const updateData = { ...data };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (updateData as any).id;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (updateData as any).userId;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (updateData as any).employeeId;
 
     return prisma.employee.update({
         where: { id },
-        data: updateData as any // Prisma partial update type is complex, leaving any here for simplicity
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data: updateData as any
     });
 };

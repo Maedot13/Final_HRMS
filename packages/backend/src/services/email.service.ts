@@ -7,6 +7,8 @@ export interface EmailOptions {
     html: string;
 }
 
+import { logger } from '../utils/logger';
+
 export const sendEmail = async (options: EmailOptions): Promise<void> => {
     try {
         const transporter = await createTransporter();
@@ -17,13 +19,13 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
             html: options.html,
         });
 
-        console.log(`Email sent: ${info.messageId}`);
+        logger.info(`Email sent: ${info.messageId}`);
         // Preview only available when sending through an Ethereal account
         if (nodemailer.getTestMessageUrl(info)) {
-            console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+            logger.info(`Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
         }
     } catch (error) {
-        console.error('Error sending email:', error);
+        logger.error('Error sending email:', error);
         // Don't throw error to prevent blocking main flow, but log it
     }
 };

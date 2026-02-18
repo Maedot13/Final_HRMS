@@ -1,6 +1,6 @@
 
 import { prisma } from '../lib/prisma';
-import { LeaveStatus, LeaveType, ClearanceStatus, JobStatus } from '@prisma/client';
+import { LeaveStatus, ClearanceStatus, JobStatus } from '@prisma/client';
 
 export const getDashboardSummary = async () => {
     const [

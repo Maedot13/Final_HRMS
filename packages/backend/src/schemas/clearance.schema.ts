@@ -1,16 +1,29 @@
 
 import { z } from 'zod';
-import { ClearanceStatus } from '@prisma/client';
 
 export const initiateClearanceSchema = z.object({
-    reason: z.string().min(10, 'Reason must be at least 10 characters long'),
-    lastWorkingDay: z.string().datetime(),
+    reason: z.string()
+        .min(10, 'Reason must be at least 10 characters')
+        .max(500, 'Reason cannot exceed 500 characters'),
+    lastWorkingDay: z.string()
+        .datetime()
+        .or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/))
+        .refine((date) => {
+            const d = new Date(date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            return d >= today;
+        }, 'Last working day must be in the future')
 });
 
 export const approveCheckSchema = z.object({
-    comment: z.string().optional()
+    unitId: z.number().int().positive('Unit ID must be a positive integer'),
+    comment: z.string().max(500).optional()
 });
 
 export const rejectCheckSchema = z.object({
-    comment: z.string().min(5, 'Rejection reason is required')
+    unitId: z.number().int().positive('Unit ID must be a positive integer'),
+    comment: z.string()
+        .min(10, 'Rejection comment must be at least 10 characters')
+        .max(500)
 });

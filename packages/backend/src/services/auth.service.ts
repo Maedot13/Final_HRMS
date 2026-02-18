@@ -58,7 +58,8 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
         }
     });
 
-    const { passwordHash: _, ...userWithoutPassword } = user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { passwordHash, ...userWithoutPassword } = user;
     const userResponse = {
         ...userWithoutPassword,
         name: user.employee?.name || '',
@@ -79,7 +80,7 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
 };
 
 export const register = async (data: RegisterRequest): Promise<AuthResponse> => {
-    const { password, name, employeeId, department, role } = data;
+    const { email, password, name, employeeId, department, role } = data;
 
     const existingEmployee = await prisma.employee.findUnique({ where: { employeeId } });
     if (existingEmployee) {
@@ -91,12 +92,18 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
         throw new Error('Employee ID already in use (User table)');
     }
 
+    const existingEmail = await prisma.user.findUnique({ where: { email } });
+    if (existingEmail) {
+        throw new Error('Email already in use');
+    }
+
     const hashedPassword = await hashPassword(password);
 
     // Use transaction to create User and Employee atomically
     const result = await prisma.$transaction(async (tx) => {
         const newUser = await tx.user.create({
             data: {
+                email,
                 passwordHash: hashedPassword,
                 role: (role as any) || UserRole.EMPLOYEE,
                 employeeId,
@@ -139,7 +146,8 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
         }
     });
 
-    const { passwordHash: _, ...userWithoutPassword } = result.newUser;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { passwordHash, ...userWithoutPassword } = result.newUser;
     const userResponse = {
         ...userWithoutPassword,
         name: result.newEmployee.name,
@@ -167,7 +175,7 @@ export const getMe = async (userId: number): Promise<AuthResponse['user']> => {
 
     if (!user) throw new Error('User not found');
 
-    const { passwordHash: _, ...userWithoutPassword } = user;
+    const { passwordHash, ...userWithoutPassword } = user;
     return {
         ...userWithoutPassword,
         name: user.employee?.name || '',
@@ -247,7 +255,8 @@ export const refreshToken = async (token: string): Promise<AuthResponse> => {
         })
     ]);
 
-    const { passwordHash: _, ...userWithoutPassword } = user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { passwordHash, ...userWithoutPassword } = user;
     const userResponse = {
         ...userWithoutPassword,
         name: user.employee?.name || '',

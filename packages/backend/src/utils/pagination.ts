@@ -1,14 +1,18 @@
 import { PaginatedResponse, PaginationParams } from '../schemas/pagination.schema';
-import { prisma } from '../lib/prisma';
+
 
 /**
  * Helper to implement cursor-based pagination
  */
 export const paginate = async <T>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     model: any,
     params: PaginationParams,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     where: any = {},
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     orderBy: any = { id: 'desc' },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     include?: any
 ): Promise<PaginatedResponse<T>> => {
     const limit = params.limit || 20;

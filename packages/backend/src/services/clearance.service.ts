@@ -1,7 +1,8 @@
 
-import { PrismaClient, ClearanceStatus } from '@prisma/client';
+import { ClearanceStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { createNotification, notifyDepartmentHead, notifyRole } from './notification.service';
+import { notifyDepartmentHead, notifyRole } from './notification.service';
+import { canApproveForUnit } from './authorization.service';
 
 
 // 1. Initiate Clearance
@@ -109,7 +110,15 @@ export const getClearance = async (id: number) => {
 
 // 3. Approve Specific Check
 // unitId is the 'ClearanceUnit.id', checking against 'ClearanceCheck.unitId'
-export const approveCheck = async (clearanceId: number, unitId: number, approverId: number, comment?: string) => {
+// 3. Approve Specific Check
+// unitId is the 'ClearanceUnit.id', checking against 'ClearanceCheck.unitId'
+export const approveCheck = async (clearanceId: number, unitId: number, approverId: number, userId: number, comment?: string) => {
+    // AUTHORIZATION CHECK
+    const canApprove = await canApproveForUnit(userId, unitId);
+    if (!canApprove) {
+        throw new Error('You do not have permission to approve for this unit');
+    }
+
     return prisma.$transaction(async (tx) => {
         // Find the specific check
         const check = await tx.clearanceCheck.findUnique({
@@ -222,7 +231,14 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
 };
 
 // 4. Reject Specific Check
-export const rejectCheck = async (clearanceId: number, unitId: number, approverId: number, comment: string) => {
+// 4. Reject Specific Check
+export const rejectCheck = async (clearanceId: number, unitId: number, approverId: number, userId: number, comment: string) => {
+    // AUTHORIZATION CHECK
+    const canApprove = await canApproveForUnit(userId, unitId);
+    if (!canApprove) {
+        throw new Error('You do not have permission to reject for this unit');
+    }
+
     return prisma.$transaction(async (tx) => {
         // Find the specific check
         const check = await tx.clearanceCheck.findUnique({

@@ -35,7 +35,7 @@ export const getUserById = async (req: Request, res: Response) => {
 export const updateUserRole = async (req: Request, res: Response) => {
     try {
         const id = parseInt(req.params.id);
-        const performerId = (req as any).user.id;
+        const performerId = req.user!.userId;
 
         // Prevent self-role change
         if (id === performerId) {
@@ -59,15 +59,19 @@ export const updateUserRole = async (req: Request, res: Response) => {
         );
 
         sendSuccess(res, user);
-    } catch (error: any) {
-        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Internal error';
+        if (message.includes('Cannot demote the last active admin')) {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, message, null, req);
+        }
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, message, null, req);
     }
 };
 
 export const toggleUserStatus = async (req: Request, res: Response) => {
     try {
         const id = parseInt(req.params.id);
-        const performerId = (req as any).user.id;
+        const performerId = req.user!.userId;
 
         // Prevent self-status toggle
         if (id === performerId) {
@@ -91,8 +95,12 @@ export const toggleUserStatus = async (req: Request, res: Response) => {
         );
 
         sendSuccess(res, user);
-    } catch (error: any) {
-        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Internal error';
+        if (message.includes('Cannot deactivate the last active admin')) {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, message, null, req);
+        }
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, message, null, req);
     }
 };
 

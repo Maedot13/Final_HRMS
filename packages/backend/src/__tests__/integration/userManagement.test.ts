@@ -12,7 +12,7 @@ jest.mock('../../utils/token', () => ({
 
 describe('User Management Integration', () => {
     const adminToken = 'valid-admin-token';
-    const adminPayload = { id: 1, employeeId: 'EMP001', role: UserRole.ADMIN };
+    const adminPayload = { userId: 1, employeeId: 'EMP001', role: UserRole.ADMIN };
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -46,7 +46,7 @@ describe('User Management Integration', () => {
                 .set('Authorization', `Bearer ${adminToken}`)
                 .send({ role: UserRole.EMPLOYEE });
 
-            expect(res.status).toBe(500); // Internal error from service throw
+            expect(res.status).toBe(403);
             expect(res.body.error.message).toContain('Cannot demote the last active admin');
         });
 
@@ -98,7 +98,7 @@ describe('User Management Integration', () => {
                 .send({ isActive: false });
 
 
-            expect(res.status).toBe(500);
+            expect(res.status).toBe(403);
             expect(res.body.error.message).toContain('Cannot deactivate the last active admin');
         });
     });

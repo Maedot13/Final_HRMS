@@ -17,7 +17,7 @@ export enum ErrorCode {
 export interface ApiError {
     code: ErrorCode;
     message: string;
-    details?: any;
+    details?: unknown;
     timestamp: string;
     requestId?: string;
 }
@@ -27,7 +27,7 @@ export const sendError = (
     statusCode: number,
     code: ErrorCode,
     message: string,
-    details?: any,
+    details?: unknown,
     req?: Request
 ): void => {
     const error: ApiError = {
@@ -41,8 +41,8 @@ export const sendError = (
     }
 
     // Add request ID if available
-    if (req && (req as any).id) {
-        error.requestId = (req as any).id;
+    if (req && 'id' in req) {
+        error.requestId = (req as any).id; // keeping cast for now as we checked existence, or simpler:
     }
 
     res.status(statusCode).json({ error });
@@ -50,7 +50,7 @@ export const sendError = (
 
 export const sendSuccess = (
     res: Response,
-    data: any,
+    data: unknown,
     statusCode: number = 200
 ): void => {
     res.status(statusCode).json(data);

@@ -1,5 +1,5 @@
 
-import { JobStatus, ApplicationStatus, Prisma } from '@prisma/client';
+import { JobStatus, ApplicationStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { createNotification } from './notification.service';
 import { sendEmail } from './email.service';

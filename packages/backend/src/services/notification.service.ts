@@ -74,7 +74,7 @@ export const notifyRole = async (role: string, notification: {
     relatedType?: string;
 }) => {
     const users = await prisma.user.findMany({
-        where: { role: role as any, isActive: true },
+        where: { role: role as import('@prisma/client').UserRole, isActive: true },
         select: { id: true }
     });
     const userIds = users.map(u => u.id);

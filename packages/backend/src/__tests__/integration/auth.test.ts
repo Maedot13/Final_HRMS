@@ -2,9 +2,16 @@ import request from 'supertest';
 import app from '../../app';
 import { prismaMock } from '../../lib/prisma-mock';
 import { UserRole } from '@prisma/client';
+import * as passwordUtils from '../../utils/password';
 
 // Note: Integration tests verify end-to-end flows with mocked database
 // For full E2E testing with real database, use a separate test environment
+
+// Mock password utilities
+jest.mock('../../utils/password', () => ({
+    comparePassword: jest.fn(),
+    hashPassword: jest.fn()
+}));
 
 describe('Auth Integration', () => {
     beforeEach(() => {
@@ -15,6 +22,7 @@ describe('Auth Integration', () => {
         it('should return 400 if employee already exists', async () => {
             const userData = {
                 name: 'John Doe',
+                email: 'john.doe@example.com',
                 employeeId: 'EMP001',
                 department: 'Engineering',
                 password: 'Password123!',
@@ -68,12 +76,14 @@ describe('Auth Integration', () => {
                 updatedAt: new Date()
             } as any);
 
+            (passwordUtils.comparePassword as jest.Mock).mockResolvedValue(true);
+
             const res = await request(app)
                 .post('/api/v1/auth/login')
                 .send(loginData);
 
             expect(res.status).toBe(401);
-            expect(res.body.error.message).toContain('Invalid credentials');
+            expect(res.body.error.message).toContain('Account is deactivated');
         });
     });
 });

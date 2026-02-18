@@ -1,5 +1,5 @@
 
-import { startOfMonth, endOfMonth, differenceInDays, isSameMonth } from 'date-fns';
+import { endOfMonth, differenceInDays, isSameMonth } from 'date-fns';
 import { prisma } from '../lib/prisma';
 import { PAYROLL_CONSTANTS } from '../config/constants';
 
@@ -83,6 +83,7 @@ export const getPayrollData = async (params: PayrollDataParams) => {
         if (!emp.user.isActive) {
             // Find termination date. 
             // We can use the payroll transfer effective date as the "Last Pay Day" equivalent
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const transfer = (emp as any).payrollTransfers?.[0];
             if (transfer) {
                 const exitDate = transfer.effectiveDate;

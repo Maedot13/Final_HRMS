@@ -13,6 +13,8 @@ export const deleteFile = (filePath: string): void => {
     }
 };
 
-export const getFileUrl = (req: any, filename: string): string => {
+import { Request } from 'express';
+
+export const getFileUrl = (req: Request, filename: string): string => {
     return `${req.protocol}://${req.get('host')}/uploads/${filename}`;
 };

@@ -9,7 +9,7 @@ interface AuditLogParams {
     action: AuditAction;
     entityType: string;
     entityId?: number;
-    changes?: any;
+    changes?: Record<string, unknown> | null;
     ipAddress?: string;
     userAgent?: string;
 }
@@ -25,7 +25,8 @@ export const createAuditLog = async (params: AuditLogParams) => {
                 action: params.action,
                 entityType: params.entityType,
                 entityId: params.entityId,
-                changes: params.changes || null,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                changes: (params.changes || null) as any,
                 ipAddress: params.ipAddress,
                 userAgent: params.userAgent,
             },
@@ -53,7 +54,7 @@ export const auditAuth = async (
     action: AuditAction,
     userId: number | undefined,
     req: Request,
-    changes?: any
+    changes?: Record<string, unknown>
 ) => {
     const metadata = getRequestMetadata(req);
     await createAuditLog({
@@ -74,7 +75,7 @@ export const auditLeaveRequest = async (
     userId: number,
     leaveRequestId: number,
     req: Request,
-    changes?: any
+    changes?: Record<string, unknown>
 ) => {
     const metadata = getRequestMetadata(req);
     await createAuditLog({
@@ -95,7 +96,7 @@ export const auditClearance = async (
     userId: number,
     clearanceId: number,
     req: Request,
-    changes?: any
+    changes?: Record<string, unknown>
 ) => {
     const metadata = getRequestMetadata(req);
     await createAuditLog({
@@ -116,7 +117,7 @@ export const auditUserUpdate = async (
     performerId: number,
     targetUserId: number,
     req: Request,
-    changes?: any
+    changes?: Record<string, unknown>
 ) => {
     const metadata = getRequestMetadata(req);
     await createAuditLog({

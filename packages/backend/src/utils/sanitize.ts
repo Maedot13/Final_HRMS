@@ -20,12 +20,14 @@ export const sanitizeInput = (input: string): string => {
 /**
  * Sanitizes an object's string properties
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const sanitizeObject = <T extends Record<string, any>>(obj: T): T => {
     const sanitized = { ...obj };
 
     for (const key in sanitized) {
         if (typeof sanitized[key] === 'string') {
-            sanitized[key] = sanitizeInput(sanitized[key]) as any;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            sanitized[key] = sanitizeInput(sanitized[key] as string) as any;
         }
     }
 

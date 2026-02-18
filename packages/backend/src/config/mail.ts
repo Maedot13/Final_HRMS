@@ -1,12 +1,14 @@
 
 import nodemailer from 'nodemailer';
 
+import { logger } from '../utils/logger';
+
 // Create a transporter using environment variables or fall back to Ethereal for testing
 export const createTransporter = async () => {
     // For development/testing without real SMTP credentials
     if (process.env.NODE_ENV !== 'production' && !process.env.SMTP_HOST) {
         const testAccount = await nodemailer.createTestAccount();
-        console.log('Ethereal Email Test Account:', testAccount.user);
+        logger.info(`Ethereal Email Test Account: ${testAccount.user}`);
 
         return nodemailer.createTransport({
             host: 'smtp.ethereal.email',
