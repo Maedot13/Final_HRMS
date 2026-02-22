@@ -164,3 +164,23 @@ export const getUserAuditLogs = async (userId: number, limit: number = 50) => {
         take: limit,
     });
 };
+
+/**
+ * Audit log wrapper for employee profile updates
+ */
+export const auditEmployeeUpdate = async (
+    performerId: number,
+    targetEmployeeId: number,
+    req: Request,
+    changes?: Record<string, unknown>
+) => {
+    const metadata = getRequestMetadata(req);
+    await createAuditLog({
+        userId: performerId,
+        action: AuditAction.EMPLOYEE_UPDATE,
+        entityType: 'Employee',
+        entityId: targetEmployeeId,
+        changes,
+        ...metadata,
+    });
+};

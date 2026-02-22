@@ -1,6 +1,7 @@
 
 import { Employee } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { redis } from '../lib/redis';
 
 
 export const getEmployeeById = async (id: number): Promise<Employee | null> => {
@@ -36,18 +37,40 @@ export const getEmployeeByUserId = async (userId: number): Promise<Employee | nu
 };
 
 export const updateEmployee = async (id: number, data: Partial<Employee>): Promise<Employee> => {
-    // Exclude sensitive or primary key fields from update
-    const updateData = { ...data };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (updateData as any).id;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (updateData as any).userId;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (updateData as any).employeeId;
+    // Explicitly select allowed fields to prevent mass assignment / prototype pollution
+    // We do NOT just delete from 'data' because 'data' might contain prototype properties
+    const {
+        name,
+        department,
+        position,
+        hireDate,
+        grossSalary,
+        salaryType,
+        contactInfo
+    } = data;
 
-    return prisma.employee.update({
+    // Create a clean object with only the fields we want to update
+    // undefined values will be ignored by Prisma, but we should filter them out for clarity if needed
+    // Prisma treats 'undefined' as 'do nothing' for nullable fields, but for required fields it might be rigorous
+    const safeUpdateData: any = {};
+
+    if (name !== undefined) safeUpdateData.name = name;
+    if (department !== undefined) safeUpdateData.department = department;
+    if (position !== undefined) safeUpdateData.position = position;
+    if (hireDate !== undefined) safeUpdateData.hireDate = hireDate;
+    if (grossSalary !== undefined) safeUpdateData.grossSalary = grossSalary;
+    if (salaryType !== undefined) safeUpdateData.salaryType = salaryType;
+    if (contactInfo !== undefined) safeUpdateData.contactInfo = contactInfo;
+
+    const updatedEmployee = await prisma.employee.update({
         where: { id },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        data: updateData as any
+        data: safeUpdateData
     });
+
+    // Invalidate cache
+    if (updatedEmployee.userId) {
+        await redis.del(`employee:${updatedEmployee.userId}`);
+    }
+
+    return updatedEmployee;
 };

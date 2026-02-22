@@ -7,7 +7,8 @@ import { UserRole } from '@hrms/types';
 const router = Router();
 
 router.use(authenticate);
-router.use(authorize([UserRole.ADMIN])); // Admin only
+router.use(authenticate);
+// Removed global admin check to allow users to see their own logs
 
 /**
  * @swagger
@@ -45,7 +46,26 @@ router.use(authorize([UserRole.ADMIN])); // Admin only
  *       200:
  *         description: List of audit logs
  */
-router.get('/', auditController.getAuditLogs);
+router.get('/', authorize([UserRole.ADMIN, UserRole.HR_OFFICER]), auditController.getAuditLogs);
+
+/**
+ * @swagger
+ * /api/v1/audit-logs/my-logs:
+ *   get:
+ *     summary: Get current user's audit logs
+ *     tags: [Audit]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: List of own audit logs
+ */
+router.get('/my-logs', auditController.getMyLogs);
 
 /**
  * @swagger
@@ -59,6 +79,28 @@ router.get('/', auditController.getAuditLogs);
  *       200:
  *         description: Audit logs export
  */
-router.get('/export', auditController.exportAuditLogs);
+router.get('/export', authorize([UserRole.ADMIN, UserRole.HR_OFFICER]), auditController.exportAuditLogs);
+
+/**
+ * @swagger
+ * /api/v1/audit-logs/{id}:
+ *   get:
+ *     summary: Get specific audit log
+ *     tags: [Audit]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Audit log details
+ *       404:
+ *         description: Log not found
+ */
+router.get('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER]), auditController.getAuditLogById);
 
 export default router;

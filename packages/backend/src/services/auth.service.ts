@@ -18,6 +18,7 @@ const getTokenExpiration = (token: string): Date => {
 export const login = async (data: LoginRequest): Promise<AuthResponse> => {
     const { employeeId, password } = data;
 
+    // Strict login with Employee ID only as per requirement
     const user = await prisma.user.findUnique({
         where: { employeeId },
         include: { employee: true }

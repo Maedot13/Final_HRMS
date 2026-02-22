@@ -12,9 +12,24 @@ export enum ErrorCode {
     INSUFFICIENT_BALANCE = 'INSUFFICIENT_BALANCE',
     INVALID_DATE_RANGE = 'INVALID_DATE_RANGE',
     BAD_REQUEST = 'BAD_REQUEST',
+    UNIQUE_CONSTRAINT_VIOLATION = 'UNIQUE_CONSTRAINT_VIOLATION'
 }
 
-export interface ApiError {
+export class AppError extends Error {
+    public readonly statusCode: number;
+    public readonly code: ErrorCode;
+    public readonly details?: unknown;
+
+    constructor(statusCode: number, code: ErrorCode, message: string, details?: unknown) {
+        super(message);
+        this.statusCode = statusCode;
+        this.code = code;
+        this.details = details;
+        Object.setPrototypeOf(this, AppError.prototype);
+    }
+}
+
+export interface ApiErrorResponse {
     code: ErrorCode;
     message: string;
     details?: unknown;
@@ -30,22 +45,22 @@ export const sendError = (
     details?: unknown,
     req?: Request
 ): void => {
-    const error: ApiError = {
+    const errorResponse: ApiErrorResponse = {
         code,
         message,
         timestamp: new Date().toISOString(),
     };
 
     if (details) {
-        error.details = details;
+        errorResponse.details = details;
     }
 
     // Add request ID if available
     if (req && 'id' in req) {
-        error.requestId = (req as any).id; // keeping cast for now as we checked existence, or simpler:
+        errorResponse.requestId = (req as any).id;
     }
 
-    res.status(statusCode).json({ error });
+    res.status(statusCode).json(errorResponse);
 };
 
 export const sendSuccess = (

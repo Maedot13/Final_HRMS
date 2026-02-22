@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import * as employeeService from '../services/employee.service';
 import { UserRole } from '@hrms/types';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
+import { auditEmployeeUpdate, AuditAction } from '../utils/auditLog';
 
 export const getEmployee = async (req: Request, res: Response) => {
     try {
@@ -135,6 +136,20 @@ export const updateEmployee = async (req: Request, res: Response) => {
         }
 
         const updatedEmployee = await employeeService.updateEmployee(id, data);
+
+        // Audit log (Diff tracking)
+        // We log the fields that were requested to be changed
+        await auditEmployeeUpdate(
+            user.userId,
+            id,
+            req,
+            {
+                ...data,
+                // Optional: You could compare 'employee' (old) vs 'updatedEmployee' (new) here
+                // But logging the requested changes is usually sufficient for "Intent"
+            }
+        );
+
         sendSuccess(res, updatedEmployee);
 
     } catch (error: any) {

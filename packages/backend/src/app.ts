@@ -135,37 +135,59 @@ app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/audit-logs', auditRoutes);
 
+import { registerLeavehandlers } from './subscribers/leave.subscriber';
+// Initialize Event Listeners
+registerLeavehandlers();
+
 import { logger } from './utils/logger';
 
 // Error Handler
+// Error Handler
+import { sendError, ErrorCode, AppError } from './utils/errorHandler';
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     logger.error(`[Error] ${req.method} ${req.url}: ${err.message}`, { stack: err.stack });
+
+    // Handle AppError (Trusted errors)
+    if (err instanceof AppError) {
+        return sendError(res, err.statusCode, err.code, err.message, err.details, req);
+    }
 
     // Prisma Unique Constraint Error
     if (err.code === 'P2002') {
         const target = err.meta?.target || 'field';
-        return res.status(400).json({
-            message: `Unique constraint failed on ${target}`,
-            code: 'UNIQUE_CONSTRAINT_VIOLATION'
-        });
+        return sendError(
+            res,
+            409,
+            ErrorCode.UNIQUE_CONSTRAINT_VIOLATION,
+            `Unique constraint failed on ${target}`,
+            null,
+            req
+        );
     }
 
     // Prisma Records Not Found
     if (err.code === 'P2025') {
-        return res.status(404).json({
-            message: err.meta?.cause || 'Record not found',
-            code: 'NOT_FOUND'
-        });
+        return sendError(
+            res,
+            404,
+            ErrorCode.NOT_FOUND,
+            err.meta?.cause || 'Record not found',
+            null,
+            req
+        );
     }
 
-    const status = err.status || 500;
-    const message = err.message || 'Internal Server Error';
-
-    res.status(status).json({
-        message,
-        code: err.code || 'INTERNAL_ERROR',
-        timestamp: new Date().toISOString()
-    });
+    // Unknown Errors
+    return sendError(
+        res,
+        500,
+        ErrorCode.INTERNAL_ERROR,
+        process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message,
+        process.env.NODE_ENV === 'production' ? null : err.stack,
+        req
+    );
 });
 
 export default app;

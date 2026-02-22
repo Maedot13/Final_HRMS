@@ -1,17 +1,10 @@
 import { Request, Response } from 'express';
 import * as leaveService from '../services/leave.service';
 import { UserRole } from '@hrms/types';
-import { z } from 'zod';
 import { LeaveType } from '@prisma/client';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 
-const createLeaveSchema = z.object({
-    leaveType: z.nativeEnum(LeaveType),
-    startDate: z.string().datetime(), // Expect ISO string
-    endDate: z.string().datetime(),
-    reason: z.string().min(1),
-    attachmentUrl: z.string().optional()
-});
+
 
 import { AuditAction } from '@prisma/client';
 import { logAction } from '../services/auditLog.service';

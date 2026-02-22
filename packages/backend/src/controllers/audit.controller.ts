@@ -52,6 +52,74 @@ export const getAuditLogs = async (req: Request, res: Response) => {
     }
 };
 
+export const getAuditLogById = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const log = await prisma.auditLog.findUnique({
+            where: { id: parseInt(id) }
+        });
+
+        if (!log) {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, 'Audit log not found', null, req);
+        }
+
+        sendSuccess(res, log);
+    } catch (error: any) {
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
+export const getMyLogs = async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        const {
+            action,
+            entityType,
+            startDate,
+            endDate,
+            page = 1,
+            limit = 50
+        } = req.query;
+
+        if (!userId) {
+            return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'User not authenticated', null, req);
+        }
+
+        const where: any = { userId }; // Force filter by current user
+
+        if (action) where.action = action as AuditAction;
+        if (entityType) where.entityType = entityType as string;
+
+        if (startDate || endDate) {
+            where.timestamp = {};
+            if (startDate) where.timestamp.gte = new Date(startDate as string);
+            if (endDate) where.timestamp.lte = new Date(endDate as string);
+        }
+
+        const [logs, total] = await Promise.all([
+            prisma.auditLog.findMany({
+                where,
+                orderBy: { timestamp: 'desc' },
+                skip: (parseInt(page as string) - 1) * parseInt(limit as string),
+                take: parseInt(limit as string)
+            }),
+            prisma.auditLog.count({ where })
+        ]);
+
+        sendSuccess(res, {
+            data: logs,
+            pagination: {
+                page: parseInt(page as string),
+                limit: parseInt(limit as string),
+                total,
+                pages: Math.ceil(total / parseInt(limit as string))
+            }
+        });
+    } catch (error: any) {
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
 export const exportAuditLogs = async (req: Request, res: Response) => {
     try {
         // Simple JSON export for now

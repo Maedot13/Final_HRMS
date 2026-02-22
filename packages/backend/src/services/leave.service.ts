@@ -3,9 +3,7 @@ import { LeaveStatus, LeaveType } from '@prisma/client';
 import { checkOverlappingRequests } from './timeoff.service';
 import { prisma } from '../lib/prisma';
 import { LEAVE_BALANCES } from '../config/constants';
-import { createNotification, notifyDepartmentHead } from './notification.service';
-import { sendEmail } from './email.service';
-import { templates } from '../utils/emailTemplates';
+import { eventBus, AppEvents } from '../utils/eventBus';
 
 // Helper to get duration in days (excluding weekends/holidays - simplified for now to just diff)
 const calculateDays = (start: Date, end: Date): number => {
@@ -85,13 +83,11 @@ export const createLeaveRequest = async (
         include: { employee: true }
     });
 
-    // NOTIFICATION: Notify Department Head
-    await notifyDepartmentHead(request.employee.department, {
-        type: 'LEAVE_REQUEST_CREATED',
-        title: 'New Leave Request',
-        message: `${request.employee.name} has requested ${request.days} days of ${request.leaveType} leave.`,
-        relatedId: request.id,
-        relatedType: 'LEAVE_REQUEST'
+    // ASYNC EVENT: Notify Department Head
+    eventBus.emit(AppEvents.LEAVE_REQUEST_CREATED, {
+        ...request,
+        startDate: request.startDate, // Date objects are passed as is
+        endDate: request.endDate
     });
 
     return request;
@@ -205,30 +201,11 @@ export const approveRequest = async (requestId: number, approverId: number, appr
             include: { employee: true }
         });
 
-        // Trigger Notification
-        await createNotification({
-            userId: updatedRequest.employee.userId,
-            type: 'LEAVE_APPROVED',
-            title: 'Leave Request Approved',
-            message: `Your ${updatedRequest.leaveType} leave request for ${updatedRequest.days} days has been approved.`,
-            relatedId: updatedRequest.id,
-            relatedType: 'LEAVE_REQUEST'
+        // ASYNC EVENT: Notify User
+        eventBus.emit(AppEvents.LEAVE_REQUEST_APPROVED, {
+            requestId: updatedRequest.id,
+            comment
         });
-
-        // 3. Send Email
-        if (updatedRequest.employee && updatedRequest.employee.userId) { // Assuming userId links to user with email
-            // We need to fetch the user email. For now, we'll assume we can get it or the employee model has it
-            // Ideally: const user = await prisma.user.findUnique({ where: { id: updatedRequest.employee.userId }});
-            // For this implementation, I'll fetch it to be safe and correct
-            const user = await prisma.user.findUnique({ where: { id: updatedRequest.employee.userId } });
-            if (user && user.email) {
-                await sendEmail({
-                    to: user.email,
-                    subject: `Leave Request Approved`,
-                    html: templates.leaveRequestStatusUpdate('Approved', comment || '')
-                });
-            }
-        }
 
         return updatedRequest;
     }, {
@@ -269,25 +246,11 @@ export const rejectRequest = async (requestId: number, approverId: number, appro
         include: { employee: true }
     });
 
-    // Trigger Notification
-    await createNotification({
-        userId: updatedRequest.employee.userId,
-        type: 'LEAVE_REJECTED',
-        title: 'Leave Request Rejected',
-        message: `Your ${updatedRequest.leaveType} leave request for ${updatedRequest.days} days has been rejected. Comment: ${comment || 'No comment provided'}`,
-        relatedId: updatedRequest.id,
-        relatedType: 'LEAVE_REQUEST'
+    // ASYNC EVENT: Notify User
+    eventBus.emit(AppEvents.LEAVE_REQUEST_REJECTED, {
+        requestId: updatedRequest.id,
+        comment
     });
-
-    // Send Email
-    const user = await prisma.user.findUnique({ where: { id: updatedRequest.employee.userId } });
-    if (user && user.email) {
-        await sendEmail({
-            to: user.email,
-            subject: `Leave Request Rejected`,
-            html: templates.leaveRequestStatusUpdate('Rejected', comment || '')
-        });
-    }
 
     return updatedRequest;
 };

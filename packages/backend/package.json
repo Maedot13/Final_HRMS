@@ -5,6 +5,7 @@
     "main": "dist/server.js",
     "scripts": {
         "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+        "dev:local": "./scripts/check-env.sh && npm run dev",
         "build": "tsc",
         "start": "node dist/server.js",
         "lint": "eslint .",

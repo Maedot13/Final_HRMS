@@ -2,6 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { Employee } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { redis } from '../lib/redis';
 
 
 declare global {
@@ -21,6 +22,14 @@ export const attachEmployee = async (req: Request, res: Response, next: NextFunc
     }
 
     try {
+        const cacheKey = `employee:${req.user.userId}`;
+        const cachedEmployee = await redis.get(cacheKey);
+
+        if (cachedEmployee) {
+            req.employee = JSON.parse(cachedEmployee);
+            return next();
+        }
+
         const employee = await prisma.employee.findUnique({
             where: { userId: req.user.userId }
         });
@@ -28,6 +37,9 @@ export const attachEmployee = async (req: Request, res: Response, next: NextFunc
         if (!employee) {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'Employee profile not found', null, req);
         }
+
+        // Cache for 1 hour
+        await redis.setEx(cacheKey, 3600, JSON.stringify(employee));
 
         req.employee = employee;
         next();

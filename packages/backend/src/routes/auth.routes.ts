@@ -71,6 +71,7 @@ router.post('/register', authController.register);
  *             properties:
  *               employeeId:
  *                 type: string
+ *                 description: Employee ID (e.g., BDU/1234/14)
  *               password:
  *                 type: string
  *     responses:

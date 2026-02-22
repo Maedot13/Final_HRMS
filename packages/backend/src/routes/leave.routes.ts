@@ -4,6 +4,8 @@ import * as leaveController from '../controllers/leave.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { attachEmployee } from '../middleware/employee.middleware';
 import { UserRole } from '@hrms/types';
+import { validateBody } from '../middleware/validate.middleware';
+import { createLeaveRequestSchema, approveRejectSchema } from '../schemas/leave.schema';
 
 const router = Router();
 
@@ -91,11 +93,14 @@ import { upload } from '../middleware/upload.middleware';
  *               startDate:
  *                 type: string
  *                 format: date
+ *                 description: YYYY-MM-DD or ISO datetime. Must not be in the past.
  *               endDate:
  *                 type: string
  *                 format: date
+ *                 description: YYYY-MM-DD or ISO datetime. Must be after startDate.
  *               reason:
  *                 type: string
+ *                 minLength: 5
  *               attachment:
  *                 type: string
  *                 format: binary
@@ -105,7 +110,7 @@ import { upload } from '../middleware/upload.middleware';
  *       400:
  *         description: Validation error or insufficient balance
  */
-router.post('/', attachEmployee, upload.single('attachment'), leaveController.createLeaveRequest);
+router.post('/', attachEmployee, upload.single('attachment'), validateBody(createLeaveRequestSchema), leaveController.createLeaveRequest);
 router.get('/', attachEmployee, leaveController.getMyRequests);
 
 /**
@@ -174,6 +179,7 @@ router.get('/pending',
 router.patch('/:id/approve',
     authorize([UserRole.DEPARTMENT_HEAD]),
     attachEmployee,
+    validateBody(approveRejectSchema),
     leaveController.approveRequest
 );
 
@@ -213,6 +219,7 @@ router.patch('/:id/approve',
 router.patch('/:id/reject',
     authorize([UserRole.DEPARTMENT_HEAD]),
     attachEmployee,
+    validateBody(approveRejectSchema),
     leaveController.rejectRequest
 );
 

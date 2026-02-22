@@ -89,6 +89,15 @@ router.get('/:id', employeeController.getEmployee);
  *                 type: string
  *               contactInfo:
  *                 type: object
+ *                 description: JSON object with contact details
+ *               hireDate:
+ *                  type: string
+ *                  format: date-time
+ *               grossSalary:
+ *                  type: number
+ *               salaryType:
+ *                  type: string
+ *                  enum: [MONTHLY, DAILY]
  *     responses:
  *       200:
  *         description: Employee updated
