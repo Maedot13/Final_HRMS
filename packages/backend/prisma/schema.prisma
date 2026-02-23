@@ -217,6 +217,8 @@ model AuditLog {
   entityType String
   entityId   Int?
   changes    Json?
+  status     AuditStatus @default(SUCCESS)
+  metadata   Json?
   ipAddress  String?
   userAgent  String?
   timestamp  DateTime    @default(now())
@@ -224,6 +226,12 @@ model AuditLog {
   @@index([userId, timestamp])
   @@index([action, timestamp])
   @@index([entityType, entityId])
+}
+
+enum AuditStatus {
+  SUCCESS
+  FAILURE
+  DENIED
 }
 
 enum AuditAction {
@@ -244,6 +252,8 @@ enum AuditAction {
   PAYROLL_TRANSFER_CREATE
   USER_ROLE_UPDATE
   USER_STATUS_TOGGLE
+  AUDIT_LOG_ACCESSED
+  AUDIT_LOG_EXPORTED
 }
 
 enum UserRole {

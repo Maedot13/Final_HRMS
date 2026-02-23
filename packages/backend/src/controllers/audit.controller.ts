@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 import { AuditAction } from '@prisma/client';
+import { createAuditLog, getRequestMetadata } from '../utils/auditLog';
 
 export const getAuditLogs = async (req: Request, res: Response) => {
     try {
@@ -37,6 +38,16 @@ export const getAuditLogs = async (req: Request, res: Response) => {
             }),
             prisma.auditLog.count({ where })
         ]);
+
+        // Audit the auditors: log who accessed audit logs
+        const meta = getRequestMetadata(req);
+        await createAuditLog({
+            userId: req.user?.userId,
+            action: AuditAction.AUDIT_LOG_ACCESSED,
+            entityType: 'AuditLog',
+            metadata: { filters: { userId, action, entityType, startDate, endDate }, page, limit },
+            ...meta,
+        });
 
         sendSuccess(res, {
             data: logs,
@@ -122,7 +133,6 @@ export const getMyLogs = async (req: Request, res: Response) => {
 
 export const exportAuditLogs = async (req: Request, res: Response) => {
     try {
-        // Simple JSON export for now
         const {
             userId,
             action,
@@ -147,6 +157,16 @@ export const exportAuditLogs = async (req: Request, res: Response) => {
             where,
             orderBy: { timestamp: 'desc' },
             take: 1000 // Limit export to 1000 for safety
+        });
+
+        // Audit the export action itself
+        const meta = getRequestMetadata(req);
+        await createAuditLog({
+            userId: req.user?.userId,
+            action: AuditAction.AUDIT_LOG_EXPORTED,
+            entityType: 'AuditLog',
+            metadata: { filters: { userId, action, entityType, startDate, endDate }, count: logs.length },
+            ...meta,
         });
 
         res.setHeader('Content-Type', 'application/json');

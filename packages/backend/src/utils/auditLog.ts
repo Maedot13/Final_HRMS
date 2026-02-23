@@ -1,7 +1,7 @@
-import { AuditAction } from '@prisma/client';
+import { AuditAction, AuditStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { Request } from 'express';
-export { AuditAction };
+export { AuditAction, AuditStatus };
 
 
 interface AuditLogParams {
@@ -10,15 +10,48 @@ interface AuditLogParams {
     entityType: string;
     entityId?: number;
     changes?: Record<string, unknown> | null;
+    status?: AuditStatus;
+    metadata?: Record<string, unknown> | null;
     ipAddress?: string;
     userAgent?: string;
 }
+
+const SENSITIVE_FIELDS = ['password', 'passwordHash', 'ssn', 'salary', 'accessToken', 'refreshToken', 'token'];
+
+/**
+ * Redact sensitive data from a payload recursively
+ */
+const redactSensitiveData = (data: any): any => {
+    if (!data) return data;
+
+    if (Array.isArray(data)) {
+        return data.map(item => redactSensitiveData(item));
+    }
+
+    if (typeof data === 'object') {
+        const redacted: any = {};
+        for (const [key, value] of Object.entries(data)) {
+            if (SENSITIVE_FIELDS.some(field => key.toLowerCase().includes(field.toLowerCase()))) {
+                redacted[key] = '***REDACTED***';
+            } else if (typeof value === 'object' && value !== null) {
+                redacted[key] = redactSensitiveData(value);
+            } else {
+                redacted[key] = value;
+            }
+        }
+        return redacted;
+    }
+
+    return data;
+};
 
 /**
  * Create an audit log entry
  */
 export const createAuditLog = async (params: AuditLogParams) => {
     try {
+        const redactedChanges = redactSensitiveData(params.changes);
+
         await prisma.auditLog.create({
             data: {
                 userId: params.userId,
@@ -26,7 +59,10 @@ export const createAuditLog = async (params: AuditLogParams) => {
                 entityType: params.entityType,
                 entityId: params.entityId,
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                changes: (params.changes || null) as any,
+                changes: (redactedChanges || null) as any,
+                status: params.status || AuditStatus.SUCCESS,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                metadata: (params.metadata || null) as any,
                 ipAddress: params.ipAddress,
                 userAgent: params.userAgent,
             },
@@ -34,6 +70,9 @@ export const createAuditLog = async (params: AuditLogParams) => {
     } catch (error) {
         // Log error but don't throw - audit logging should not break the main flow
         console.error('Failed to create audit log:', error);
+
+        // If logging fails and the action is critical, optionally we could throw
+        // to implement fail-closed. For now, we stick to fail-open with logging.
     }
 };
 

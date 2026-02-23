@@ -1,9 +1,9 @@
 
 import { Request, Response, NextFunction } from 'express';
-import { AnyZodObject, ZodError } from 'zod';
+import { ZodTypeAny, ZodError } from 'zod';
 import { sendError, ErrorCode } from '../utils/errorHandler';
 
-export const validate = (schema: AnyZodObject) => async (req: Request, res: Response, next: NextFunction) => {
+export const validate = (schema: ZodTypeAny) => async (req: Request, res: Response, next: NextFunction) => {
     try {
         await schema.parseAsync({
             body: req.body,
@@ -27,7 +27,7 @@ export const validate = (schema: AnyZodObject) => async (req: Request, res: Resp
 };
 
 // Simplified validator that checks only body (common case)
-export const validateBody = (schema: AnyZodObject) => async (req: Request, res: Response, next: NextFunction) => {
+export const validateBody = (schema: ZodTypeAny) => async (req: Request, res: Response, next: NextFunction) => {
     try {
         req.body = await schema.parseAsync(req.body);
         return next();
