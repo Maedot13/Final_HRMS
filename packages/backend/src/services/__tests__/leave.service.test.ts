@@ -161,8 +161,7 @@ describe('LeaveService - Employee to Department Head Workflow', () => {
                 employee: { userId: 1, name: 'John Doe' },
             } as any);
 
-            // Pass department parameter (4th argument)
-            const result = await leaveService.approveRequest(1, 2, 'Engineering', 'Approved for vacation');
+            const result = await leaveService.approveRequest(1, 2, 'Engineering', null, 'Approved for vacation');
 
             expect(result.status).toBe(LeaveStatus.APPROVED);
             // We expect logic to handle approver assignment via update data

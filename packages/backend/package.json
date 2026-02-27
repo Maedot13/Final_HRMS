@@ -11,7 +11,8 @@
         "lint": "eslint .",
         "prisma:generate": "prisma generate",
         "prisma:migrate": "prisma migrate dev",
-        "test": "jest"
+        "test": "jest",
+        "seed:dev": "ts-node scripts/seed-dev-data.ts"
     },
     "dependencies": {
         "@hrms/types": "^1.0.0",
@@ -48,7 +49,7 @@
         "@types/morgan": "^1.9.9",
         "@types/multer": "^2.0.0",
         "@types/node": "^20.11.16",
-        "@types/nodemailer": "^7.0.10",
+        "@types/nodemailer": "^7.0.11",
         "@types/supertest": "^6.0.3",
         "eslint": "^9.39.1",
         "globals": "^16.5.0",
@@ -62,6 +63,6 @@
         "typescript-eslint": "^8.46.4"
     },
     "prisma": {
-        "seed": "ts-node scripts/seed-clearance-units.ts"
+        "seed": "ts-node scripts/seed-multi-campus-backfill.ts && ts-node scripts/seed-clearance-units.ts"
     }
 }

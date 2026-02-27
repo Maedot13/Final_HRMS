@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 import { AuditAction } from '@prisma/client';
 import { createAuditLog, getRequestMetadata } from '../utils/auditLog';
+import { getCampusScope, getCampusIdFilter, assertSameCampus } from '../lib/campusScope';
 
 export const getAuditLogs = async (req: Request, res: Response) => {
     try {
@@ -18,6 +19,9 @@ export const getAuditLogs = async (req: Request, res: Response) => {
         } = req.query;
 
         const where: any = {};
+        const campusCtx = getCampusScope(req);
+        const campusFilter = getCampusIdFilter(campusCtx);
+        if (campusFilter != null) where.campusId = campusFilter;
 
         if (userId) where.userId = parseInt(userId as string);
         if (action) where.action = action as AuditAction;
@@ -59,6 +63,9 @@ export const getAuditLogs = async (req: Request, res: Response) => {
             }
         });
     } catch (error: any) {
+        if (error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
@@ -74,8 +81,14 @@ export const getAuditLogById = async (req: Request, res: Response) => {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'Audit log not found', null, req);
         }
 
+        // Campus isolation: campus users can only view audit logs from their campus
+        assertSameCampus(req, log.campusId);
+
         sendSuccess(res, log);
     } catch (error: any) {
+        if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
@@ -142,6 +155,9 @@ export const exportAuditLogs = async (req: Request, res: Response) => {
         } = req.query;
 
         const where: any = {};
+        const campusCtx = getCampusScope(req);
+        const campusFilter = getCampusIdFilter(campusCtx);
+        if (campusFilter != null) where.campusId = campusFilter;
 
         if (userId) where.userId = parseInt(userId as string);
         if (action) where.action = action as AuditAction;
@@ -174,6 +190,9 @@ export const exportAuditLogs = async (req: Request, res: Response) => {
         res.send(JSON.stringify(logs, null, 2));
 
     } catch (error: any) {
+        if (error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };

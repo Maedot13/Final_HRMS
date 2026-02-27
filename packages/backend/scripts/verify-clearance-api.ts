@@ -7,8 +7,15 @@ import { UserRole } from '@hrms/types';
 
 const prisma = new PrismaClient();
 
+async function getScriptCreatorContext() {
+    const campus = await prisma.campus.findFirst({ where: { isActive: true }, orderBy: { code: 'asc' } });
+    if (!campus) throw new Error('No active campus found. Run seed first.');
+    return { userId: 0, role: 'ADMIN' as any, scope: 'UNIVERSITY' as any, campusId: campus.id, employeeId: 'SYSTEM' };
+}
+
 async function main() {
     console.log('🚀 Starting Dynamic Clearance Verification...');
+    const creatorContext = await getScriptCreatorContext();
 
     const empId = 'CLEAR_TEST_EMP';
     const approverId = 'CLEAR_TEST_ADMIN';
@@ -38,21 +45,25 @@ async function main() {
     console.log('👤 Registering Employee...');
     const empReg = await authService.register({
         name: 'Clearance Seeker',
+        email: 'clear_emp@example.com',
         employeeId: empId,
         department: 'Science',
-        password: 'password123',
-        role: UserRole.EMPLOYEE
-    });
+        password: 'Password123!',
+        role: UserRole.EMPLOYEE,
+        campusId: creatorContext.campusId
+    }, creatorContext);
     const empDbId = (empReg.user as any).employee.id;
 
     console.log('👑 Registering Approver...');
     const appReg = await authService.register({
         name: 'Super Approver',
+        email: 'clear_admin@example.com',
         employeeId: approverId,
         department: 'Admin',
-        password: 'password123',
-        role: UserRole.ADMIN
-    });
+        password: 'Password123!',
+        role: UserRole.ADMIN,
+        campusId: creatorContext.campusId
+    }, creatorContext);
     const appDbId = (appReg.user as any).employee.id;
 
     // 3. Initiate Clearance

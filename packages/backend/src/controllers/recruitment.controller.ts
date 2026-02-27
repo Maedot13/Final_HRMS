@@ -8,6 +8,7 @@ import {
     updateApplicationStatusSchema
 } from '../schemas/recruitment.schema';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
+import { getCampusScope, getCampusIdFilter } from '../lib/campusScope';
 
 export const createJobPosting = async (req: Request, res: Response) => {
     try {
@@ -29,12 +30,18 @@ export const createJobPosting = async (req: Request, res: Response) => {
 export const getJobPostings = async (req: Request, res: Response) => {
     try {
         const { status, department } = req.query;
+        const campusCtx = getCampusScope(req);
+        const campusIdFilter = getCampusIdFilter(campusCtx);
+
         const postings = await recruitmentService.getJobPostings({
             status: status as any,
             department: department as string
-        });
+        }, campusIdFilter);
         sendSuccess(res, postings);
     } catch (error: any) {
+        if (error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
@@ -42,12 +49,18 @@ export const getJobPostings = async (req: Request, res: Response) => {
 export const getJobPostingById = async (req: Request, res: Response) => {
     try {
         const id = parseInt(req.params.id);
-        const job = await recruitmentService.getJobPostingById(id);
+        const campusCtx = getCampusScope(req);
+        const campusIdFilter = getCampusIdFilter(campusCtx);
+
+        const job = await recruitmentService.getJobPostingById(id, campusIdFilter);
         if (!job) {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'Job posting not found', null, req);
         }
         sendSuccess(res, job);
     } catch (error: any) {
+        if (error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
@@ -60,9 +73,15 @@ export const updateJobStatus = async (req: Request, res: Response) => {
             return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid input', validation.error.format(), req);
         }
 
-        const job = await recruitmentService.updateJobStatus(id, validation.data.status);
+        const campusCtx = getCampusScope(req);
+        const campusIdFilter = getCampusIdFilter(campusCtx);
+
+        const job = await recruitmentService.updateJobStatus(id, validation.data.status, campusIdFilter);
         sendSuccess(res, job);
     } catch (error: any) {
+        if (error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };

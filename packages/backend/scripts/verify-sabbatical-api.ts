@@ -7,8 +7,17 @@ import { UserRole } from '@hrms/types';
 
 const prisma = new PrismaClient();
 
+// Script-level creator context: scripts run with admin-level access directly against the DB.
+// campusId will be resolved at runtime from the first active campus.
+async function getScriptCreatorContext() {
+    const campus = await prisma.campus.findFirst({ where: { isActive: true }, orderBy: { code: 'asc' } });
+    if (!campus) throw new Error('No active campus found. Run seed first.');
+    return { userId: 0, role: UserRole.ADMIN as any, scope: 'UNIVERSITY' as any, campusId: campus.id, employeeId: 'SYSTEM' };
+}
+
 async function main() {
     console.log('🚀 Starting Sabbatical Verification...');
+    const creatorContext = await getScriptCreatorContext();
 
     const empId = 'SABB_TEST_EMP';
     const headId = 'SABB_TEST_HEAD';
@@ -32,21 +41,25 @@ async function main() {
     console.log('👤 Registering Employee...');
     const empReg = await authService.register({
         name: 'Sabbatical Seeker',
+        email: 'sabb_emp@example.com',
         employeeId: empId,
         department: 'Science',
         password: 'password123',
-        role: UserRole.EMPLOYEE
-    });
+        role: UserRole.EMPLOYEE,
+        campusId: creatorContext.campusId
+    }, creatorContext);
     const empDbId = (empReg.user as any).employee.id;
 
     // 3. Register Head
     const headReg = await authService.register({
         name: 'Science Head',
+        email: 'sabb_head@example.com',
         employeeId: headId,
         department: 'Science',
         password: 'password123',
-        role: UserRole.DEPARTMENT_HEAD
-    });
+        role: UserRole.DEPARTMENT_HEAD,
+        campusId: creatorContext.campusId
+    }, creatorContext);
     const headDbId = (headReg.user as any).employee.id;
 
     // 4. Test Eligibility (Should Fail - 0 years)
@@ -96,7 +109,7 @@ async function main() {
 
     // 8. Approve Request
     console.log('👑 Approving Request...');
-    const approved = await sabbaticalService.approveSabbatical(request.id, headDbId, 'Good luck');
+    const approved = await sabbaticalService.approveSabbatical(request.id, headDbId, null, 'Good luck');
     if (approved.status !== LeaveStatus.APPROVED) throw new Error('Status failed');
     console.log('✅ Approval successful');
 

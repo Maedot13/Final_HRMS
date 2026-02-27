@@ -3,6 +3,7 @@ import * as employeeService from '../services/employee.service';
 import { UserRole } from '@hrms/types';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 import { auditEmployeeUpdate, AuditAction } from '../utils/auditLog';
+import { assertSameCampus } from '../lib/campusScope';
 
 export const getEmployee = async (req: Request, res: Response) => {
     try {
@@ -62,8 +63,14 @@ export const getEmployee = async (req: Request, res: Response) => {
             );
         }
 
+        // Campus isolation: campus users can only view employees in their campus
+        assertSameCampus(req, employee.campusId);
+
         sendSuccess(res, employee);
     } catch (error: any) {
+        if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(
             res,
             500,
@@ -135,6 +142,9 @@ export const updateEmployee = async (req: Request, res: Response) => {
             );
         }
 
+        // Campus isolation: campus users can only update employees in their campus
+        assertSameCampus(req, employee.campusId);
+
         const updatedEmployee = await employeeService.updateEmployee(id, data);
 
         // Audit log (Diff tracking)
@@ -153,6 +163,9 @@ export const updateEmployee = async (req: Request, res: Response) => {
         sendSuccess(res, updatedEmployee);
 
     } catch (error: any) {
+        if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(
             res,
             500,

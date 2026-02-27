@@ -2,7 +2,10 @@
 import { prisma } from '../lib/prisma';
 import { LeaveStatus, ClearanceStatus, JobStatus } from '@prisma/client';
 
-export const getDashboardSummary = async () => {
+const campusWhere = (campusId?: number) => campusId != null ? { campusId } : {};
+
+export const getDashboardSummary = async (campusId?: number) => {
+    const where = campusWhere(campusId);
     const [
         employeeCount,
         pendingLeaveCount,
@@ -10,11 +13,11 @@ export const getDashboardSummary = async () => {
         activeClearanceCount,
         openJobsCount
     ] = await Promise.all([
-        prisma.employee.count(),
-        prisma.leaveRequest.count({ where: { status: LeaveStatus.PENDING } }),
-        prisma.sabbaticalRequest.count({ where: { status: LeaveStatus.PENDING } }),
-        prisma.clearanceRequest.count({ where: { status: ClearanceStatus.PENDING } }),
-        prisma.jobPosting.count({ where: { status: JobStatus.OPEN } })
+        prisma.employee.count({ where }),
+        prisma.leaveRequest.count({ where: { status: LeaveStatus.PENDING, ...where } }),
+        prisma.sabbaticalRequest.count({ where: { status: LeaveStatus.PENDING, ...where } }),
+        prisma.clearanceRequest.count({ where: { status: ClearanceStatus.PENDING, ...where } }),
+        prisma.jobPosting.count({ where: { status: JobStatus.OPEN, ...where } })
     ]);
 
     return {
@@ -26,9 +29,11 @@ export const getDashboardSummary = async () => {
     };
 };
 
-export const getLeaveStats = async () => {
+export const getLeaveStats = async (campusId?: number) => {
+    const where = campusWhere(campusId);
     const stats = await prisma.leaveRequest.groupBy({
         by: ['leaveType', 'status'],
+        where: Object.keys(where).length > 0 ? where : undefined,
         _count: {
             id: true
         }
@@ -37,9 +42,11 @@ export const getLeaveStats = async () => {
     return stats;
 };
 
-export const getDepartmentStats = async () => {
+export const getDepartmentStats = async (campusId?: number) => {
+    const where = campusWhere(campusId);
     const stats = await prisma.employee.groupBy({
         by: ['department'],
+        where: Object.keys(where).length > 0 ? where : undefined,
         _count: {
             id: true
         }
@@ -48,8 +55,10 @@ export const getDepartmentStats = async () => {
     return stats;
 };
 
-export const getRecruitmentStats = async () => {
+export const getRecruitmentStats = async (campusId?: number) => {
+    const where = campusWhere(campusId);
     const stats = await prisma.jobPosting.findMany({
+        where: Object.keys(where).length > 0 ? where : undefined,
         include: {
             _count: {
                 select: { applications: true }

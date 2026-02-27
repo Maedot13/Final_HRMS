@@ -15,12 +15,14 @@ interface LeaveRequestPayload {
     startDate: Date;
     endDate: Date;
     status: string;
+    campusId?: number | null;
     employee: {
         id: number;
         userId: number;
         name: string;
         department: string;
         email?: string; // If available on employee directly
+        campusId?: number | null;
     };
 }
 
@@ -30,13 +32,15 @@ export const registerLeavehandlers = () => {
     eventBus.on(AppEvents.LEAVE_REQUEST_CREATED, async (payload: LeaveRequestPayload) => {
         try {
             logger.info(`Processing LEAVE_REQUEST_CREATED for request ${payload.id}`);
-            // Notify Department Head
+            // Notify Department Head (same campus only - campus isolation)
+            const campusId = payload.campusId ?? payload.employee.campusId ?? null;
             await notifyDepartmentHead(payload.employee.department, {
                 type: 'LEAVE_REQUEST_CREATED',
                 title: 'New Leave Request',
                 message: `${payload.employee.name} has requested ${payload.days} days of ${payload.leaveType} leave.`,
                 relatedId: payload.id,
-                relatedType: 'LEAVE_REQUEST'
+                relatedType: 'LEAVE_REQUEST',
+                campusId
             });
         } catch (error) {
             logger.error(`Error handling LEAVE_REQUEST_CREATED: ${error}`);

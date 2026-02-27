@@ -12,7 +12,7 @@ jest.mock('../../utils/token', () => ({
 
 describe('User Management Integration', () => {
     const adminToken = 'valid-admin-token';
-    const adminPayload = { userId: 1, employeeId: 'EMP001', role: UserRole.ADMIN };
+    const adminPayload = { userId: 1, employeeId: 'EMP001', role: UserRole.ADMIN, scope: 'UNIVERSITY', campusId: 1 };
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -27,7 +27,7 @@ describe('User Management Integration', () => {
                 .send({ role: UserRole.EMPLOYEE });
 
             expect(res.status).toBe(403);
-            expect(res.body.error.message).toContain('You cannot change your own role');
+            expect(res.body.message).toContain('You cannot change your own role');
         });
 
         it('should prevent demoting the last active admin', async () => {
@@ -47,7 +47,7 @@ describe('User Management Integration', () => {
                 .send({ role: UserRole.EMPLOYEE });
 
             expect(res.status).toBe(403);
-            expect(res.body.error.message).toContain('Cannot demote the last active admin');
+            expect(res.body.message).toContain('Cannot demote the last active admin');
         });
 
         it('should allow changing role of another user if multiple admins exist', async () => {
@@ -80,7 +80,7 @@ describe('User Management Integration', () => {
                 .send({ isActive: false });
 
             expect(res.status).toBe(403);
-            expect(res.body.error.message).toContain('You cannot deactivate your own account');
+            expect(res.body.message).toContain('You cannot deactivate your own account');
         });
 
         it('should prevent deactivating the last active admin', async () => {
@@ -99,7 +99,7 @@ describe('User Management Integration', () => {
 
 
             expect(res.status).toBe(403);
-            expect(res.body.error.message).toContain('Cannot deactivate the last active admin');
+            expect(res.body.message).toContain('Cannot deactivate the last active admin');
         });
     });
 });

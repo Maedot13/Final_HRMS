@@ -5,8 +5,15 @@ import { UserRole } from '@hrms/types';
 
 const prisma = new PrismaClient();
 
+async function getScriptCreatorContext() {
+    const campus = await prisma.campus.findFirst({ where: { isActive: true }, orderBy: { code: 'asc' } });
+    if (!campus) throw new Error('No active campus found. Run seed first.');
+    return { userId: 0, role: 'ADMIN' as any, scope: 'UNIVERSITY' as any, campusId: campus.id, employeeId: 'SYSTEM' };
+}
+
 async function main() {
     console.log('🚀 Starting Auth Flow Verification...');
+    const creatorContext = await getScriptCreatorContext();
 
     const testEmployeeId = 'TEST_EMP_001';
     const testEmail = 'test@example.com';
@@ -24,11 +31,13 @@ async function main() {
     console.log('📝 Testing Register...');
     const registerRes = await authService.register({
         name: 'Test User',
+        email: testEmail,
         employeeId: testEmployeeId,
         department: 'IT',
-        password: 'password123',
-        role: UserRole.EMPLOYEE
-    });
+        password: 'Password123!',
+        role: UserRole.EMPLOYEE,
+        campusId: creatorContext.campusId
+    }, creatorContext);
 
     if (!registerRes.token || !registerRes.refreshToken) throw new Error('Register failed to return tokens');
     console.log('✅ Register successful');
@@ -37,7 +46,7 @@ async function main() {
     console.log('🔑 Testing Login...');
     const loginRes = await authService.login({
         employeeId: testEmployeeId,
-        password: 'password123'
+        password: 'Password123!'
     });
 
     if (!loginRes.token || !loginRes.refreshToken) throw new Error('Login failed to return tokens');

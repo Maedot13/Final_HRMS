@@ -4,8 +4,9 @@ import { prisma } from '../lib/prisma';
 import { PAYROLL_CONSTANTS } from '../config/constants';
 
 interface PayrollDataParams {
-    month?: number; // 0-11 (JS Date style) or 1-12? Let's use 1-12 for API, convert internally
+    month?: number; // 1-12 for API
     year?: number;
+    campusId?: number; // Filter by campus (campus users); omit for university admin (all campuses)
 }
 
 export const getPayrollData = async (params: PayrollDataParams) => {
@@ -27,9 +28,12 @@ export const getPayrollData = async (params: PayrollDataParams) => {
     // - isActive = true
     // - OR (clearance completed in this month)
 
+    const campusFilter = params.campusId != null ? { campusId: params.campusId } : {};
+
     // Step 1: Get Active Employees
     const activeEmployees = await prisma.employee.findMany({
         where: {
+            ...campusFilter,
             user: { isActive: true }
         },
         include: { user: true }
@@ -41,6 +45,7 @@ export const getPayrollData = async (params: PayrollDataParams) => {
     // Or check PayrollTransfer effectiveDate
     const exitedEmployees = await prisma.employee.findMany({
         where: {
+            ...campusFilter,
             payrollTransfers: {
                 some: {
                     effectiveDate: {

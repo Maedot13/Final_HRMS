@@ -59,8 +59,8 @@ describe('Clearance Service', () => {
             prismaMock.payrollTransfer.create.mockResolvedValue({} as any);
             prismaMock.notification.create.mockResolvedValue({} as any);
 
-            // approveCheck(clearanceId, unitId, approverId, userId, comment)
-            const result = await approveCheck(mockClearanceId, mockUnitId, mockApproverId, 999, 'Approved');
+            // approveCheck(clearanceId, unitId, approverId, userId, approverCampusId, comment)
+            const result = await approveCheck(mockClearanceId, mockUnitId, mockApproverId, 999, null, 'Approved');
 
             expect(result.status).toBe('COMPLETED');
             expect(prismaMock.clearanceRequest.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -95,8 +95,8 @@ describe('Clearance Service', () => {
             prismaMock.clearanceUnit.findUnique.mockResolvedValue({ name: 'IT' } as any);
             prismaMock.notification.create.mockResolvedValue({} as any);
 
-            // rejectCheck(clearanceId, unitId, approverId, userId, comment)
-            const result = await rejectCheck(mockClearanceId, mockUnitId, mockApproverId, 999, 'Reason');
+            // rejectCheck(clearanceId, unitId, approverId, userId, approverCampusId, comment)
+            const result = await rejectCheck(mockClearanceId, mockUnitId, mockApproverId, 999, null, 'Reason');
 
             expect(result.status).toBe('REJECTED');
             expect(prismaMock.clearanceCheck.update).toHaveBeenCalledWith(expect.objectContaining({

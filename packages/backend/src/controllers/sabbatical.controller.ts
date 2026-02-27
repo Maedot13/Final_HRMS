@@ -4,6 +4,7 @@ import * as sabbaticalService from '../services/sabbatical.service';
 import { UserRole } from '@hrms/types';
 import { z } from 'zod';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
+import { getCampusScope, getCampusIdFilter } from '../lib/campusScope';
 
 const createSabbaticalSchema = z.object({
     purpose: z.string().min(10),
@@ -66,9 +67,18 @@ export const getRequests = async (req: Request, res: Response) => {
         // If employee, see own. If HR/Admin/Head, see all (or filtered, simplified to all for now)
         const isPrivileged = [UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD].includes(user.role);
 
-        const requests = await sabbaticalService.getSabbaticalRequests(isPrivileged ? undefined : employee.id);
+        const campusCtx = getCampusScope(req);
+        const campusIdFilter = getCampusIdFilter(campusCtx);
+
+        const requests = await sabbaticalService.getSabbaticalRequests(
+            isPrivileged ? undefined : employee.id,
+            isPrivileged ? campusIdFilter : undefined
+        );
         sendSuccess(res, requests);
     } catch (error: any) {
+        if (error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
@@ -93,7 +103,10 @@ export const approveRequest = async (req: Request, res: Response) => {
             return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Approver profile not found', null, req);
         }
 
-        const result = await sabbaticalService.approveSabbatical(id, approver.id, comment);
+        const campusCtx = getCampusScope(req);
+        const approverCampusId = campusCtx.scope === 'CAMPUS' ? campusCtx.campusId : null;
+
+        const result = await sabbaticalService.approveSabbatical(id, approver.id, approverCampusId, comment);
 
         await logAction({
             userId: user.userId,
@@ -107,6 +120,9 @@ export const approveRequest = async (req: Request, res: Response) => {
 
         sendSuccess(res, result);
     } catch (error: any) {
+        if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
@@ -133,7 +149,10 @@ export const rejectRequest = async (req: Request, res: Response) => {
             return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Approver profile not found', null, req);
         }
 
-        const result = await sabbaticalService.rejectSabbatical(id, approver.id, comment);
+        const campusCtx = getCampusScope(req);
+        const approverCampusId = campusCtx.scope === 'CAMPUS' ? campusCtx.campusId : null;
+
+        const result = await sabbaticalService.rejectSabbatical(id, approver.id, approverCampusId, comment);
 
         await logAction({
             userId: user.userId,
@@ -147,6 +166,9 @@ export const rejectRequest = async (req: Request, res: Response) => {
 
         sendSuccess(res, result);
     } catch (error: any) {
+        if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };

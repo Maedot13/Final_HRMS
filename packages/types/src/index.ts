@@ -8,16 +8,35 @@ export enum UserRole {
     EMPLOYEE = 'EMPLOYEE'
 }
 
+// Multi-campus: user scope (campus-scoped vs university-level)
+export enum UserScope {
+    CAMPUS = 'CAMPUS',
+    UNIVERSITY = 'UNIVERSITY'
+}
+
+// Campus (multi-campus)
+export interface Campus {
+    id: number;
+    code: string;
+    name: string;
+    description?: string;
+    isActive: boolean;
+    timezone?: string;
+}
+
 // User Interface
 export interface User {
     id: number;
     name: string;
     role: UserRole;
+    scope?: UserScope;
+    campusId?: number | null;
     employeeId?: string;
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
     employee?: Employee;
+    campus?: Campus;
 }
 
 // Auth DTOs
@@ -28,11 +47,12 @@ export interface LoginRequest {
 
 export interface RegisterRequest {
     email: string;
-    password: string;
+    password?: string;
     name: string;
     employeeId: string;
     department: string;
     role?: UserRole; // Optional, defaults to EMPLOYEE usually, but handy for seeding
+    campusId?: number; // Optional, explicit assignment for UNIVERSITY scoped admins
 }
 
 export interface AuthResponse {

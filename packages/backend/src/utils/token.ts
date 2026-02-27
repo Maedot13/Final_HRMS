@@ -1,12 +1,15 @@
 
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
-import { UserRole } from '@hrms/types';
+import { UserRole, UserScope } from '@hrms/types';
 
 export interface TokenPayload {
     userId: number;
     role: UserRole;
+    scope?: UserScope;
+    campusId?: number | null;
     employeeId?: string | null;
+    mustChangePassword?: boolean;
     exp?: number;
 }
 

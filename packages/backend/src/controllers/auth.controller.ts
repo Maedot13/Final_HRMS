@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import * as authService from '../services/auth.service';
-import { loginSchema, registerSchema, refreshTokenSchema } from '../schemas/auth.schema';
+import { loginSchema, registerSchema, refreshTokenSchema, changePasswordSchema } from '../schemas/auth.schema';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 
 import { AuditAction } from '@prisma/client';
@@ -38,7 +38,12 @@ export const register = async (req: Request, res: Response) => {
             return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid input', validation.error.format(), req);
         }
 
-        const result = await authService.register(validation.data);
+        const creatorContext = req.user;
+        if (!creatorContext) {
+            return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'User context not found', null, req);
+        }
+
+        const result = await authService.register(validation.data, creatorContext);
 
         // Audit Log
         await logAction({
@@ -108,5 +113,40 @@ export const logout = async (req: Request, res: Response) => {
         sendSuccess(res, { message: 'Logged out successfully' });
     } catch (error: any) {
         sendSuccess(res, { message: 'Logged out successfully' });
+    }
+};
+
+export const changePassword = async (req: Request, res: Response) => {
+    try {
+        const validation = changePasswordSchema.safeParse(req.body);
+        if (!validation.success) {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid input', validation.error.format(), req);
+        }
+
+        const userId = req.user?.userId;
+        if (!userId) {
+            return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'User context not found', null, req);
+        }
+
+        await authService.changePassword(
+            userId,
+            validation.data.currentPassword,
+            validation.data.newPassword
+        );
+
+        // Audit Log
+        await logAction({
+            userId,
+            action: AuditAction.USER_STATUS_TOGGLE, // Repurposing since there's no password change enum
+            entityType: 'User',
+            entityId: userId,
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent'),
+            changes: { reason: 'User forcibly changed their password' }
+        });
+
+        sendSuccess(res, { message: 'Password changed successfully' }, 200);
+    } catch (error: any) {
+        sendError(res, 400, ErrorCode.BAD_REQUEST, error.message, null, req);
     }
 };

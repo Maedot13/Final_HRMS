@@ -6,8 +6,15 @@ import { UserRole } from '@hrms/types';
 
 const prisma = new PrismaClient();
 
+async function getScriptCreatorContext() {
+    const campus = await prisma.campus.findFirst({ where: { isActive: true }, orderBy: { code: 'asc' } });
+    if (!campus) throw new Error('No active campus found. Run seed first.');
+    return { userId: 0, role: 'ADMIN' as any, scope: 'UNIVERSITY' as any, campusId: campus.id, employeeId: 'SYSTEM' };
+}
+
 async function main() {
     console.log('🚀 Starting Employee API Verification...');
+    const creatorContext = await getScriptCreatorContext();
 
     const testEmpId = 'EMP_API_TEST_001';
 
@@ -23,11 +30,13 @@ async function main() {
     console.log('👤 Creating Test Employee...');
     const registerRes = await authService.register({
         name: 'API Test User',
+        email: 'emp_api_test@example.com',
         employeeId: testEmpId,
         department: 'HR',
-        password: 'password123',
-        role: UserRole.EMPLOYEE
-    });
+        password: 'Password123!',
+        role: UserRole.EMPLOYEE,
+        campusId: creatorContext.campusId
+    }, creatorContext);
 
     const employeeId = (registerRes.user as any).employee.id;
     console.log(`✅ Created Employee ID: ${employeeId}`);

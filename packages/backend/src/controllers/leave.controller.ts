@@ -3,6 +3,7 @@ import * as leaveService from '../services/leave.service';
 import { UserRole } from '@hrms/types';
 import { LeaveType } from '@prisma/client';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
+import { getCampusScope, getCampusIdFilter } from '../lib/campusScope';
 
 
 
@@ -75,13 +76,19 @@ export const getPendingRequests = async (req: Request, res: Response) => {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
         }
 
+        const campusCtx = getCampusScope(req);
+        const campusIdFilter = getCampusIdFilter(campusCtx);
+
         // Department Heads see only their department, HR/Admin see all
         const requests = user.role === UserRole.DEPARTMENT_HEAD
-            ? await leaveService.getPendingRequests(employee.department)
-            : await leaveService.getAllPendingRequests();
+            ? await leaveService.getPendingRequests(employee.department, campusIdFilter)
+            : await leaveService.getAllPendingRequests(campusIdFilter);
 
         sendSuccess(res, requests);
     } catch (error: any) {
+        if (error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
@@ -104,7 +111,10 @@ export const approveRequest = async (req: Request, res: Response) => {
             return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Approver profile not found', null, req);
         }
 
-        const result = await leaveService.approveRequest(id, approver.id, approver.department, comment);
+        const campusCtx = getCampusScope(req);
+        const approverCampusId = campusCtx.scope === 'CAMPUS' ? campusCtx.campusId : null;
+
+        const result = await leaveService.approveRequest(id, approver.id, approver.department, approverCampusId, comment);
 
         await logAction({
             userId: user.userId,
@@ -118,6 +128,9 @@ export const approveRequest = async (req: Request, res: Response) => {
 
         sendSuccess(res, result);
     } catch (error: any) {
+        if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
@@ -140,7 +153,10 @@ export const rejectRequest = async (req: Request, res: Response) => {
             return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Approver profile not found', null, req);
         }
 
-        const result = await leaveService.rejectRequest(id, approver.id, approver.department, comment);
+        const campusCtx = getCampusScope(req);
+        const approverCampusId = campusCtx.scope === 'CAMPUS' ? campusCtx.campusId : null;
+
+        const result = await leaveService.rejectRequest(id, approver.id, approver.department, approverCampusId, comment);
 
         await logAction({
             userId: user.userId,
@@ -154,6 +170,9 @@ export const rejectRequest = async (req: Request, res: Response) => {
 
         sendSuccess(res, result);
     } catch (error: any) {
+        if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };

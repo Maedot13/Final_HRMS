@@ -6,8 +6,15 @@ import { UserRole } from '@hrms/types';
 
 const prisma = new PrismaClient();
 
+async function getScriptCreatorContext() {
+    const campus = await prisma.campus.findFirst({ where: { isActive: true }, orderBy: { code: 'asc' } });
+    if (!campus) throw new Error('No active campus found. Run seed first.');
+    return { userId: 0, role: 'ADMIN' as any, scope: 'UNIVERSITY' as any, campusId: campus.id, employeeId: 'SYSTEM' };
+}
+
 async function main() {
     console.log('🚀 Starting Leave Management Verification...');
+    const creatorContext = await getScriptCreatorContext();
 
     const empId = 'LEAVE_TEST_EMP';
     const headId = 'LEAVE_TEST_HEAD';
@@ -32,11 +39,13 @@ async function main() {
     console.log('👤 Registering Employee...');
     const empReg = await authService.register({
         name: 'Leave Requester',
+        email: 'leave_emp@example.com',
         employeeId: empId,
         department: 'IT',
-        password: 'password123',
-        role: UserRole.EMPLOYEE
-    });
+        password: 'Password123!',
+        role: UserRole.EMPLOYEE,
+        campusId: creatorContext.campusId
+    }, creatorContext);
     // Cast to access employee
     const empDbId = (empReg.user as any).employee.id;
 
@@ -44,11 +53,13 @@ async function main() {
     console.log('👑 Registering Dept Head...');
     const headReg = await authService.register({
         name: 'IT Boss',
+        email: 'leave_head@example.com',
         employeeId: headId,
         department: 'IT',
-        password: 'password123',
-        role: UserRole.DEPARTMENT_HEAD
-    });
+        password: 'Password123!',
+        role: UserRole.DEPARTMENT_HEAD,
+        campusId: creatorContext.campusId
+    }, creatorContext);
     const headDbId = (headReg.user as any).employee.id;
 
     // 4. Create Leave Request (Annual)
@@ -92,7 +103,7 @@ async function main() {
 
     // 7. Approve Request
     console.log('✅ Approving Request...');
-    const approved = await leaveService.approveRequest(request.id, headDbId, 'Have fun');
+    const approved = await leaveService.approveRequest(request.id, headDbId, 'IT', null, 'Have fun');
     if (approved.status !== LeaveStatus.APPROVED) throw new Error('Status not approved');
 
     // 8. Verify Balance Deduction

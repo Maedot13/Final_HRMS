@@ -88,7 +88,7 @@ describe('SabbaticalService', () => {
             // Mock notification creation if needed, depending on implementation
             prismaMock.notification.create.mockResolvedValue({} as any);
 
-            const result = await sabbaticalService.approveSabbatical(1, 2, 'Approved');
+            const result = await sabbaticalService.approveSabbatical(1, 2, null, 'Approved');
 
             expect(result.status).toBe(LeaveStatus.APPROVED);
         });

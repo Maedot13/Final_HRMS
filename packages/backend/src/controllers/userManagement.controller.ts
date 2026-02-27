@@ -1,4 +1,3 @@
-
 import { Request, Response } from 'express';
 import * as userManagementService from '../services/userManagement.service';
 import {
@@ -8,13 +7,18 @@ import {
 } from '../schemas/userManagement.schema';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 import { auditUserUpdate, AuditAction } from '../utils/auditLog';
-
+import { getCampusScope, getCampusIdFilter, assertSameCampus } from '../lib/campusScope';
 
 export const getAllUsers = async (req: Request, res: Response) => {
     try {
-        const users = await userManagementService.getAllUsers();
+        const campusCtx = getCampusScope(req);
+        const campusId = getCampusIdFilter(campusCtx);
+        const users = await userManagementService.getAllUsers(campusId);
         sendSuccess(res, users);
     } catch (error: any) {
+        if (error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
@@ -26,8 +30,12 @@ export const getUserById = async (req: Request, res: Response) => {
         if (!user) {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'User not found', null, req);
         }
+        assertSameCampus(req, user.campusId);
         sendSuccess(res, user);
     } catch (error: any) {
+        if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
@@ -41,6 +49,12 @@ export const updateUserRole = async (req: Request, res: Response) => {
         if (id === performerId) {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'You cannot change your own role', null, req);
         }
+
+        const targetUser = await userManagementService.getUserById(id);
+        if (!targetUser) {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, 'User not found', null, req);
+        }
+        assertSameCampus(req, targetUser.campusId);
 
         const validation = updateUserRoleSchema.safeParse(req.body);
         if (!validation.success) {
@@ -61,6 +75,9 @@ export const updateUserRole = async (req: Request, res: Response) => {
         sendSuccess(res, user);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Internal error';
+        if (message === 'Cross-campus access denied' || message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         if (message.includes('Cannot demote the last active admin')) {
             return sendError(res, 403, ErrorCode.FORBIDDEN, message, null, req);
         }
@@ -77,6 +94,12 @@ export const toggleUserStatus = async (req: Request, res: Response) => {
         if (id === performerId) {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'You cannot deactivate your own account', null, req);
         }
+
+        const targetUser = await userManagementService.getUserById(id);
+        if (!targetUser) {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, 'User not found', null, req);
+        }
+        assertSameCampus(req, targetUser.campusId);
 
         const validation = toggleUserStatusSchema.safeParse(req.body);
         if (!validation.success) {
@@ -97,6 +120,9 @@ export const toggleUserStatus = async (req: Request, res: Response) => {
         sendSuccess(res, user);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Internal error';
+        if (message === 'Cross-campus access denied' || message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         if (message.includes('Cannot deactivate the last active admin')) {
             return sendError(res, 403, ErrorCode.FORBIDDEN, message, null, req);
         }
@@ -107,6 +133,12 @@ export const toggleUserStatus = async (req: Request, res: Response) => {
 export const resetPassword = async (req: Request, res: Response) => {
     try {
         const id = parseInt(req.params.id);
+        const targetUser = await userManagementService.getUserById(id);
+        if (!targetUser) {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, 'User not found', null, req);
+        }
+        assertSameCampus(req, targetUser.campusId);
+
         const validation = resetPasswordSchema.safeParse(req.body);
         if (!validation.success) {
             return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid input', validation.error.format(), req);
@@ -115,6 +147,9 @@ export const resetPassword = async (req: Request, res: Response) => {
         await userManagementService.resetUserPassword(id, validation.data.password);
         sendSuccess(res, { message: 'Password reset successfully' });
     } catch (error: any) {
+        if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };

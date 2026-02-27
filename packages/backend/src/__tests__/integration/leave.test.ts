@@ -25,8 +25,8 @@ describe('Leave Workflow Integration', () => {
         it('should create a leave request', async () => {
             const leaveData = {
                 leaveType: LeaveType.ANNUAL,
-                startDate: '2023-06-01',
-                endDate: '2023-06-05',
+                startDate: '2027-06-01',
+                endDate: '2027-06-05',
                 reason: 'Summer break'
             };
 

@@ -14,6 +14,7 @@ import {
 import { AuditAction } from '@prisma/client';
 import { logAction } from '../services/auditLog.service';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
+import { getCampusScope, getCampusIdFilter, assertSameCampus } from '../lib/campusScope';
 
 // ... (schema definition remains)
 
@@ -73,8 +74,14 @@ export const getClearance = async (req: Request, res: Response) => {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'Clearance request not found', null, req);
         }
 
+        // Campus isolation: campus users can only view clearances in their campus
+        assertSameCampus(req, clearance.campusId);
+
         sendSuccess(res, clearance);
     } catch (error: any) {
+        if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
@@ -99,7 +106,10 @@ export const approveCheck = async (req: Request, res: Response) => {
 
         const sanitizedComment = comment ? sanitizeInput(comment) : undefined;
 
-        const result = await clearanceService.approveCheck(clearanceId, unitId, approver.id, user.userId, sanitizedComment);
+        const campusCtx = getCampusScope(req);
+        const approverCampusId = campusCtx.scope === 'CAMPUS' ? campusCtx.campusId : null;
+
+        const result = await clearanceService.approveCheck(clearanceId, unitId, approver.id, user.userId, approverCampusId, sanitizedComment);
 
         await logAction({
             userId: user.userId,
@@ -113,6 +123,9 @@ export const approveCheck = async (req: Request, res: Response) => {
 
         sendSuccess(res, result);
     } catch (error: any) {
+        if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
@@ -139,7 +152,10 @@ export const rejectCheck = async (req: Request, res: Response) => {
 
         const sanitizedComment = sanitizeInput(comment);
 
-        const result = await clearanceService.rejectCheck(clearanceId, unitId, approver.id, user.userId, sanitizedComment);
+        const campusCtx = getCampusScope(req);
+        const approverCampusId = campusCtx.scope === 'CAMPUS' ? campusCtx.campusId : null;
+
+        const result = await clearanceService.rejectCheck(clearanceId, unitId, approver.id, user.userId, approverCampusId, sanitizedComment);
 
         await logAction({
             userId: user.userId,
@@ -153,6 +169,9 @@ export const rejectCheck = async (req: Request, res: Response) => {
 
         sendSuccess(res, result);
     } catch (error: any) {
+        if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
@@ -173,9 +192,15 @@ export const getPendingChecksForUnit = async (req: Request, res: Response) => {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden: Insufficient permissions', null, req);
         }
 
-        const pendingChecks = await clearanceService.getPendingChecksForUnit(unitId);
+        const campusCtx = getCampusScope(req);
+        const campusIdFilter = getCampusIdFilter(campusCtx);
+
+        const pendingChecks = await clearanceService.getPendingChecksForUnit(unitId, campusIdFilter);
         sendSuccess(res, pendingChecks);
     } catch (error: any) {
+        if (error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };

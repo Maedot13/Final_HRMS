@@ -8,10 +8,22 @@ export const createNotification = async (data: {
     message: string;
     relatedId?: number;
     relatedType?: string;
+    campusId?: number | null;
 }) => {
+    const campusId = data.campusId ?? (await prisma.user.findUnique({
+        where: { id: data.userId },
+        select: { campusId: true }
+    }))?.campusId ?? null;
+
     return prisma.notification.create({
         data: {
-            ...data,
+            userId: data.userId,
+            type: data.type,
+            title: data.title,
+            message: data.message,
+            relatedId: data.relatedId,
+            relatedType: data.relatedType,
+            campusId,
             isRead: false
         }
     });
@@ -52,6 +64,7 @@ export const notifyUsers = async (userIds: number[], notification: {
     message: string;
     relatedId?: number;
     relatedType?: string;
+    campusId?: number | null;
 }) => {
     // Basic deduplication if needed, but not critical for now
     const uniqueUserIds = [...new Set(userIds)];
@@ -72,9 +85,14 @@ export const notifyRole = async (role: string, notification: {
     message: string;
     relatedId?: number;
     relatedType?: string;
+    campusId?: number | null;
 }) => {
     const users = await prisma.user.findMany({
-        where: { role: role as import('@prisma/client').UserRole, isActive: true },
+        where: {
+            role: role as import('@prisma/client').UserRole,
+            isActive: true,
+            ...(notification.campusId != null ? { campusId: notification.campusId } : {})
+        },
         select: { id: true }
     });
     const userIds = users.map(u => u.id);
@@ -89,10 +107,12 @@ export const notifyDepartmentHead = async (department: string, notification: {
     message: string;
     relatedId?: number;
     relatedType?: string;
+    campusId?: number | null;
 }) => {
     // Find the DEPARTMENT_HEAD for this specific department
     const heads = await prisma.employee.findMany({
         where: {
+            ...(notification.campusId != null ? { campusId: notification.campusId } : {}),
             department: {
                 equals: department,
                 mode: 'insensitive' // Makes it case-insensitive

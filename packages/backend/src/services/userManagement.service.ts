@@ -3,8 +3,9 @@ import { UserRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcrypt';
 
-export const getAllUsers = async () => {
+export const getAllUsers = async (campusId?: number) => {
     return prisma.user.findMany({
+        where: campusId != null ? { campusId } : undefined,
         include: {
             employee: {
                 select: {

@@ -2,6 +2,7 @@
 import { LeaveStatus, LeaveType } from '@prisma/client';
 import { checkOverlappingRequests } from './timeoff.service';
 import { prisma } from '../lib/prisma';
+import { logger } from '../utils/logger';
 import { LEAVE_BALANCES } from '../config/constants';
 import { eventBus, AppEvents } from '../utils/eventBus';
 
@@ -21,6 +22,13 @@ export const createLeaveRequest = async (
     const days = calculateDays(start, end);
     const year = start.getFullYear();
 
+    // 0. Get employee's campusId for multi-campus
+    const emp = await prisma.employee.findUnique({
+        where: { id: employeeId },
+        select: { campusId: true }
+    });
+    const campusId = emp?.campusId ?? null;
+
     // 1. Get or Create Balance for this year (Atomic Upsert)
     // We use upsert to handle potential race conditions where two requests might try to initialize balance
     const balance = await prisma.leaveBalance.upsert({
@@ -32,6 +40,7 @@ export const createLeaveRequest = async (
         },
         update: {}, // No changes if exists
         create: {
+            campusId,
             employeeId,
             year,
             annualBalance: LEAVE_BALANCES.ANNUAL,
@@ -71,6 +80,7 @@ export const createLeaveRequest = async (
     // 3. Create Request
     const request = await prisma.leaveRequest.create({
         data: {
+            campusId,
             employeeId,
             leaveType: data.leaveType,
             startDate: start,
@@ -101,10 +111,11 @@ export const getEmployeeRequests = async (employeeId: number) => {
 };
 
 // For Department Heads - filtered by department
-export const getPendingRequests = async (approverDepartment: string) => {
+export const getPendingRequests = async (approverDepartment: string, campusId?: number) => {
     return prisma.leaveRequest.findMany({
         where: {
             status: LeaveStatus.PENDING,
+            ...(campusId ? { campusId } : {}),
             employee: {
                 department: approverDepartment
             }
@@ -115,15 +126,21 @@ export const getPendingRequests = async (approverDepartment: string) => {
 };
 
 // For HR Officers and Admins - see all requests
-export const getAllPendingRequests = async () => {
+export const getAllPendingRequests = async (campusId?: number) => {
     return prisma.leaveRequest.findMany({
-        where: { status: LeaveStatus.PENDING },
+        where: { status: LeaveStatus.PENDING, ...(campusId ? { campusId } : {}) },
         include: { employee: true },
         orderBy: { createdAt: 'asc' }
     });
 };
 
-export const approveRequest = async (requestId: number, approverId: number, approverDepartment: string, comment?: string) => {
+export const approveRequest = async (
+    requestId: number,
+    approverId: number,
+    approverDepartment: string,
+    approverCampusId: number | null,
+    comment?: string
+) => {
     return prisma.$transaction(async (tx) => {
         const request = await tx.leaveRequest.findUnique({
             where: { id: requestId },
@@ -131,6 +148,15 @@ export const approveRequest = async (requestId: number, approverId: number, appr
         });
         if (!request) throw new Error('Request not found');
         if (request.status !== LeaveStatus.PENDING) throw new Error('Request is not pending');
+
+        if (approverCampusId != null && request.campusId != null && request.campusId !== approverCampusId) {
+            logger.warn('Campus isolation: Cross-campus leave approval denied', {
+                requestId: request.id,
+                approverCampusId,
+                requestCampusId: request.campusId,
+            });
+            throw new Error('Cross-campus access denied');
+        }
 
         // Department-scoped authorization check
         if (request.employee.department !== approverDepartment) {
@@ -213,7 +239,13 @@ export const approveRequest = async (requestId: number, approverId: number, appr
     });
 };
 
-export const rejectRequest = async (requestId: number, approverId: number, approverDepartment: string, comment?: string) => {
+export const rejectRequest = async (
+    requestId: number,
+    approverId: number,
+    approverDepartment: string,
+    approverCampusId: number | null,
+    comment?: string
+) => {
     const request = await prisma.leaveRequest.findUnique({
         where: { id: requestId },
         include: { employee: true }
@@ -221,6 +253,15 @@ export const rejectRequest = async (requestId: number, approverId: number, appro
     if (!request) throw new Error('Request not found');
     if (request.status !== LeaveStatus.PENDING) {
         throw new Error(`Cannot reject leave request. Current status: ${request.status}`);
+    }
+
+    if (approverCampusId != null && request.campusId != null && request.campusId !== approverCampusId) {
+        logger.warn('Campus isolation: Cross-campus leave rejection denied', {
+            requestId: request.id,
+            approverCampusId,
+            requestCampusId: request.campusId,
+        });
+        throw new Error('Cross-campus access denied');
     }
 
     // Department-scoped authorization check

@@ -14,18 +14,26 @@ export const createJobPosting = async (data: {
     deadline: string;
     createdBy: number;
 }) => {
+    const creator = await prisma.user.findUnique({
+        where: { id: data.createdBy },
+        select: { campusId: true }
+    });
+    const campusId = creator?.campusId ?? null;
+
     return prisma.jobPosting.create({
         data: {
             ...data,
+            campusId,
             deadline: new Date(data.deadline),
             status: JobStatus.OPEN
         }
     });
 };
 
-export const getJobPostings = async (filters: { status?: JobStatus; department?: string }) => {
+export const getJobPostings = async (filters: { status?: JobStatus; department?: string }, campusId?: number) => {
     return prisma.jobPosting.findMany({
         where: {
+            ...(campusId ? { campusId } : {}),
             ...(filters.status && { status: filters.status }),
             ...(filters.department && { department: filters.department })
         },
@@ -33,9 +41,9 @@ export const getJobPostings = async (filters: { status?: JobStatus; department?:
     });
 };
 
-export const getJobPostingById = async (id: number) => {
-    return prisma.jobPosting.findUnique({
-        where: { id },
+export const getJobPostingById = async (id: number, campusId?: number) => {
+    return prisma.jobPosting.findFirst({
+        where: { id, ...(campusId ? { campusId } : {}) },
         include: {
             _count: {
                 select: { applications: true }
@@ -44,11 +52,15 @@ export const getJobPostingById = async (id: number) => {
     });
 };
 
-export const updateJobStatus = async (id: number, status: JobStatus) => {
-    return prisma.jobPosting.update({
-        where: { id },
+export const updateJobStatus = async (id: number, status: JobStatus, campusId?: number) => {
+    const updated = await prisma.jobPosting.updateMany({
+        where: { id, ...(campusId ? { campusId } : {}) },
         data: { status }
     });
+    if (updated.count === 0) {
+        throw new Error('Job posting not found');
+    }
+    return prisma.jobPosting.findFirst({ where: { id, ...(campusId ? { campusId } : {}) } });
 };
 
 export const applyForJob = async (employeeId: number, userId: number, userRole: string, data: {

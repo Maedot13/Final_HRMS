@@ -7,23 +7,61 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ---------------------------------------------------------------------------
+// Multi-campus support (Phase 1)
+// ---------------------------------------------------------------------------
+
+model Campus {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  timezone    String?  @default("Africa/Addis_Ababa")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users                 User[]
+  employees              Employee[]
+  leaveRequests         LeaveRequest[]
+  leaveBalances         LeaveBalance[]
+  sabbaticalRequests    SabbaticalRequest[]
+  clearanceRequests     ClearanceRequest[]
+  clearanceUnits        ClearanceUnit[]
+  jobPostings           JobPosting[]
+  notifications         Notification[]
+  auditLogs             AuditLog[]
+}
+
+enum UserScope {
+  CAMPUS
+  UNIVERSITY
+}
+
 model User {
   id            Int            @id @default(autoincrement())
   passwordHash  String
   role          UserRole
+  scope         UserScope      @default(CAMPUS)
+  campusId      Int?
   employeeId    String         @unique
   email         String         @unique
+  mustChangePassword Boolean   @default(false)
   isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+  campus        Campus?        @relation(fields: [campusId], references: [id], onDelete: Restrict)
   employee      Employee?
   jobPostings   JobPosting[]   @relation("JobCreator")
   notifications Notification[]
   refreshTokens RefreshToken[]
+
+  @@index([campusId])
 }
 
 model Employee {
   id         Int      @id @default(autoincrement())
+  campusId   Int?
   userId     Int      @unique
   employeeId String   @unique
   name       String
@@ -35,6 +73,7 @@ model Employee {
   grossSalary        Float               @default(0)
   salaryType         SalaryType          @default(MONTHLY)
   contactInfo        Json
+  campus             Campus?             @relation(fields: [campusId], references: [id], onDelete: Restrict)
   clearanceRequests  ClearanceRequest[]
   user               User                @relation(fields: [userId], references: [id])
   jobApplications    JobApplication[]
@@ -42,10 +81,13 @@ model Employee {
   leaveRequests      LeaveRequest[]
   payrollTransfers   PayrollTransfer[]
   sabbaticalRequests SabbaticalRequest[]
+
+  @@index([campusId])
 }
 
 model LeaveRequest {
   id              Int         @id @default(autoincrement())
+  campusId        Int?
   employeeId      Int
   leaveType       LeaveType
   startDate       DateTime
@@ -60,27 +102,33 @@ model LeaveRequest {
   lastDecisionAt  DateTime?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
+  campus          Campus?     @relation(fields: [campusId], references: [id], onDelete: Restrict)
   employee        Employee    @relation(fields: [employeeId], references: [id])
 
+  @@index([campusId])
   @@index([employeeId, status])
   @@index([status, createdAt])
 }
 
 model LeaveBalance {
   id               Int      @id @default(autoincrement())
+  campusId         Int?
   employeeId       Int
   year             Int
   annualBalance    Int      @default(0)
   sickBalance      Int      @default(0)
   maternityBalance Int      @default(0)
   paternityBalance Int      @default(0)
+  campus           Campus?  @relation(fields: [campusId], references: [id], onDelete: Restrict)
   employee         Employee @relation(fields: [employeeId], references: [id])
 
+  @@index([campusId])
   @@unique([employeeId, year])
 }
 
 model SabbaticalRequest {
   id              Int         @id @default(autoincrement())
+  campusId        Int?
   employeeId      Int
   purpose         String
   startDate       DateTime
@@ -95,11 +143,15 @@ model SabbaticalRequest {
   lastDecisionAt  DateTime?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
+  campus          Campus?     @relation(fields: [campusId], references: [id], onDelete: Restrict)
   employee        Employee    @relation(fields: [employeeId], references: [id])
+
+  @@index([campusId])
 }
 
 model ClearanceRequest {
   id             Int             @id @default(autoincrement())
+  campusId       Int?
   employeeId     Int
   reason         String
   lastWorkingDay DateTime
@@ -107,18 +159,26 @@ model ClearanceRequest {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
+  campus          Campus?         @relation(fields: [campusId], references: [id], onDelete: Restrict)
   checks          ClearanceCheck[]
   employee        Employee         @relation(fields: [employeeId], references: [id])
   payrollTransfer PayrollTransfer?
+
+  @@index([campusId])
 }
 
 model ClearanceUnit {
   id          Int              @id @default(autoincrement())
-  name        String           @unique
+  campusId    Int?
+  name        String
   description String?
   isActive    Boolean          @default(true)
   createdAt   DateTime         @default(now())
+  campus      Campus?          @relation(fields: [campusId], references: [id], onDelete: Restrict)
   checks      ClearanceCheck[]
+
+  @@unique([campusId, name])
+  @@index([campusId])
 }
 
 model ClearanceCheck {
@@ -152,6 +212,7 @@ model PayrollTransfer {
 
 model JobPosting {
   id           Int              @id @default(autoincrement())
+  campusId     Int?
   title        String
   description  String
   requirements String
@@ -161,8 +222,11 @@ model JobPosting {
   status       JobStatus        @default(OPEN)
   createdBy    Int
   createdAt    DateTime         @default(now())
+  campus       Campus?          @relation(fields: [campusId], references: [id], onDelete: Restrict)
   applications JobApplication[]
   creator      User             @relation("JobCreator", fields: [createdBy], references: [id])
+
+  @@index([campusId])
 }
 
 model JobApplication {
@@ -184,6 +248,7 @@ model JobApplication {
 
 model Notification {
   id          Int      @id @default(autoincrement())
+  campusId    Int?
   userId      Int
   type        String
   title       String
@@ -192,7 +257,10 @@ model Notification {
   relatedType String?
   isRead      Boolean  @default(false)
   createdAt   DateTime @default(now())
+  campus      Campus?  @relation(fields: [campusId], references: [id], onDelete: SetNull)
   user        User     @relation(fields: [userId], references: [id])
+
+  @@index([campusId])
 }
 
 model RefreshToken {
@@ -212,6 +280,7 @@ model RefreshToken {
 
 model AuditLog {
   id         Int         @id @default(autoincrement())
+  campusId   Int?
   userId     Int?
   action     AuditAction
   entityType String
@@ -223,6 +292,9 @@ model AuditLog {
   userAgent  String?
   timestamp  DateTime    @default(now())
 
+  campus     Campus?     @relation(fields: [campusId], references: [id], onDelete: SetNull)
+
+  @@index([campusId, timestamp])
   @@index([userId, timestamp])
   @@index([action, timestamp])
   @@index([entityType, entityId])

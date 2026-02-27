@@ -4,6 +4,7 @@ import { differenceInMonths } from 'date-fns';
 import { checkOverlappingRequests, checkSabbaticalEligibility } from './timeoff.service';
 import { prisma } from '../lib/prisma';
 import { createNotification, notifyDepartmentHead } from './notification.service';
+import { logger } from '../utils/logger';
 
 
 export const createSabbaticalRequest = async (
@@ -28,9 +29,16 @@ export const createSabbaticalRequest = async (
     // Rule 2.5: Overlap check
     await checkOverlappingRequests(employeeId, start, end);
 
+    const employee = await prisma.employee.findUnique({
+        where: { id: employeeId },
+        select: { campusId: true }
+    });
+    const campusId = employee?.campusId ?? null;
+
     // 3. Create Request
     const request = await prisma.sabbaticalRequest.create({
         data: {
+            campusId,
             employeeId,
             purpose: data.purpose,
             startDate: start,
@@ -43,19 +51,20 @@ export const createSabbaticalRequest = async (
         include: { employee: true }
     });
 
-    // NOTIFICATION: Notify Department Head
+    // NOTIFICATION: Notify Department Head (same campus only - campus isolation)
     await notifyDepartmentHead(request.employee.department, {
         type: 'SABBATICAL_REQUEST_CREATED',
         title: 'New Sabbatical Request',
         message: `${request.employee.name} has requested a ${request.durationMonths}-month sabbatical.`,
         relatedId: request.id,
-        relatedType: 'SABBATICAL_REQUEST'
+        relatedType: 'SABBATICAL_REQUEST',
+        campusId
     });
 
     return request;
 };
 
-export const getSabbaticalRequests = async (employeeId?: number) => {
+export const getSabbaticalRequests = async (employeeId?: number, campusId?: number) => {
     if (employeeId) {
         return prisma.sabbaticalRequest.findMany({
             where: { employeeId },
@@ -65,16 +74,18 @@ export const getSabbaticalRequests = async (employeeId?: number) => {
     }
     // For HR/Admin, return all
     return prisma.sabbaticalRequest.findMany({
+        where: { ...(campusId ? { campusId } : {}) },
         include: { employee: true },
         orderBy: { createdAt: 'desc' }
     });
 };
 
 // For Department Heads - filtered by department
-export const getPendingRequests = async (approverDepartment: string) => {
+export const getPendingRequests = async (approverDepartment: string, campusId?: number) => {
     return prisma.sabbaticalRequest.findMany({
         where: {
             status: LeaveStatus.PENDING,
+            ...(campusId ? { campusId } : {}),
             employee: {
                 department: approverDepartment
             }
@@ -85,19 +96,33 @@ export const getPendingRequests = async (approverDepartment: string) => {
 };
 
 // For HR Officers and Admins - see all requests
-export const getAllPendingRequests = async () => {
+export const getAllPendingRequests = async (campusId?: number) => {
     return prisma.sabbaticalRequest.findMany({
-        where: { status: LeaveStatus.PENDING },
+        where: { status: LeaveStatus.PENDING, ...(campusId ? { campusId } : {}) },
         include: { employee: true },
         orderBy: { createdAt: 'asc' }
     });
 };
 
-export const approveSabbatical = async (requestId: number, approverId: number, comment?: string) => {
+export const approveSabbatical = async (
+    requestId: number,
+    approverId: number,
+    approverCampusId: number | null,
+    comment?: string
+) => {
     const request = await prisma.sabbaticalRequest.findUnique({ where: { id: requestId } });
     if (!request) throw new Error('Sabbatical request not found');
     if (request.status !== LeaveStatus.PENDING) {
         throw new Error(`Cannot approve sabbatical request. Current status: ${request.status}`);
+    }
+
+    if (approverCampusId != null && request.campusId != null && request.campusId !== approverCampusId) {
+        logger.warn('Campus isolation: Cross-campus sabbatical approval denied', {
+            requestId: request.id,
+            approverCampusId,
+            requestCampusId: request.campusId,
+        });
+        throw new Error('Cross-campus access denied');
     }
 
     // Rule 3: Approval
@@ -121,7 +146,8 @@ export const approveSabbatical = async (requestId: number, approverId: number, c
         title: 'Sabbatical Request Approved',
         message: `Your sabbatical request for ${updatedRequest.durationMonths} months has been approved.`,
         relatedId: updatedRequest.id,
-        relatedType: 'SABBATICAL_REQUEST'
+        relatedType: 'SABBATICAL_REQUEST',
+        campusId: updatedRequest.campusId ?? null
     });
 
     // Send Email
@@ -138,11 +164,25 @@ export const approveSabbatical = async (requestId: number, approverId: number, c
 
     return updatedRequest;
 };
-export const rejectSabbatical = async (requestId: number, approverId: number, comment: string) => {
+export const rejectSabbatical = async (
+    requestId: number,
+    approverId: number,
+    approverCampusId: number | null,
+    comment: string
+) => {
     const request = await prisma.sabbaticalRequest.findUnique({ where: { id: requestId } });
     if (!request) throw new Error('Sabbatical request not found');
     if (request.status !== LeaveStatus.PENDING) {
         throw new Error(`Cannot reject sabbatical request. Current status: ${request.status}`);
+    }
+
+    if (approverCampusId != null && request.campusId != null && request.campusId !== approverCampusId) {
+        logger.warn('Campus isolation: Cross-campus sabbatical rejection denied', {
+            requestId: request.id,
+            approverCampusId,
+            requestCampusId: request.campusId,
+        });
+        throw new Error('Cross-campus access denied');
     }
 
     const updatedRequest = await prisma.sabbaticalRequest.update({
@@ -165,7 +205,8 @@ export const rejectSabbatical = async (requestId: number, approverId: number, co
         title: 'Sabbatical Request Rejected',
         message: `Your sabbatical request for ${updatedRequest.durationMonths} months has been rejected. Comment: ${comment || 'No comment provided'}`,
         relatedId: updatedRequest.id,
-        relatedType: 'SABBATICAL_REQUEST'
+        relatedType: 'SABBATICAL_REQUEST',
+        campusId: updatedRequest.campusId ?? null
     });
 
     // Send Email

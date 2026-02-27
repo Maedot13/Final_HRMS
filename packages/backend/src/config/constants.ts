@@ -32,6 +32,6 @@ export const RATE_LIMITS = {
     },
     AUTH: {
         WINDOW_MS: 15 * 60 * 1000 as number,
-        MAX_REQUESTS: 1000 as number, // Increased for test phase
+        MAX_REQUESTS: 5 as number,
     },
 };

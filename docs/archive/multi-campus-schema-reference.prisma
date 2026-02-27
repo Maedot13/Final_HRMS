@@ -1,0 +1,64 @@
+// Multi-Campus Schema Reference (snippet to merge into packages/backend/prisma/schema.prisma)
+// See docs/multi-campus-architecture.md for full design.
+
+model Campus {
+  id          Int       @id @default(autoincrement())
+  code        String    @unique
+  name        String
+  description String?
+  isActive    Boolean   @default(true)
+  timezone    String?   @default("Africa/Addis_Ababa")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  users                 User[]
+  employees             Employee[]
+  leaveRequests         LeaveRequest[]
+  leaveBalances         LeaveBalance[]
+  sabbaticalRequests    SabbaticalRequest[]
+  clearanceRequests     ClearanceRequest[]
+  jobPostings           JobPosting[]
+  clearanceUnits        ClearanceUnit[]
+  notifications         Notification[]
+  auditLogs             AuditLog[]
+}
+
+enum UserScope {
+  CAMPUS
+  UNIVERSITY
+}
+
+// User: add scope, campusId; change unique to (campusId, employeeId)
+// model User {
+//   ...
+//   scope    UserScope  @default(CAMPUS)
+//   campusId Int?
+//   campus   Campus?   @relation(fields: [campusId], references: [id])
+//   @@unique([campusId, employeeId])
+//   @@index([campusId])
+// }
+
+// Employee: add campusId; change unique to (campusId, employeeId)
+// model Employee {
+//   campusId Int
+//   campus   Campus @relation(fields: [campusId], references: [id])
+//   @@unique([campusId, employeeId])
+//   @@index([campusId])
+// }
+
+// LeaveRequest, LeaveBalance, SabbaticalRequest, ClearanceRequest, JobPosting, etc.:
+// Add campusId (Int), campus relation, @@index([campusId, ...])
+
+// ClearanceUnit: add campusId (Int?, null = university-wide)
+// model ClearanceUnit {
+//   campusId Int?
+//   campus   Campus? @relation(fields: [campusId], references: [id])
+//   @@unique([campusId, name])
+// }
+
+// AuditLog: add campusId (Int?, null = university-level action)
+// model AuditLog {
+//   campusId Int?
+//   campus   Campus? @relation(fields: [campusId], references: [id])
+//   @@index([campusId, timestamp])
+// }

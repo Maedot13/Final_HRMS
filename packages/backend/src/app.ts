@@ -3,12 +3,36 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { rateLimit } from 'express-rate-limit';
-import { RATE_LIMITS } from './config/constants';
 import requestId from 'express-request-id';
 import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from './config/swagger';
 import cookieParser from 'cookie-parser';
 import csrf from 'csurf';
+
+// Config & Utils
+import { RATE_LIMITS } from './config/constants';
+import { swaggerSpec } from './config/swagger';
+import { logger } from './utils/logger';
+import { sendError, ErrorCode, AppError } from './utils/errorHandler';
+
+// Middleware
+import { authenticate, blockIfPasswordChangeRequired } from './middleware/auth.middleware';
+
+// Routes
+import authRoutes from './routes/auth.routes';
+import employeeRoutes from './routes/employee.routes';
+import leaveRoutes from './routes/leave.routes';
+import sabbaticalRoutes from './routes/sabbatical.routes';
+import clearanceRoutes from './routes/clearance.routes';
+import payrollRoutes from './routes/payroll.routes';
+import recruitmentRoutes from './routes/recruitment.routes';
+import notificationRoutes from './routes/notification.routes';
+import reportRoutes from './routes/report.routes';
+import userRoutes from './routes/userManagement.routes';
+import auditRoutes from './routes/audit.routes';
+import campusRoutes from './routes/campus.routes';
+
+// Subscribers
+import { registerLeavehandlers } from './subscribers/leave.subscriber';
 
 const app = express();
 
@@ -89,19 +113,6 @@ app.get('/health', async (req, res) => {
     res.status(statusCode).json(health);
 });
 
-// Routes
-import authRoutes from './routes/auth.routes';
-import employeeRoutes from './routes/employee.routes';
-import leaveRoutes from './routes/leave.routes';
-import sabbaticalRoutes from './routes/sabbatical.routes';
-import clearanceRoutes from './routes/clearance.routes';
-import payrollRoutes from './routes/payroll.routes';
-import recruitmentRoutes from './routes/recruitment.routes';
-import notificationRoutes from './routes/notification.routes';
-import reportRoutes from './routes/report.routes';
-import userRoutes from './routes/userManagement.routes';
-import auditRoutes from './routes/audit.routes';
-
 // CSRF Protection
 const csrfProtection = csrf({ cookie: true });
 
@@ -123,28 +134,26 @@ app.use('/api/v1/auth/login', authLimiter);
 app.use('/api/v1/auth/register', authLimiter);
 app.use('/api/v1/auth/refresh', authLimiter);
 
+// Auth Routes (Public or special auth)
 app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/employees', employeeRoutes);
-app.use('/api/v1/leave', leaveRoutes);
-app.use('/api/v1/sabbatical', sabbaticalRoutes);
-app.use('/api/v1/clearance', clearanceRoutes);
-app.use('/api/v1/payroll', payrollRoutes);
-app.use('/api/v1/recruitment', recruitmentRoutes);
-app.use('/api/v1/notifications', notificationRoutes);
-app.use('/api/v1/reports', reportRoutes);
-app.use('/api/v1/users', userRoutes);
-app.use('/api/v1/audit-logs', auditRoutes);
 
-import { registerLeavehandlers } from './subscribers/leave.subscriber';
+// Protected Domain Routes
+app.use('/api/v1/employees', authenticate, blockIfPasswordChangeRequired, employeeRoutes);
+app.use('/api/v1/leave', authenticate, blockIfPasswordChangeRequired, leaveRoutes);
+app.use('/api/v1/sabbatical', authenticate, blockIfPasswordChangeRequired, sabbaticalRoutes);
+app.use('/api/v1/clearance', authenticate, blockIfPasswordChangeRequired, clearanceRoutes);
+app.use('/api/v1/payroll', authenticate, blockIfPasswordChangeRequired, payrollRoutes);
+app.use('/api/v1/recruitment', authenticate, blockIfPasswordChangeRequired, recruitmentRoutes);
+app.use('/api/v1/notifications', authenticate, blockIfPasswordChangeRequired, notificationRoutes);
+app.use('/api/v1/reports', authenticate, blockIfPasswordChangeRequired, reportRoutes);
+app.use('/api/v1/users', authenticate, blockIfPasswordChangeRequired, userRoutes);
+app.use('/api/v1/audit-logs', authenticate, blockIfPasswordChangeRequired, auditRoutes);
+app.use('/api/v1/campuses', authenticate, blockIfPasswordChangeRequired, campusRoutes);
+
 // Initialize Event Listeners
 registerLeavehandlers();
 
-import { logger } from './utils/logger';
-
 // Error Handler
-// Error Handler
-import { sendError, ErrorCode, AppError } from './utils/errorHandler';
-
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     logger.error(`[Error] ${req.method} ${req.url}: ${err.message}`, { stack: err.stack });
@@ -191,3 +200,4 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 export default app;
+

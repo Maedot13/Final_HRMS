@@ -1,8 +1,11 @@
 
-import { LoginRequest, RegisterRequest, AuthResponse, UserRole } from '@hrms/types';
+import { LoginRequest, RegisterRequest, AuthResponse, UserRole, UserScope } from '@hrms/types';
 import { hashPassword, comparePassword } from '../utils/password';
-import { generateToken, generateRefreshToken, verifyRefreshToken } from '../utils/token';
+import { generateToken, generateRefreshToken, verifyRefreshToken, TokenPayload } from '../utils/token';
 import { prisma } from '../lib/prisma';
+import crypto from 'crypto';
+import * as emailService from './email.service';
+import { logger } from '../utils/logger';
 
 
 // Helper to get expiration date from JWT token
@@ -21,7 +24,7 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
     // Strict login with Employee ID only as per requirement
     const user = await prisma.user.findUnique({
         where: { employeeId },
-        include: { employee: true }
+        include: { employee: true, campus: true }
     });
 
     if (!user) {
@@ -38,16 +41,24 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
         throw new Error('Account is deactivated');
     }
 
+    const scope = user.scope === 'UNIVERSITY' ? UserScope.UNIVERSITY : UserScope.CAMPUS;
+
     const token = generateToken({
         userId: user.id,
         role: user.role as UserRole,
-        employeeId: user.employeeId
+        scope,
+        campusId: user.campusId ?? null,
+        employeeId: user.employeeId,
+        mustChangePassword: user.mustChangePassword
     });
 
     const refreshTokenString = generateRefreshToken({
         userId: user.id,
         role: user.role as UserRole,
-        employeeId: user.employeeId
+        scope,
+        campusId: user.campusId ?? null,
+        employeeId: user.employeeId,
+        mustChangePassword: user.mustChangePassword
     });
 
     // Save refresh token to DB
@@ -65,12 +76,15 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
         ...userWithoutPassword,
         name: user.employee?.name || '',
         role: user.role as UserRole,
+        scope: scope,
+        campusId: user.campusId ?? null,
         createdAt: user.createdAt.toISOString(),
         updatedAt: user.updatedAt.toISOString(),
         employee: user.employee ? {
             ...user.employee,
             hireDate: user.employee.hireDate.toISOString()
-        } : undefined
+        } : undefined,
+        campus: user.campus ? { id: user.campus.id, code: user.campus.code, name: user.campus.name, description: user.campus.description ?? undefined, isActive: user.campus.isActive, timezone: user.campus.timezone ?? undefined } : undefined
     };
 
     return {
@@ -80,8 +94,8 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
     };
 };
 
-export const register = async (data: RegisterRequest): Promise<AuthResponse> => {
-    const { email, password, name, employeeId, department, role } = data;
+export const register = async (data: RegisterRequest, creatorContext: TokenPayload): Promise<AuthResponse> => {
+    const { email, password, name, employeeId, department, role, campusId: requestedCampusId } = data;
 
     const existingEmployee = await prisma.employee.findUnique({ where: { employeeId } });
     if (existingEmployee) {
@@ -98,7 +112,34 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
         throw new Error('Email already in use');
     }
 
-    const hashedPassword = await hashPassword(password);
+    let assignedCampusId: number;
+
+    if (creatorContext.scope === UserScope.UNIVERSITY) {
+        if (!requestedCampusId) {
+            throw new Error('UNIVERSITY scoped admins must explicitly provide a campusId when registering a user.');
+        }
+
+        // Verify the requested campus exists
+        const campusExists = await prisma.campus.findUnique({ where: { id: requestedCampusId } });
+        if (!campusExists) {
+            throw new Error(`Campus with ID ${requestedCampusId} not found.`);
+        }
+        assignedCampusId = requestedCampusId;
+    } else {
+        // Force the new user into the same campus as the HR Officer creating them
+        if (!creatorContext.campusId) {
+            throw new Error('Creator has no campus assigned.');
+        }
+        assignedCampusId = creatorContext.campusId;
+
+        if (requestedCampusId && requestedCampusId !== assignedCampusId) {
+            throw new Error('CAMPUS scoped users cannot register users for another campus.');
+        }
+    }
+
+    const rawPassword = password || crypto.randomBytes(8).toString('base64url');
+    const mustChangePassword = !password; // True if auto-generated
+    const hashedPassword = await hashPassword(rawPassword);
 
     // Use transaction to create User and Employee atomically
     const result = await prisma.$transaction(async (tx) => {
@@ -106,13 +147,17 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
             data: {
                 email,
                 passwordHash: hashedPassword,
+                mustChangePassword,
                 role: (role as any) || UserRole.EMPLOYEE,
+                scope: 'CAMPUS',
+                campusId: assignedCampusId,
                 employeeId,
             }
         });
 
         const newEmployee = await tx.employee.create({
             data: {
+                campusId: assignedCampusId,
                 userId: newUser.id,
                 employeeId,
                 name,
@@ -126,16 +171,32 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
         return { newUser, newEmployee };
     });
 
+    // Send welcome email asynchronously if password was generated
+    if (mustChangePassword) {
+        emailService.sendWelcomeEmail({
+            to: email,
+            name,
+            employeeId,
+            tempPassword: rawPassword
+        }).catch(err => logger.error('Async welcome email failed', err));
+    }
+
     const token = generateToken({
         userId: result.newUser.id,
         role: result.newUser.role as UserRole,
-        employeeId: result.newUser.employeeId
+        scope: UserScope.CAMPUS,
+        campusId: result.newUser.campusId ?? null,
+        employeeId: result.newUser.employeeId,
+        mustChangePassword: result.newUser.mustChangePassword
     });
 
     const refreshTokenString = generateRefreshToken({
         userId: result.newUser.id,
         role: result.newUser.role as UserRole,
-        employeeId: result.newUser.employeeId
+        scope: UserScope.CAMPUS,
+        campusId: result.newUser.campusId ?? null,
+        employeeId: result.newUser.employeeId,
+        mustChangePassword: result.newUser.mustChangePassword
     });
 
     // Save refresh token
@@ -147,18 +208,26 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
         }
     });
 
+    const campus = await prisma.campus.findUnique({
+        where: { id: assignedCampusId },
+        select: { id: true, code: true, name: true, description: true, isActive: true, timezone: true }
+    });
+
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { passwordHash, ...userWithoutPassword } = result.newUser;
     const userResponse = {
         ...userWithoutPassword,
         name: result.newEmployee.name,
         role: result.newUser.role as UserRole,
+        scope: UserScope.CAMPUS,
+        campusId: assignedCampusId,
         employee: {
             ...result.newEmployee,
             hireDate: result.newEmployee.hireDate.toISOString()
         },
         createdAt: result.newUser.createdAt.toISOString(),
-        updatedAt: result.newUser.updatedAt.toISOString()
+        updatedAt: result.newUser.updatedAt.toISOString(),
+        campus: campus ? { id: campus.id, code: campus.code, name: campus.name, description: campus.description ?? undefined, isActive: campus.isActive, timezone: campus.timezone ?? undefined } : undefined
     };
 
     return {
@@ -171,22 +240,26 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
 export const getMe = async (userId: number): Promise<AuthResponse['user']> => {
     const user = await prisma.user.findUnique({
         where: { id: userId },
-        include: { employee: true }
+        include: { employee: true, campus: true }
     });
 
     if (!user) throw new Error('User not found');
 
+    const scope = user.scope === 'UNIVERSITY' ? UserScope.UNIVERSITY : UserScope.CAMPUS;
     const { passwordHash, ...userWithoutPassword } = user;
     return {
         ...userWithoutPassword,
         name: user.employee?.name || '',
         role: user.role as UserRole,
+        scope,
+        campusId: user.campusId ?? null,
         createdAt: user.createdAt.toISOString(),
         updatedAt: user.updatedAt.toISOString(),
         employee: user.employee ? {
             ...user.employee,
             hireDate: user.employee.hireDate.toISOString()
-        } : undefined
+        } : undefined,
+        campus: user.campus ? { id: user.campus.id, code: user.campus.code, name: user.campus.name, description: user.campus.description ?? undefined, isActive: user.campus.isActive, timezone: user.campus.timezone ?? undefined } : undefined
     } as unknown as AuthResponse['user'];
 }
 
@@ -197,7 +270,7 @@ export const refreshToken = async (token: string): Promise<AuthResponse> => {
     // 2. Check DB for token status
     const dbToken = await prisma.refreshToken.findUnique({
         where: { token },
-        include: { user: { include: { employee: true } } }
+        include: { user: { include: { employee: true, campus: true } } }
     });
 
     // Token reuse detection or simply not found
@@ -225,16 +298,22 @@ export const refreshToken = async (token: string): Promise<AuthResponse> => {
         throw new Error('User inactive');
     }
 
+    const scope = user.scope === 'UNIVERSITY' ? UserScope.UNIVERSITY : UserScope.CAMPUS;
+
     // 3. Rotation: Revoke old, Issue new
     const newAccessToken = generateToken({
         userId: user.id,
         role: user.role as UserRole,
+        scope,
+        campusId: user.campusId ?? null,
         employeeId: user.employeeId
     });
 
     const newRefreshTokenString = generateRefreshToken({
         userId: user.id,
         role: user.role as UserRole,
+        scope,
+        campusId: user.campusId ?? null,
         employeeId: user.employeeId
     });
 
@@ -262,12 +341,15 @@ export const refreshToken = async (token: string): Promise<AuthResponse> => {
         ...userWithoutPassword,
         name: user.employee?.name || '',
         role: user.role as UserRole,
+        scope,
+        campusId: user.campusId ?? null,
         createdAt: user.createdAt.toISOString(),
         updatedAt: user.updatedAt.toISOString(),
         employee: user.employee ? {
             ...user.employee,
             hireDate: user.employee.hireDate.toISOString()
-        } : undefined
+        } : undefined,
+        campus: user.campus ? { id: user.campus.id, code: user.campus.code, name: user.campus.name, description: user.campus.description ?? undefined, isActive: user.campus.isActive, timezone: user.campus.timezone ?? undefined } : undefined
     };
 
     return {
@@ -293,10 +375,36 @@ export const logout = async (refreshToken: string, accessToken?: string): Promis
             // Access tokens expire in 1 hour (3600 seconds)
             await blacklistToken(accessToken, 3600);
         } catch (error) {
-            console.error('Failed to blacklist access token:', error);
-            // Continue even if blacklisting fails
         }
     }
 
     return { message: 'Logged out successfully' };
+};
+
+export const changePassword = async (userId: number, currentPassword: string, newPassword: string): Promise<void> => {
+    const user = await prisma.user.findUnique({
+        where: { id: userId }
+    });
+
+    if (!user) {
+        throw new Error('User not found');
+    }
+
+    const isPasswordValid = await comparePassword(currentPassword, user.passwordHash);
+    if (!isPasswordValid) {
+        throw new Error('Incorrect current password');
+    }
+
+    const newPasswordHash = await hashPassword(newPassword);
+
+    await prisma.user.update({
+        where: { id: userId },
+        data: {
+            passwordHash: newPasswordHash,
+            mustChangePassword: false
+        }
+    });
+
+    // We do NOT invalidate refresh tokens here because the user is already logged in 
+    // and this is merely a forced profile completion step, not a security compromise.
 };

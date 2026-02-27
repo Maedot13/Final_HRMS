@@ -1,7 +1,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { verifyToken, TokenPayload } from '../utils/token';
-import { UserRole } from '@hrms/types';
+import { UserRole, UserScope } from '@hrms/types';
 import { isTokenBlacklisted } from '../utils/tokenBlacklist';
 import { sendError, ErrorCode } from '../utils/errorHandler';
 
@@ -86,4 +86,30 @@ export const authorize = (allowedRoles: UserRole[]) => {
 
         next();
     };
+};
+
+/** Requires ADMIN role and UNIVERSITY scope (university-level admin only). */
+export const requireUniversityAdmin = (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+        return sendError(res, 401, ErrorCode.AUTHENTICATION_FAILED, 'User not authenticated', null, req);
+    }
+    if (req.user.role !== UserRole.ADMIN || req.user.scope !== UserScope.UNIVERSITY) {
+        return sendError(res, 403, ErrorCode.FORBIDDEN, 'University admin access required', null, req);
+    }
+    next();
+};
+
+/** Blocks access to routes if user is in 'mustChangePassword' state. */
+export const blockIfPasswordChangeRequired = (req: Request, res: Response, next: NextFunction) => {
+    if (req.user?.mustChangePassword) {
+        return sendError(
+            res,
+            403,
+            ErrorCode.PASSWORD_CHANGE_REQUIRED,
+            'You must change your password before accessing this resource',
+            null,
+            req
+        );
+    }
+    next();
 };
