@@ -3,6 +3,7 @@ import { Router } from 'express';
 import * as recruitmentController from '../controllers/recruitment.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { attachEmployee } from '../middleware/employee.middleware';
+import { cacheMiddleware } from '../middleware/cache.middleware';
 import { UserRole } from '@hrms/types';
 
 const router = Router();
@@ -64,7 +65,7 @@ router.use(authenticate);
  *       403:
  *         description: Forbidden
  */
-router.get('/postings', recruitmentController.getJobPostings);
+router.get('/postings', cacheMiddleware(120), recruitmentController.getJobPostings);
 
 /**
  * @swagger

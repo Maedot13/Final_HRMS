@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as campusController from '../controllers/campus.controller';
 import { authenticate, requireUniversityAdmin } from '../middleware/auth.middleware';
+import { cacheMiddleware } from '../middleware/cache.middleware';
 
 const router = Router();
 
@@ -8,7 +9,7 @@ const router = Router();
 router.use(authenticate);
 router.use(requireUniversityAdmin);
 
-router.get('/', campusController.getCampuses);
+router.get('/', cacheMiddleware(60), campusController.getCampuses);
 router.post('/', campusController.createCampus);
 router.get('/:id/users', campusController.getCampusUsers); // more specific before :id
 router.get('/:id', campusController.getCampusById);

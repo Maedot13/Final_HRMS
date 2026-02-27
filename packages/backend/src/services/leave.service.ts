@@ -4,7 +4,7 @@ import { checkOverlappingRequests } from './timeoff.service';
 import { prisma } from '../lib/prisma';
 import { logger } from '../utils/logger';
 import { LEAVE_BALANCES } from '../config/constants';
-import { eventBus, AppEvents } from '../utils/eventBus';
+import { dispatchEvent, SystemEventTypes } from './eventBus.service';
 
 // Helper to get duration in days (excluding weekends/holidays - simplified for now to just diff)
 const calculateDays = (start: Date, end: Date): number => {
@@ -93,11 +93,15 @@ export const createLeaveRequest = async (
         include: { employee: true }
     });
 
-    // ASYNC EVENT: Notify Department Head
-    eventBus.emit(AppEvents.LEAVE_REQUEST_CREATED, {
-        ...request,
-        startDate: request.startDate, // Date objects are passed as is
-        endDate: request.endDate
+    // ASYNC EVENT: Notify Department Head (via BullMQ)
+    await dispatchEvent(SystemEventTypes.LEAVE_REQUESTED, {
+        requestId: request.id,
+        employeeId: request.employeeId,
+        employeeName: request.employee.name,
+        employeeDepartment: request.employee.department,
+        leaveType: request.leaveType,
+        days: request.days,
+        campusId: request.campusId
     });
 
     return request;
@@ -227,9 +231,12 @@ export const approveRequest = async (
             include: { employee: true }
         });
 
-        // ASYNC EVENT: Notify User
-        eventBus.emit(AppEvents.LEAVE_REQUEST_APPROVED, {
+        // ASYNC EVENT: Notify User (via BullMQ)
+        await dispatchEvent(SystemEventTypes.LEAVE_APPROVED, {
             requestId: updatedRequest.id,
+            employeeUserId: updatedRequest.employee.userId,
+            leaveType: updatedRequest.leaveType,
+            days: updatedRequest.days,
             comment
         });
 
@@ -287,9 +294,12 @@ export const rejectRequest = async (
         include: { employee: true }
     });
 
-    // ASYNC EVENT: Notify User
-    eventBus.emit(AppEvents.LEAVE_REQUEST_REJECTED, {
+    // ASYNC EVENT: Notify User (via BullMQ)
+    await dispatchEvent(SystemEventTypes.LEAVE_REJECTED, {
         requestId: updatedRequest.id,
+        employeeUserId: updatedRequest.employee.userId,
+        leaveType: updatedRequest.leaveType,
+        days: updatedRequest.days,
         comment
     });
 

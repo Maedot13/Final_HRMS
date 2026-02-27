@@ -31,8 +31,8 @@ import userRoutes from './routes/userManagement.routes';
 import auditRoutes from './routes/audit.routes';
 import campusRoutes from './routes/campus.routes';
 
-// Subscribers
-import { registerLeavehandlers } from './subscribers/leave.subscriber';
+// Workers
+import './workers/notification.worker';
 
 const app = express();
 
@@ -151,12 +151,16 @@ app.use('/api/v1/audit-logs', authenticate, blockIfPasswordChangeRequired, audit
 app.use('/api/v1/campuses', authenticate, blockIfPasswordChangeRequired, campusRoutes);
 
 // Initialize Event Listeners
-registerLeavehandlers();
+// (Worker initialized via import above)
 
 // Error Handler
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    logger.error(`[Error] ${req.method} ${req.url}: ${err.message}`, { stack: err.stack });
+    logger.error(`[Error] ${req.method} ${req.url}: ${err.message}`, {
+        stack: err.stack,
+        // @ts-ignore - injected by express-request-id
+        requestId: req.id
+    });
 
     // Handle AppError (Trusted errors)
     if (err instanceof AppError) {

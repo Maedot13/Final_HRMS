@@ -1,0 +1,69 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: hrms_user
+          POSTGRES_PASSWORD: hrms_password
+          POSTGRES_DB: hrms_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Use Node.js 20.x
+      uses: actions/setup-node@v3
+      with:
+        node-version: 20.x
+        cache: 'npm'
+        cache-dependency-path: './packages/backend/package-lock.json'
+
+    # Backend setup
+    - name: Install backend dependencies
+      working-directory: ./packages/backend
+      run: npm ci
+
+    - name: Generate Prisma Client
+      working-directory: ./packages/backend
+      run: npx prisma generate
+
+    - name: Run Backend Linter
+      working-directory: ./packages/backend
+      run: npm run lint
+
+    - name: Run Backend Tests
+      working-directory: ./packages/backend
+      env:
+        DATABASE_URL: postgresql://hrms_user:hrms_password@localhost:5432/hrms_db?schema=public
+        JWT_SECRET: supersecret_jwt_key_for_testing
+        JWT_EXPIRES_IN: 1h
+        JWT_REFRESH_SECRET: supersecret_refresh_key_for_testing
+        JWT_REFRESH_EXPIRES_IN: 7d
+        REDIS_URL: redis://localhost:6379
+        NODE_ENV: test
+      run: npm test
+
+    - name: Build Backend
+      working-directory: ./packages/backend
+      run: npm run build

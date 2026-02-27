@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { notifyDepartmentHead, notifyRole } from './notification.service';
 import { canApproveForUnit } from './authorization.service';
 import { logger } from '../utils/logger';
+import { dispatchEvent, SystemEventTypes } from './eventBus.service';
 
 
 // 1. Initiate Clearance
@@ -184,73 +185,36 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
 
         if (pendingChecks === 0) {
             // All approved! Complete the clearance
-            await tx.clearanceRequest.update({
+            const completedClearance = await tx.clearanceRequest.update({
                 where: { id: clearanceId },
-                data: { status: ClearanceStatus.APPROVED } // APPROVED = COMPLETE
-            });
-
-            // AUTOMATICALLY CREATE PAYROLL TRANSFER
-            const clearance = await tx.clearanceRequest.findUnique({
-                where: { id: clearanceId },
+                data: { status: ClearanceStatus.APPROVED },
                 include: { employee: true }
             });
-            if (clearance) {
-                await tx.payrollTransfer.create({
-                    data: {
-                        employeeId: clearance.employeeId,
-                        clearanceId: clearance.id,
-                        reason: 'Clearance Completed',
-                        effectiveDate: new Date(),
-                        status: 'PENDING',
-                        createdBy: approverId
-                    }
-                });
 
-                // Trigger Notification: Clearance Completed
-                await tx.notification.create({
-                    data: {
-                        userId: clearance.employee.userId,
-                        type: 'CLEARANCE_COMPLETED',
-                        title: 'Clearance Process Completed',
-                        message: 'All departments have approved your clearance. Payroll transfer has been initiated.',
-                        relatedId: clearance.id,
-                        relatedType: 'CLEARANCE_REQUEST'
-                    }
-                });
-
-                // Send Email
-                const user = await tx.user.findUnique({ where: { id: clearance.employee.userId } });
-                if (user && user.email) {
-                    const { sendEmail } = await import('./email.service');
-                    const { templates } = await import('../utils/emailTemplates');
-                    await sendEmail({
-                        to: user.email,
-                        subject: 'Clearance Process Completed',
-                        html: templates.clearanceCompleted(clearance.employee.name)
-                    });
-                }
-            }
+            // Dispatch async side-effects (notifications, email, payroll) to BullMQ worker
+            await dispatchEvent(SystemEventTypes.CLEARANCE_COMPLETED, {
+                clearanceId,
+                employeeUserId: completedClearance.employee.userId,
+                employeeName: completedClearance.employee.name,
+                approverId
+            });
 
             return { status: 'COMPLETED', message: 'Clearance fully approved and Payroll Transfer initiated' };
         }
 
-        // Notify employee about unit approval
+        // Fetch employee userId for notification dispatch
         const clearanceWithEmployee = await tx.clearanceRequest.findUnique({
             where: { id: clearanceId },
             include: { employee: true }
         });
         const unit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
 
+        // Dispatch async notification to BullMQ worker
         if (clearanceWithEmployee) {
-            await tx.notification.create({
-                data: {
-                    userId: clearanceWithEmployee.employee.userId,
-                    type: 'CLEARANCE_UNIT_APPROVED',
-                    title: 'Clearance Unit Approved',
-                    message: `Department "${unit?.name || 'Unknown'}" has approved your clearance.`,
-                    relatedId: clearanceId,
-                    relatedType: 'CLEARANCE_REQUEST'
-                }
+            await dispatchEvent(SystemEventTypes.CLEARANCE_UNIT_APPROVED, {
+                clearanceId,
+                employeeUserId: clearanceWithEmployee.employee.userId,
+                unitName: unit?.name || 'Unknown'
             });
         }
 
@@ -309,23 +273,20 @@ export const rejectCheck = async (clearanceId: number, unitId: number, approverI
             }
         });
 
-        // Notify employee about rejection
+        // Fetch employee + unit data for the async event payload
         const clearanceWithEmployee = await tx.clearanceRequest.findUnique({
             where: { id: clearanceId },
             include: { employee: true }
         });
         const unit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
 
+        // Dispatch async notification to BullMQ worker
         if (clearanceWithEmployee) {
-            await tx.notification.create({
-                data: {
-                    userId: clearanceWithEmployee.employee.userId,
-                    type: 'CLEARANCE_UNIT_REJECTED',
-                    title: 'Clearance Unit Rejected',
-                    message: `Department "${unit?.name || 'Unknown'}" has rejected your clearance. Comment: ${comment}`,
-                    relatedId: clearanceId,
-                    relatedType: 'CLEARANCE_REQUEST'
-                }
+            await dispatchEvent(SystemEventTypes.CLEARANCE_UNIT_REJECTED, {
+                clearanceId,
+                employeeUserId: clearanceWithEmployee.employee.userId,
+                unitName: unit?.name || 'Unknown',
+                comment
             });
         }
 

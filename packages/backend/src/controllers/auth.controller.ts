@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as authService from '../services/auth.service';
+import * as passwordService from '../services/password.service';
 import { loginSchema, registerSchema, refreshTokenSchema, changePasswordSchema } from '../schemas/auth.schema';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 
@@ -128,7 +129,7 @@ export const changePassword = async (req: Request, res: Response) => {
             return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'User context not found', null, req);
         }
 
-        await authService.changePassword(
+        await passwordService.changePassword(
             userId,
             validation.data.currentPassword,
             validation.data.newPassword

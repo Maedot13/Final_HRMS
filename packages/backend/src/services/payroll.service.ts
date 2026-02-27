@@ -2,6 +2,7 @@
 import { endOfMonth, differenceInDays, isSameMonth } from 'date-fns';
 import { prisma } from '../lib/prisma';
 import { PAYROLL_CONSTANTS } from '../config/constants';
+import { logger } from '../utils/logger';
 
 interface PayrollDataParams {
     month?: number; // 1-12 for API
@@ -125,4 +126,23 @@ export const getPayrollData = async (params: PayrollDataParams) => {
         count: results.length,
         data: results
     };
+};
+
+export const triggerClearancePayrollTransfer = async (clearanceId: number, employeeId: number, approverId: number) => {
+    try {
+        await prisma.payrollTransfer.create({
+            data: {
+                employeeId,
+                clearanceId,
+                reason: 'Clearance Completed',
+                effectiveDate: new Date(),
+                status: 'PENDING',
+                createdBy: approverId
+            }
+        });
+        logger.info(`[Payroll Service] Initiated payroll transfer for clearance ${clearanceId}`);
+    } catch (error) {
+        logger.error(`[Payroll Service] Failed to initiate payroll transfer for clearance ${clearanceId}`, error);
+        throw error;
+    }
 };

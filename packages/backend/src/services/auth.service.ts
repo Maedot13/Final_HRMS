@@ -1,22 +1,12 @@
 
 import { LoginRequest, RegisterRequest, AuthResponse, UserRole, UserScope } from '@hrms/types';
 import { hashPassword, comparePassword } from '../utils/password';
-import { generateToken, generateRefreshToken, verifyRefreshToken, TokenPayload } from '../utils/token';
+import { verifyRefreshToken, TokenPayload } from '../utils/token';
+import { createTokenPair, rotateTokenPair } from './token.service';
 import { prisma } from '../lib/prisma';
 import crypto from 'crypto';
 import * as emailService from './email.service';
 import { logger } from '../utils/logger';
-
-
-// Helper to get expiration date from JWT token
-const getTokenExpiration = (token: string): Date => {
-    // SECURITY: Use verifyToken instead of decode to ensure the token is valid before reading claims
-    const decoded = verifyRefreshToken(token);
-    if (!decoded || !decoded.exp) {
-        throw new Error('Invalid token format or signature');
-    }
-    return new Date(decoded.exp * 1000);
-};
 
 export const login = async (data: LoginRequest): Promise<AuthResponse> => {
     const { employeeId, password } = data;
@@ -43,31 +33,13 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
 
     const scope = user.scope === 'UNIVERSITY' ? UserScope.UNIVERSITY : UserScope.CAMPUS;
 
-    const token = generateToken({
+    const tokenPair = await createTokenPair({
         userId: user.id,
         role: user.role as UserRole,
         scope,
         campusId: user.campusId ?? null,
         employeeId: user.employeeId,
         mustChangePassword: user.mustChangePassword
-    });
-
-    const refreshTokenString = generateRefreshToken({
-        userId: user.id,
-        role: user.role as UserRole,
-        scope,
-        campusId: user.campusId ?? null,
-        employeeId: user.employeeId,
-        mustChangePassword: user.mustChangePassword
-    });
-
-    // Save refresh token to DB
-    await prisma.refreshToken.create({
-        data: {
-            token: refreshTokenString,
-            userId: user.id,
-            expiresAt: getTokenExpiration(refreshTokenString)
-        }
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -88,8 +60,7 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
     };
 
     return {
-        token,
-        refreshToken: refreshTokenString,
+        ...tokenPair,
         user: userResponse as unknown as AuthResponse['user']
     };
 };
@@ -181,31 +152,13 @@ export const register = async (data: RegisterRequest, creatorContext: TokenPaylo
         }).catch(err => logger.error('Async welcome email failed', err));
     }
 
-    const token = generateToken({
+    const tokenPair = await createTokenPair({
         userId: result.newUser.id,
         role: result.newUser.role as UserRole,
         scope: UserScope.CAMPUS,
         campusId: result.newUser.campusId ?? null,
         employeeId: result.newUser.employeeId,
         mustChangePassword: result.newUser.mustChangePassword
-    });
-
-    const refreshTokenString = generateRefreshToken({
-        userId: result.newUser.id,
-        role: result.newUser.role as UserRole,
-        scope: UserScope.CAMPUS,
-        campusId: result.newUser.campusId ?? null,
-        employeeId: result.newUser.employeeId,
-        mustChangePassword: result.newUser.mustChangePassword
-    });
-
-    // Save refresh token
-    await prisma.refreshToken.create({
-        data: {
-            token: refreshTokenString,
-            userId: result.newUser.id,
-            expiresAt: getTokenExpiration(refreshTokenString)
-        }
     });
 
     const campus = await prisma.campus.findUnique({
@@ -231,8 +184,7 @@ export const register = async (data: RegisterRequest, creatorContext: TokenPaylo
     };
 
     return {
-        token,
-        refreshToken: refreshTokenString,
+        ...tokenPair,
         user: userResponse as unknown as AuthResponse['user']
     };
 };
@@ -300,40 +252,14 @@ export const refreshToken = async (token: string): Promise<AuthResponse> => {
 
     const scope = user.scope === 'UNIVERSITY' ? UserScope.UNIVERSITY : UserScope.CAMPUS;
 
-    // 3. Rotation: Revoke old, Issue new
-    const newAccessToken = generateToken({
+    // 3. Rotation: Revoke old, Issue new via token.service
+    const tokenPair = await rotateTokenPair(dbToken.id, user.id, {
         userId: user.id,
         role: user.role as UserRole,
         scope,
         campusId: user.campusId ?? null,
         employeeId: user.employeeId
     });
-
-    const newRefreshTokenString = generateRefreshToken({
-        userId: user.id,
-        role: user.role as UserRole,
-        scope,
-        campusId: user.campusId ?? null,
-        employeeId: user.employeeId
-    });
-
-    // Transaction to revoke old and save new
-    await prisma.$transaction([
-        prisma.refreshToken.update({
-            where: { id: dbToken.id },
-            data: {
-                revoked: true,
-                replacedBy: newRefreshTokenString
-            }
-        }),
-        prisma.refreshToken.create({
-            data: {
-                token: newRefreshTokenString,
-                userId: user.id,
-                expiresAt: getTokenExpiration(newRefreshTokenString)
-            }
-        })
-    ]);
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { passwordHash, ...userWithoutPassword } = user;
@@ -353,8 +279,7 @@ export const refreshToken = async (token: string): Promise<AuthResponse> => {
     };
 
     return {
-        token: newAccessToken,
-        refreshToken: newRefreshTokenString,
+        ...tokenPair,
         user: userResponse as unknown as AuthResponse['user']
     };
 };
@@ -381,30 +306,3 @@ export const logout = async (refreshToken: string, accessToken?: string): Promis
     return { message: 'Logged out successfully' };
 };
 
-export const changePassword = async (userId: number, currentPassword: string, newPassword: string): Promise<void> => {
-    const user = await prisma.user.findUnique({
-        where: { id: userId }
-    });
-
-    if (!user) {
-        throw new Error('User not found');
-    }
-
-    const isPasswordValid = await comparePassword(currentPassword, user.passwordHash);
-    if (!isPasswordValid) {
-        throw new Error('Incorrect current password');
-    }
-
-    const newPasswordHash = await hashPassword(newPassword);
-
-    await prisma.user.update({
-        where: { id: userId },
-        data: {
-            passwordHash: newPasswordHash,
-            mustChangePassword: false
-        }
-    });
-
-    // We do NOT invalidate refresh tokens here because the user is already logged in 
-    // and this is merely a forced profile completion step, not a security compromise.
-};
