@@ -36,7 +36,9 @@ export const openApiSpec: Record<string, any> = {
         properties: {
           code: { type: 'string', example: 'VALIDATION_ERROR' },
           message: { type: 'string', example: 'Invalid input' },
+          details: { type: 'object', additionalProperties: true, description: 'Optional detailed validation or error messages' },
           timestamp: { type: 'string', format: 'date-time' },
+          requestId: { type: 'string', description: 'Unique request identifier for tracing' },
         },
       },
       User: {
@@ -174,6 +176,33 @@ export const openApiSpec: Record<string, any> = {
         responses: { 200: { description: 'Logged out successfully' } },
       },
     },
+    '/api/v1/auth/change-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Change the current user\'s password (Required on first login)',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['currentPassword', 'newPassword'],
+                properties: {
+                  currentPassword: { type: 'string' },
+                  newPassword: { type: 'string', minLength: 8 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Password changed successfully' },
+          400: { description: 'Invalid input' },
+          401: { description: 'Unauthorized or incorrect current password' },
+        },
+      },
+    },
     '/api/v1/employees/{id}': {
       get: {
         tags: ['Employees'],
@@ -209,6 +238,7 @@ export const openApiSpec: Record<string, any> = {
       get: {
         tags: ['Leave'],
         summary: 'Get my leave requests',
+        security: [{ bearerAuth: [] }],
         responses: { 200: { description: 'List of leave requests' } },
       },
       post: {
@@ -233,6 +263,14 @@ export const openApiSpec: Record<string, any> = {
           },
         },
         responses: { 201: { description: 'Leave request created' }, 400: { description: 'Validation error or insufficient balance' } },
+      },
+    },
+    '/api/v1/leave/my': {
+      get: {
+        tags: ['Leave'],
+        summary: 'Get current employee\'s leave requests (Alias for GET /api/v1/leave)',
+        security: [{ bearerAuth: [] }],
+        responses: { 200: { description: 'List of leave requests' } },
       },
     },
     '/api/v1/leave/pending': {
