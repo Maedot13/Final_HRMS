@@ -21,6 +21,11 @@ model Campus {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  employeeIdPrefix        String   @default("EMP")
+  employeeNumericLength   Int      @default(4)
+  employeeSequenceCurrent Int      @default(0)
+  isPatternLocked         Boolean  @default(false)
+
   users                 User[]
   employees              Employee[]
   leaveRequests         LeaveRequest[]

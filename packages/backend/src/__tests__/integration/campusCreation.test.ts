@@ -47,6 +47,8 @@ describe('Campus Creation Integration (Phase 2)', () => {
             name: 'Test Campus',
             description: 'A test campus',
             timezone: 'Africa/Addis_Ababa',
+            employeeIdPrefix: 'TEST',
+            employeeNumericLength: 4,
             initialAdmin: {
                 employeeId: 'EMP-ADMIN-001',
                 email: 'admin@test.com',

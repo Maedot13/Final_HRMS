@@ -5,6 +5,8 @@ export const createCampusSchema = z.object({
     name: z.string().min(3).max(100),
     description: z.string().max(500).optional(),
     timezone: z.string().optional(),
+    employeeIdPrefix: z.string().min(1).max(10).regex(/^[A-Z]+$/, 'Prefix must consist of only uppercase letters'),
+    employeeNumericLength: z.number().min(3, 'Length must be at least 3').max(6, 'Length cannot exceed 6'),
     initialAdmin: z.object({
         employeeId: z.string().min(3).max(50),
         email: z.string().email(),
@@ -18,6 +20,8 @@ export const updateCampusSchema = z.object({
     description: z.string().max(500).nullable().optional(),
     isActive: z.boolean().optional(),
     timezone: z.string().optional(),
+    employeeIdPrefix: z.string().min(1).max(10).regex(/^[A-Z]+$/, 'Prefix must consist of only uppercase letters').optional(),
+    employeeNumericLength: z.number().min(3).max(6).optional(),
 });
 
 export type CreateCampusInput = z.infer<typeof createCampusSchema>;

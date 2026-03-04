@@ -76,7 +76,7 @@ export const updateCampus = async (req: Request, res: Response) => {
     const campus = await campusService.updateCampus(id, parsed.data, updatedById);
     sendSuccess(res, campus);
   } catch (error: any) {
-    if (error.code === 'P2025') {
+    if (error.code === 'P2025' || error.message === 'Campus not found') {
       return sendError(res, 404, ErrorCode.NOT_FOUND, 'Campus not found', null, req);
     }
     // Activation readiness failure

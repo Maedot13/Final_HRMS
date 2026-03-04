@@ -22,6 +22,8 @@ export interface CreateCampusInput {
   name: string;
   description?: string;
   timezone?: string;
+  employeeIdPrefix: string;
+  employeeNumericLength: number;
   initialAdmin: {
     employeeId: string;
     email: string;
@@ -35,6 +37,8 @@ export interface UpdateCampusInput {
   description?: string | null;
   isActive?: boolean;
   timezone?: string;
+  employeeIdPrefix?: string;
+  employeeNumericLength?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +145,8 @@ export const createCampus = async (
           description: dto.description?.trim() ?? null,
           timezone: dto.timezone ?? 'Africa/Addis_Ababa',
           isActive: false, // must be explicitly activated after staffing
+          employeeIdPrefix: dto.employeeIdPrefix.trim().toUpperCase(),
+          employeeNumericLength: dto.employeeNumericLength,
         },
       });
 
@@ -219,33 +225,39 @@ export const createCampus = async (
 // UPDATE — with activation readiness gate
 // ---------------------------------------------------------------------------
 export const updateCampus = async (id: number, data: UpdateCampusInput, updatedById?: number) => {
-  // If activating a currently-inactive campus, enforce readiness
-  if (data.isActive === true) {
-    const campus = await prisma.campus.findUnique({ where: { id } });
-    if (campus && !campus.isActive) {
-      const readiness = await getCampusReadiness(id);
-      if (!readiness.isReady) {
-        const msgs: string[] = [];
-        if (readiness.missingCampusRoles.length > 0) {
-          msgs.push(`Missing roles: ${readiness.missingCampusRoles.join(', ')}`);
-        }
-        if (readiness.deptsWithoutHead.length > 0) {
-          msgs.push(`Departments without head: ${readiness.deptsWithoutHead.join(', ')}`);
-        }
-        throw new Error(
-          `Campus cannot be activated. ${msgs.join('. ')}`
-        );
-      }
+  const campus = await prisma.campus.findUnique({ where: { id } });
+  if (!campus) throw new Error('Campus not found');
 
-      // Log activation
-      if (updatedById) {
-        logAction({
-          userId: updatedById,
-          action: AuditAction.CAMPUS_ACTIVATED,
-          entityType: 'Campus',
-          entityId: id,
-        }).catch((err: Error) => logger.error('Audit log failed on campus activate', { error: err.message }));
+  if (data.employeeIdPrefix !== undefined || data.employeeNumericLength !== undefined) {
+    if (campus.isPatternLocked) {
+      throw new Error('Employee ID pattern is locked and cannot be changed.');
+    }
+  }
+
+  // If activating a currently-inactive campus, enforce readiness
+  if (data.isActive === true && !campus.isActive) {
+    const readiness = await getCampusReadiness(id);
+    if (!readiness.isReady) {
+      const msgs: string[] = [];
+      if (readiness.missingCampusRoles.length > 0) {
+        msgs.push(`Missing roles: ${readiness.missingCampusRoles.join(', ')}`);
       }
+      if (readiness.deptsWithoutHead.length > 0) {
+        msgs.push(`Departments without head: ${readiness.deptsWithoutHead.join(', ')}`);
+      }
+      throw new Error(
+        `Campus cannot be activated. ${msgs.join('. ')}`
+      );
+    }
+
+    // Log activation
+    if (updatedById) {
+      logAction({
+        userId: updatedById,
+        action: AuditAction.CAMPUS_ACTIVATED,
+        entityType: 'Campus',
+        entityId: id,
+      }).catch((err: Error) => logger.error('Audit log failed on campus activate', { error: err.message }));
     }
   }
 
@@ -266,6 +278,8 @@ export const updateCampus = async (id: number, data: UpdateCampusInput, updatedB
       ...(data.description !== undefined && { description: data.description?.trim() ?? null }),
       ...(data.isActive !== undefined && { isActive: data.isActive }),
       ...(data.timezone !== undefined && { timezone: data.timezone }),
+      ...(data.employeeIdPrefix !== undefined && { employeeIdPrefix: data.employeeIdPrefix.trim().toUpperCase() }),
+      ...(data.employeeNumericLength !== undefined && { employeeNumericLength: data.employeeNumericLength }),
     },
   });
 };

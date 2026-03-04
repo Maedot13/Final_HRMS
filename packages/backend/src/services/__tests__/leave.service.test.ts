@@ -25,7 +25,7 @@ describe('LeaveService - Employee to Department Head Workflow', () => {
                 userId: 1,
                 employeeId: 'EMP001',
                 name: 'John Doe',
-                department: 'Engineering',
+                deptLegacy: 'Engineering',
                 position: 'Software Developer',
                 hireDate: new Date('2020-01-01'),
             };
@@ -131,7 +131,7 @@ describe('LeaveService - Employee to Department Head Workflow', () => {
                 userId: 1,
                 employeeId: 'EMP001',
                 name: 'John Doe',
-                department: 'Engineering',
+                deptLegacy: 'Engineering',
                 position: 'Software Developer',
                 hireDate: new Date('2020-01-01'),
             };

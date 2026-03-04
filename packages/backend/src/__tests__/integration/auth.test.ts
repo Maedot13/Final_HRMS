@@ -32,20 +32,19 @@ describe('Auth Integration', () => {
     });
 
     describe('POST /api/v1/auth/register', () => {
-        it('should return 400 if employee already exists', async () => {
+        it('should return 400 if email already exists', async () => {
             const userData = {
                 name: 'John Doe',
                 email: 'john.doe@example.com',
-                employeeId: 'EMP001',
                 department: 'Engineering',
                 password: 'Password123!',
                 role: 'EMPLOYEE'
             };
 
-            // Mock existing employee
-            prismaMock.employee.findUnique.mockResolvedValue({
+            // Mock existing email
+            prismaMock.user.findUnique.mockResolvedValue({
                 id: 1,
-                employeeId: 'EMP001'
+                email: 'john.doe@example.com'
             } as any);
 
             const res = await request(app)
@@ -54,7 +53,7 @@ describe('Auth Integration', () => {
                 .send(userData);
 
             expect(res.status).toBe(400);
-            expect(res.body.error?.message ?? res.body.message).toContain('Employee ID already in use');
+            expect(res.body.error?.message ?? res.body.message).toContain('Email already in use');
         });
 
         it('should return 401 if called without a token (unauthenticated)', async () => {

@@ -69,15 +69,7 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
     const { email, password, name, employeeId, department, departmentId, role, campusId: requestedCampusId } = data;
     const deptLegacy = department; // Alias for backward compatibility
 
-    const existingEmployee = await prisma.employee.findUnique({ where: { employeeId } });
-    if (existingEmployee) {
-        throw new Error('Employee ID already in use (Employee table)');
-    }
 
-    const existingUser = await prisma.user.findUnique({ where: { employeeId } });
-    if (existingUser) {
-        throw new Error('Employee ID already in use (User table)');
-    }
 
     const existingEmail = await prisma.user.findUnique({ where: { email } });
     if (existingEmail) {
@@ -124,8 +116,14 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
         }
     }
 
+    // import generator
+    const { generateNextEmployeeId } = await import('../utils/idGenerator');
+
     // Use transaction to create User and Employee atomically
     const result = await prisma.$transaction(async (tx) => {
+        // Generate atomic ID
+        const generatedEmployeeId = await generateNextEmployeeId(assignedCampusId, tx as any);
+
         const newUser = await tx.user.create({
             data: {
                 email,
@@ -134,7 +132,7 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
                 role: (role as any) || UserRole.EMPLOYEE,
                 scope: 'CAMPUS',
                 campusId: assignedCampusId,
-                employeeId,
+                employeeId: generatedEmployeeId,
             }
         });
 
@@ -142,7 +140,7 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
             data: {
                 campusId: assignedCampusId,
                 userId: newUser.id,
-                employeeId,
+                employeeId: generatedEmployeeId,
                 name,
                 deptLegacy: deptLegacy || 'TBD',
                 departmentId: departmentId || null,
@@ -160,7 +158,7 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
         emailService.sendWelcomeEmail({
             to: email,
             name,
-            employeeId,
+            employeeId: result.newUser.employeeId,
             tempPassword: rawPassword
         }).catch(err => logger.error('Async welcome email failed', err));
     }

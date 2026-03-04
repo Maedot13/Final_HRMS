@@ -64,6 +64,10 @@ export const openApiSpec: Record<string, any> = {
           description: { type: 'string' },
           isActive: { type: 'boolean' },
           timezone: { type: 'string' },
+          employeeIdPrefix: { type: 'string', example: 'BIT' },
+          employeeNumericLength: { type: 'integer', example: 4 },
+          employeeSequenceCurrent: { type: 'integer', description: 'Current counter for ID generation' },
+          isPatternLocked: { type: 'boolean', description: 'True if employee IDs have already been generated' },
         },
       },
       Department: {
@@ -127,22 +131,22 @@ export const openApiSpec: Record<string, any> = {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['email', 'password', 'name', 'employeeId'],
+                required: ['email', 'password', 'name'],
                 properties: {
                   email: { type: 'string', format: 'email' },
                   password: { type: 'string', minLength: 8 },
                   name: { type: 'string' },
-                  employeeId: { type: 'string' },
                   departmentId: { type: 'integer', description: 'Assigned Department ID' },
                   role: { type: 'string', enum: ['EMPLOYEE', 'HR_OFFICER', 'ADMIN', 'DEPARTMENT_HEAD', 'FINANCE_OFFICER', 'RECRUITMENT_COMMITTEE'] },
                 },
+                description: 'NOTE: employeeId is automatically generated based on the campus configuration.',
               },
             },
           },
         },
         responses: {
-          201: { description: 'User registered successfully' },
-          400: { description: 'Validation error or duplicate employee ID/email' },
+          201: { description: 'User registered successfully; employeeId is generated' },
+          400: { description: 'Validation error or duplicate email' },
         },
       },
     },
@@ -795,12 +799,14 @@ export const openApiSpec: Record<string, any> = {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['code', 'name', 'initialAdmin'],
+                required: ['code', 'name', 'employeeIdPrefix', 'employeeNumericLength', 'initialAdmin'],
                 properties: {
                   code: { type: 'string', description: 'Unique campus code (e.g., MAIN)' },
                   name: { type: 'string' },
                   description: { type: 'string' },
                   timezone: { type: 'string', default: 'Africa/Addis_Ababa' },
+                  employeeIdPrefix: { type: 'string', example: 'BIT', description: 'Upper case letters only' },
+                  employeeNumericLength: { type: 'integer', example: 4, minimum: 3, maximum: 6 },
                   initialAdmin: {
                     type: 'object',
                     required: ['employeeId', 'email', 'name'],
@@ -840,12 +846,14 @@ export const openApiSpec: Record<string, any> = {
                   description: { type: 'string' },
                   isActive: { type: 'boolean' },
                   timezone: { type: 'string' },
+                  employeeIdPrefix: { type: 'string', description: 'Cannot change once IDs are generated' },
+                  employeeNumericLength: { type: 'integer', description: 'Cannot change once IDs are generated' },
                 },
               },
             },
           },
         },
-        responses: { 200: { description: 'Campus updated' }, 404: { description: 'Not found' } },
+        responses: { 200: { description: 'Campus updated' }, 400: { description: 'Pattern locked or invalid input' }, 404: { description: 'Not found' } },
       },
     },
     '/api/v1/campuses/{id}/users': {

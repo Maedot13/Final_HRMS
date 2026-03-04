@@ -42,7 +42,8 @@ describe('Clearance Service', () => {
             prismaMock.clearanceRequest.update.mockResolvedValue({
                 id: mockClearanceId,
                 employeeId: 100,
-                status: ClearanceStatus.APPROVED
+                status: ClearanceStatus.APPROVED,
+                employee: { userId: 999, name: 'Test Employee' }
             } as any);
 
             // Mock Authorization

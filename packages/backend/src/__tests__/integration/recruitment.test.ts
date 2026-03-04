@@ -3,6 +3,15 @@ import app from '../../app';
 import { prismaMock } from '../../lib/prisma-mock';
 import { JobStatus, ApplicationStatus } from '@prisma/client';
 
+// Mock Redis
+jest.mock('../../lib/redis', () => ({
+    redis: {
+        get: jest.fn().mockResolvedValue(null),
+        setex: jest.fn().mockResolvedValue('OK'),
+        on: jest.fn(),
+    },
+}));
+
 // Mock multer upload middleware
 jest.mock('../../middleware/upload.middleware', () => ({
     upload: {

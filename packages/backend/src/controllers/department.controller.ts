@@ -81,6 +81,9 @@ export const deleteDepartment = async (req: Request, res: Response) => {
         const result = await departmentService.deleteDepartment(id, campusId);
         sendSuccess(res, result);
     } catch (error: any) {
+        if (error.message.includes('Cannot delete')) {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, error.message, null, req);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
