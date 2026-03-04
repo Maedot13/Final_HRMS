@@ -35,7 +35,7 @@ export const canApproveForUnit = async (
         case UserRole.DEPARTMENT_HEAD:
             // Can approve if unit matches their department
             // We assume department names in Employee profile match Unit names
-            return user.employee?.department.toUpperCase() === unitName;
+            return user.employee?.deptLegacy.toUpperCase() === unitName;
 
         default:
             return false;

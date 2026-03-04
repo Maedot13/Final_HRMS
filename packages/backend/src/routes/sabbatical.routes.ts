@@ -1,8 +1,9 @@
 
 import { Router } from 'express';
 import * as sabbaticalController from '../controllers/sabbatical.controller';
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, authorize } from '../middleware/auth.middleware';
 import { attachEmployee } from '../middleware/employee.middleware';
+import { UserRole } from '@hrms/types';
 
 const router = Router();
 
@@ -135,7 +136,11 @@ router.get('/', attachEmployee, sabbaticalController.getRequests);
  *       404:
  *         description: Request not found
  */
-router.patch('/:id/approve', attachEmployee, sabbaticalController.approveRequest);
+router.patch('/:id/approve',
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD]),
+    attachEmployee,
+    sabbaticalController.approveRequest
+);
 
 /**
  * @swagger
@@ -170,6 +175,10 @@ router.patch('/:id/approve', attachEmployee, sabbaticalController.approveRequest
  *       404:
  *         description: Request not found
  */
-router.patch('/:id/reject', attachEmployee, sabbaticalController.rejectRequest);
+router.patch('/:id/reject',
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD]),
+    attachEmployee,
+    sabbaticalController.rejectRequest
+);
 
 export default router;

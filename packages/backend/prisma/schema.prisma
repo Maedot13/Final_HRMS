@@ -31,6 +31,7 @@ model Campus {
   jobPostings           JobPosting[]
   notifications         Notification[]
   auditLogs             AuditLog[]
+  departments           Department[]
 }
 
 enum UserScope {
@@ -65,9 +66,10 @@ model Employee {
   userId     Int      @unique
   employeeId String   @unique
   name       String
-  department String
-  position   String
-  hireDate   DateTime
+  deptLegacy         String              @map("department") // transition legacy field
+  departmentId       Int?
+  position           String
+  hireDate           DateTime
 
   serviceYears       Int                 @default(0)
   grossSalary        Float               @default(0)
@@ -75,6 +77,8 @@ model Employee {
   contactInfo        Json
   campus             Campus?             @relation(fields: [campusId], references: [id], onDelete: Restrict)
   clearanceRequests  ClearanceRequest[]
+  department         Department?         @relation(fields: [departmentId], references: [id])
+  headOf             Department?         @relation("DeptHead")
   user               User                @relation(fields: [userId], references: [id])
   jobApplications    JobApplication[]
   leaveBalances      LeaveBalance[]
@@ -168,14 +172,15 @@ model ClearanceRequest {
 }
 
 model ClearanceUnit {
-  id          Int              @id @default(autoincrement())
-  campusId    Int?
-  name        String
-  description String?
-  isActive    Boolean          @default(true)
-  createdAt   DateTime         @default(now())
-  campus      Campus?          @relation(fields: [campusId], references: [id], onDelete: Restrict)
-  checks      ClearanceCheck[]
+  id                Int              @id @default(autoincrement())
+  campusId          Int?
+  name              String
+  description       String?
+  isActive          Boolean          @default(true)
+  isSystemGenerated Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  campus            Campus?          @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  checks            ClearanceCheck[]
 
   @@unique([campusId, name])
   @@index([campusId])
@@ -216,7 +221,7 @@ model JobPosting {
   title        String
   description  String
   requirements String
-  department   String
+  deptLegacy    String           @map("department") // legacy
   position     String
   deadline     DateTime
   status       JobStatus        @default(OPEN)
@@ -300,6 +305,22 @@ model AuditLog {
   @@index([entityType, entityId])
 }
 
+model Department {
+    id              Int       @id @default(autoincrement())
+    campusId        Int
+    name            String
+    headEmployeeId  Int?      @unique    // enforces ONE head per dept at DB level
+    createdAt       DateTime  @default(now())
+    updatedAt       DateTime  @updatedAt
+
+    campus          Campus    @relation(fields: [campusId], references: [id], onDelete: Restrict)
+    head            Employee? @relation("DeptHead", fields: [headEmployeeId], references: [id])
+    employees       Employee[]
+
+    @@unique([campusId, name])     // dept name unique within a campus
+    @@index([campusId])
+}
+
 enum AuditStatus {
   SUCCESS
   FAILURE
@@ -326,6 +347,11 @@ enum AuditAction {
   USER_STATUS_TOGGLE
   AUDIT_LOG_ACCESSED
   AUDIT_LOG_EXPORTED
+  CAMPUS_CREATED
+  CAMPUS_ACTIVATED
+  CAMPUS_SUSPENDED
+  DEPARTMENT_CREATED
+  DEPARTMENT_HEAD_CHANGED
 }
 
 enum UserRole {

@@ -65,8 +65,9 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
     };
 };
 
-export const register = async (data: RegisterRequest, creatorContext: TokenPayload): Promise<AuthResponse> => {
-    const { email, password, name, employeeId, department, role, campusId: requestedCampusId } = data;
+export const register = async (data: any, creatorContext: TokenPayload): Promise<AuthResponse & { warning?: string }> => {
+    const { email, password, name, employeeId, department, departmentId, role, campusId: requestedCampusId } = data;
+    const deptLegacy = department; // Alias for backward compatibility
 
     const existingEmployee = await prisma.employee.findUnique({ where: { employeeId } });
     if (existingEmployee) {
@@ -112,6 +113,17 @@ export const register = async (data: RegisterRequest, creatorContext: TokenPaylo
     const mustChangePassword = !password; // True if auto-generated
     const hashedPassword = await hashPassword(rawPassword);
 
+    let warning: string | undefined;
+    if (departmentId) {
+        const dept = await prisma.department.findUnique({
+            where: { id: departmentId },
+            select: { headEmployeeId: true, name: true }
+        });
+        if (dept && !dept.headEmployeeId) {
+            warning = `Note: Department '${dept.name}' currently has no Department Head assigned.`;
+        }
+    }
+
     // Use transaction to create User and Employee atomically
     const result = await prisma.$transaction(async (tx) => {
         const newUser = await tx.user.create({
@@ -132,7 +144,8 @@ export const register = async (data: RegisterRequest, creatorContext: TokenPaylo
                 userId: newUser.id,
                 employeeId,
                 name,
-                department,
+                deptLegacy: deptLegacy || 'TBD',
+                departmentId: departmentId || null,
                 position: 'TBD',
                 hireDate: new Date(),
                 contactInfo: {},
@@ -185,7 +198,8 @@ export const register = async (data: RegisterRequest, creatorContext: TokenPaylo
 
     return {
         ...tokenPair,
-        user: userResponse as unknown as AuthResponse['user']
+        user: userResponse as unknown as AuthResponse['user'],
+        warning
     };
 };
 

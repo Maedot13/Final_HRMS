@@ -13,6 +13,7 @@ router.get('/', cacheMiddleware(60), campusController.getCampuses);
 router.post('/', campusController.createCampus);
 router.get('/:id/users', campusController.getCampusUsers); // more specific before :id
 router.get('/:id', campusController.getCampusById);
+router.get('/:id/readiness', campusController.getCampusReadiness);
 router.patch('/:id', campusController.updateCampus);
 
 export default router;

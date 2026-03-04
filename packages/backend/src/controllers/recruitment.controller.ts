@@ -19,6 +19,7 @@ export const createJobPosting = async (req: Request, res: Response) => {
 
         const job = await recruitmentService.createJobPosting({
             ...validation.data,
+            deptLegacy: validation.data.department,
             createdBy: req.user!.userId
         });
         sendSuccess(res, job, 201);

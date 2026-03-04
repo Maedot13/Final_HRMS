@@ -112,7 +112,7 @@ export const getPayrollData = async (params: PayrollDataParams) => {
         return {
             employeeId: emp.employeeId,
             fullName: emp.name,
-            department: emp.department,
+            department: emp.deptLegacy,
             grossSalary: emp.grossSalary,
             salaryType: emp.salaryType,
             payableDays: payableDays,

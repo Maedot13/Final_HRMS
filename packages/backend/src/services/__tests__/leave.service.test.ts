@@ -62,7 +62,7 @@ describe('LeaveService - Employee to Department Head Workflow', () => {
 
             // Verify request includes employee information
             expect(result.employee.name).toBe('John Doe');
-            expect(result.employee.department).toBe('Engineering');
+            expect(result.employee.deptLegacy).toBe('Engineering');
             expect(result.days).toBe(5);
             expect(result.status).toBe(LeaveStatus.PENDING);
         });

@@ -98,7 +98,7 @@ export const createLeaveRequest = async (
         requestId: request.id,
         employeeId: request.employeeId,
         employeeName: request.employee.name,
-        employeeDepartment: request.employee.department,
+        employeeDepartment: request.employee.deptLegacy, // Changed from department to deptLegacy
         leaveType: request.leaveType,
         days: request.days,
         campusId: request.campusId
@@ -121,7 +121,7 @@ export const getPendingRequests = async (approverDepartment: string, campusId?: 
             status: LeaveStatus.PENDING,
             ...(campusId ? { campusId } : {}),
             employee: {
-                department: approverDepartment
+                deptLegacy: approverDepartment // Changed from department to deptLegacy
             }
         },
         include: { employee: true },
@@ -163,7 +163,7 @@ export const approveRequest = async (
         }
 
         // Department-scoped authorization check
-        if (request.employee.department !== approverDepartment) {
+        if (request.employee.deptLegacy !== approverDepartment) { // Changed from department to deptLegacy
             throw new Error('Cannot approve requests from other departments');
         }
 
@@ -272,7 +272,7 @@ export const rejectRequest = async (
     }
 
     // Department-scoped authorization check
-    if (request.employee.department !== approverDepartment) {
+    if (request.employee.deptLegacy !== approverDepartment) {
         throw new Error('Cannot reject requests from other departments');
     }
 

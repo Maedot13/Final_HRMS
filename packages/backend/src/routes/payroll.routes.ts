@@ -1,7 +1,8 @@
 
 import { Router } from 'express';
 import * as payrollController from '../controllers/payroll.controller';
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, authorize } from '../middleware/auth.middleware';
+import { UserRole } from '@hrms/types';
 
 const router = Router();
 
@@ -42,6 +43,10 @@ import { payrollDataTransferSchema } from '../schemas/payroll.schema';
  *       400:
  *         description: Missing month or year
  */
-router.get('/data-transfer', validate(payrollDataTransferSchema), payrollController.getPayrollData);
+router.get('/data-transfer',
+    authorize([UserRole.ADMIN, UserRole.FINANCE_OFFICER]),
+    validate(payrollDataTransferSchema),
+    payrollController.getPayrollData
+);
 
 export default router;

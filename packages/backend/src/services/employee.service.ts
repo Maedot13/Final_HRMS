@@ -41,7 +41,8 @@ export const updateEmployee = async (id: number, data: Partial<Employee>): Promi
     // We do NOT just delete from 'data' because 'data' might contain prototype properties
     const {
         name,
-        department,
+        deptLegacy,
+        departmentId,
         position,
         hireDate,
         grossSalary,
@@ -55,7 +56,8 @@ export const updateEmployee = async (id: number, data: Partial<Employee>): Promi
     const safeUpdateData: any = {};
 
     if (name !== undefined) safeUpdateData.name = name;
-    if (department !== undefined) safeUpdateData.department = department;
+    if (deptLegacy !== undefined) safeUpdateData.deptLegacy = deptLegacy;
+    if (departmentId !== undefined) safeUpdateData.departmentId = departmentId;
     if (position !== undefined) safeUpdateData.position = position;
     if (hireDate !== undefined) safeUpdateData.hireDate = hireDate;
     if (grossSalary !== undefined) safeUpdateData.grossSalary = grossSalary;

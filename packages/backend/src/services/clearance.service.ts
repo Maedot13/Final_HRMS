@@ -23,7 +23,7 @@ export const initiateClearance = async (employeeId: number, reason: string, last
 
     const employee = await prisma.employee.findUnique({
         where: { id: employeeId },
-        select: { campusId: true, department: true, name: true }
+        select: { campusId: true, deptLegacy: true, name: true }
     });
     const campusId = employee?.campusId ?? null;
 
@@ -93,9 +93,9 @@ export const initiateClearance = async (employeeId: number, reason: string, last
                     relatedType: 'CLEARANCE_REQUEST',
                     campusId
                 });
-            } else if (unitName === 'DEPARTMENT HEAD' || unitName === createdRequest.employee.department.toUpperCase()) {
+            } else if (unitName === 'DEPARTMENT HEAD' || unitName === createdRequest.employee.deptLegacy.toUpperCase()) {
                 // If the unit is specifically "Department Head" or matches the employee's department name
-                await notifyDepartmentHead(createdRequest.employee.department, {
+                await notifyDepartmentHead(createdRequest.employee.deptLegacy, {
                     type: 'CLEARANCE_REVIEW_REQUIRED',
                     title: 'Clearance Request: Department',
                     message,
@@ -308,5 +308,21 @@ export const getPendingChecksForUnit = async (unitId: number, campusId?: number)
             },
             unit: true
         }
+    });
+};
+
+export const deleteClearanceUnit = async (unitId: number) => {
+    const unit = await prisma.clearanceUnit.findUnique({
+        where: { id: unitId }
+    });
+
+    if (!unit) throw new Error('Clearance unit not found');
+
+    if (unit.isSystemGenerated) {
+        throw new Error('System-generated clearance units cannot be deleted');
+    }
+
+    return prisma.clearanceUnit.delete({
+        where: { id: unitId }
     });
 };

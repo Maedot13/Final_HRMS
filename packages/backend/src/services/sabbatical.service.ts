@@ -52,7 +52,7 @@ export const createSabbaticalRequest = async (
     });
 
     // NOTIFICATION: Notify Department Head (same campus only - campus isolation)
-    await notifyDepartmentHead(request.employee.department, {
+    await notifyDepartmentHead(request.employee.deptLegacy, {
         type: 'SABBATICAL_REQUEST_CREATED',
         title: 'New Sabbatical Request',
         message: `${request.employee.name} has requested a ${request.durationMonths}-month sabbatical.`,
@@ -87,7 +87,7 @@ export const getPendingRequests = async (approverDepartment: string, campusId?: 
             status: LeaveStatus.PENDING,
             ...(campusId ? { campusId } : {}),
             employee: {
-                department: approverDepartment
+                deptLegacy: approverDepartment
             }
         },
         include: { employee: true },

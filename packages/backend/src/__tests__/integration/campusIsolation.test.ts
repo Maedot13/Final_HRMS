@@ -18,6 +18,18 @@ jest.mock('../../utils/tokenBlacklist', () => ({
   isTokenBlacklisted: jest.fn().mockResolvedValue(false),
 }));
 
+// Mock Redis so cacheMiddleware and attachEmployee pass through without a live Redis connection
+jest.mock('../../lib/redis', () => ({
+  redis: {
+    get: jest.fn().mockResolvedValue(null),   // always a cache miss
+    setex: jest.fn().mockResolvedValue('OK'), // Node Redis v3 style
+    setEx: jest.fn().mockResolvedValue('OK'), // Node Redis v4 style (used by attachEmployee)
+    set: jest.fn().mockResolvedValue('OK'),
+    connect: jest.fn().mockResolvedValue(undefined),
+    on: jest.fn(),
+  },
+}));
+
 describe('Campus Isolation Integration', () => {
   const campusAId = 1;
   const campusBId = 2;

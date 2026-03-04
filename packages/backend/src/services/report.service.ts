@@ -45,7 +45,7 @@ export const getLeaveStats = async (campusId?: number) => {
 export const getDepartmentStats = async (campusId?: number) => {
     const where = campusWhere(campusId);
     const stats = await prisma.employee.groupBy({
-        by: ['department'],
+        by: ['deptLegacy'],
         where: Object.keys(where).length > 0 ? where : undefined,
         _count: {
             id: true

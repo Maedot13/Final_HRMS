@@ -19,7 +19,8 @@ export const registerSchema = z.object({
     password: passwordSchema.optional(),
     name: z.string().min(2, 'Name must be at least 2 characters'),
     employeeId: z.string().min(1, 'Employee ID is required'),
-    department: z.string().min(1, 'Department is required'),
+    department: z.string().min(1, 'Department name is required').optional(),
+    departmentId: z.number().int().positive().optional(),
     role: z.nativeEnum(UserRole).optional(),
     campusId: z.number().int().positive().optional()
 });

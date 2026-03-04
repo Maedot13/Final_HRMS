@@ -70,7 +70,7 @@ router.post('/requests', validateBody(initiateClearanceSchema), clearanceControl
  *         description: Request not found
  */
 router.get('/requests/:id',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]),
     clearanceController.getClearance
 );
 
@@ -108,7 +108,7 @@ router.get('/requests/:id',
  *         description: Forbidden (Not authorized for this unit)
  */
 router.patch('/requests/:id/approve-check',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]),
     validateBody(approveCheckSchema),
     clearanceController.approveCheck
 );
@@ -146,7 +146,7 @@ router.patch('/requests/:id/approve-check',
  *         description: Check rejected successfully
  */
 router.patch('/requests/:id/reject-check',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]),
     validateBody(rejectCheckSchema),
     clearanceController.rejectCheck
 );
@@ -170,8 +170,13 @@ router.patch('/requests/:id/reject-check',
  *         description: List of pending checks
  */
 router.get('/units/:unitId/pending',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]),
     clearanceController.getPendingChecksForUnit
+);
+
+router.delete('/units/:unitId',
+    authorize([UserRole.ADMIN]),
+    clearanceController.deleteClearanceUnit
 );
 
 export default router;

@@ -113,7 +113,7 @@ export const notifyDepartmentHead = async (department: string, notification: {
     const heads = await prisma.employee.findMany({
         where: {
             ...(notification.campusId != null ? { campusId: notification.campusId } : {}),
-            department: {
+            deptLegacy: {
                 equals: department,
                 mode: 'insensitive' // Makes it case-insensitive
             },

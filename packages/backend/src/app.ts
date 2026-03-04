@@ -30,6 +30,7 @@ import reportRoutes from './routes/report.routes';
 import userRoutes from './routes/userManagement.routes';
 import auditRoutes from './routes/audit.routes';
 import campusRoutes from './routes/campus.routes';
+import departmentRoutes from './routes/department.routes';
 
 // Workers
 import './workers/notification.worker';
@@ -149,6 +150,7 @@ app.use('/api/v1/reports', authenticate, blockIfPasswordChangeRequired, reportRo
 app.use('/api/v1/users', authenticate, blockIfPasswordChangeRequired, userRoutes);
 app.use('/api/v1/audit-logs', authenticate, blockIfPasswordChangeRequired, auditRoutes);
 app.use('/api/v1/campuses', authenticate, blockIfPasswordChangeRequired, campusRoutes);
+app.use('/api/v1/departments', authenticate, blockIfPasswordChangeRequired, departmentRoutes);
 
 // Initialize Event Listeners
 // (Worker initialized via import above)

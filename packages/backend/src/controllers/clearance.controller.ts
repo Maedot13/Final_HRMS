@@ -204,3 +204,32 @@ export const getPendingChecksForUnit = async (req: Request, res: Response) => {
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
+
+export const deleteClearanceUnit = async (req: Request, res: Response) => {
+    try {
+        const unitId = parseInt(req.params.unitId);
+        if (isNaN(unitId)) {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid unit ID', null, req);
+        }
+
+        const user = req.user;
+        if (!user) return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+
+        // Authorization: Only Super Admin (UNIVERSITY scope) should be able to delete units for now?
+        // Or Campus Admin for their own campus. Let's stick to ADMIN for now as per plan.
+        if (user.role !== UserRole.ADMIN) {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden: Insufficient permissions', null, req);
+        }
+
+        const result = await clearanceService.deleteClearanceUnit(unitId);
+        sendSuccess(res, result);
+    } catch (error: any) {
+        if (error.message === 'Clearance unit not found') {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, error.message, null, req);
+        }
+        if (error.message === 'System-generated clearance units cannot be deleted') {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, error.message, null, req);
+        }
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};

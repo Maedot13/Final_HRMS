@@ -9,7 +9,7 @@ export const createJobPosting = async (data: {
     title: string;
     description: string;
     requirements: string;
-    department: string;
+    deptLegacy: string;
     position: string;
     deadline: string;
     createdBy: number;
@@ -35,7 +35,7 @@ export const getJobPostings = async (filters: { status?: JobStatus; department?:
         where: {
             ...(campusId ? { campusId } : {}),
             ...(filters.status && { status: filters.status }),
-            ...(filters.department && { department: filters.department })
+            ...(filters.department && { deptLegacy: filters.department })
         },
         orderBy: { createdAt: 'desc' }
     });
@@ -124,7 +124,7 @@ export const getApplicationsForJob = async (jobPostingId: number) => {
                     name: true,
                     employeeId: true,
                     position: true,
-                    department: true
+                    deptLegacy: true
                 }
             }
         },
@@ -171,7 +171,7 @@ export const getEmployeeApplications = async (employeeId: number) => {
             jobPosting: {
                 select: {
                     title: true,
-                    department: true,
+                    deptLegacy: true,
                     position: true,
                     status: true
                 }

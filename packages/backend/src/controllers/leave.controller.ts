@@ -81,7 +81,7 @@ export const getPendingRequests = async (req: Request, res: Response) => {
 
         // Department Heads see only their department, HR/Admin see all
         const requests = user.role === UserRole.DEPARTMENT_HEAD
-            ? await leaveService.getPendingRequests(employee.department, campusIdFilter)
+            ? await leaveService.getPendingRequests(employee.deptLegacy, campusIdFilter)
             : await leaveService.getAllPendingRequests(campusIdFilter);
 
         sendSuccess(res, requests);
@@ -114,7 +114,7 @@ export const approveRequest = async (req: Request, res: Response) => {
         const campusCtx = getCampusScope(req);
         const approverCampusId = campusCtx.scope === 'CAMPUS' ? campusCtx.campusId : null;
 
-        const result = await leaveService.approveRequest(id, approver.id, approver.department, approverCampusId, comment);
+        const result = await leaveService.approveRequest(id, approver.id, approver.deptLegacy, approverCampusId, comment);
 
         await logAction({
             userId: user.userId,
@@ -156,7 +156,7 @@ export const rejectRequest = async (req: Request, res: Response) => {
         const campusCtx = getCampusScope(req);
         const approverCampusId = campusCtx.scope === 'CAMPUS' ? campusCtx.campusId : null;
 
-        const result = await leaveService.rejectRequest(id, approver.id, approver.department, approverCampusId, comment);
+        const result = await leaveService.rejectRequest(id, approver.id, approver.deptLegacy, approverCampusId, comment);
 
         await logAction({
             userId: user.userId,

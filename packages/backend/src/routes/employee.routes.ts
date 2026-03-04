@@ -1,7 +1,8 @@
 
 import { Router } from 'express';
 import * as employeeController from '../controllers/employee.controller';
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, authorize } from '../middleware/auth.middleware';
+import { UserRole } from '@hrms/types';
 
 const router = Router();
 
@@ -58,7 +59,7 @@ import { updateEmployeeSchema } from '../schemas/employee.schema';
  *       404:
  *         description: Employee not found
  */
-router.get('/:id', employeeController.getEmployee);
+router.get('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]), employeeController.getEmployee);
 
 /**
  * @swagger
@@ -104,6 +105,6 @@ router.get('/:id', employeeController.getEmployee);
  *       403:
  *         description: Forbidden
  */
-router.patch('/:id', validateBody(updateEmployeeSchema), employeeController.updateEmployee);
+router.patch('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER]), validateBody(updateEmployeeSchema), employeeController.updateEmployee);
 
 export default router;
