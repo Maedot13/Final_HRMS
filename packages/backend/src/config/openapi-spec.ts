@@ -25,6 +25,7 @@ export const openApiSpec: Record<string, any> = {
     { name: 'Notifications', description: 'User notifications' },
     { name: 'Audit', description: 'Security audit logs' },
     { name: 'Campuses', description: 'Multi-campus administration (University admin only)' },
+    { name: 'Departments', description: 'Department management (Campus Admin controlled)' },
   ],
   components: {
     securitySchemes: {
@@ -65,6 +66,36 @@ export const openApiSpec: Record<string, any> = {
           timezone: { type: 'string' },
         },
       },
+      Department: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          campusId: { type: 'integer' },
+          name: { type: 'string' },
+          headEmployeeId: { type: 'integer', nullable: true },
+          head: { $ref: '#/components/schemas/Employee' },
+          _count: {
+            type: 'object',
+            properties: {
+              employees: { type: 'integer' },
+            },
+          },
+        },
+      },
+      Employee: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          employeeId: { type: 'string' },
+          name: { type: 'string' },
+          departmentId: { type: 'integer', nullable: true },
+          department: { $ref: '#/components/schemas/Department' },
+          deptLegacy: { type: 'string', description: 'Legacy string-based department name' },
+          position: { type: 'string' },
+          campusId: { type: 'integer' },
+          userId: { type: 'integer' },
+        },
+      },
     },
   },
   security: [{ bearerAuth: [] }],
@@ -96,13 +127,13 @@ export const openApiSpec: Record<string, any> = {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['email', 'password', 'name', 'employeeId', 'department'],
+                required: ['email', 'password', 'name', 'employeeId'],
                 properties: {
                   email: { type: 'string', format: 'email' },
                   password: { type: 'string', minLength: 8 },
                   name: { type: 'string' },
                   employeeId: { type: 'string' },
-                  department: { type: 'string' },
+                  departmentId: { type: 'integer', description: 'Assigned Department ID' },
                   role: { type: 'string', enum: ['EMPLOYEE', 'HR_OFFICER', 'ADMIN', 'DEPARTMENT_HEAD', 'FINANCE_OFFICER', 'RECRUITMENT_COMMITTEE'] },
                 },
               },
@@ -221,7 +252,7 @@ export const openApiSpec: Record<string, any> = {
                 type: 'object',
                 properties: {
                   name: { type: 'string' },
-                  department: { type: 'string' },
+                  departmentId: { type: 'integer' },
                   position: { type: 'string' },
                   phone: { type: 'string' },
                   address: { type: 'string' },
@@ -381,7 +412,7 @@ export const openApiSpec: Record<string, any> = {
     '/api/v1/clearance/requests/{id}/approve-check': {
       patch: {
         tags: ['Clearance'],
-        summary: 'Approve clearance check',
+        summary: 'Approve clearance check (Dept Head / HR / Admin / Finance Officer)',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         requestBody: {
           required: true,
@@ -401,7 +432,7 @@ export const openApiSpec: Record<string, any> = {
     '/api/v1/clearance/requests/{id}/reject-check': {
       patch: {
         tags: ['Clearance'],
-        summary: 'Reject clearance check',
+        summary: 'Reject clearance check (Dept Head / HR / Admin / Finance Officer)',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         requestBody: {
           required: true,
@@ -421,7 +452,7 @@ export const openApiSpec: Record<string, any> = {
     '/api/v1/clearance/units/{unitId}/pending': {
       get: {
         tags: ['Clearance'],
-        summary: 'Get pending checks for a unit',
+        summary: 'Get pending checks for a unit (Dept Head / HR / Admin / Finance Officer)',
         parameters: [{ name: 'unitId', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: { 200: { description: 'Pending checks (campus-scoped)' } },
       },
@@ -542,7 +573,7 @@ export const openApiSpec: Record<string, any> = {
     '/api/v1/payroll/data-transfer': {
       get: {
         tags: ['Payroll'],
-        summary: 'Get payroll data for transfer',
+        summary: 'Get payroll data for transfer (Admin / Finance Officer)',
         parameters: [
           { name: 'month', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 12 } },
           { name: 'year', in: 'query', schema: { type: 'integer' } },
@@ -687,6 +718,65 @@ export const openApiSpec: Record<string, any> = {
         responses: { 200: { description: 'Audit log' }, 403: { description: 'Cross-campus denied' }, 404: { description: 'Not found' } },
       },
     },
+    '/api/v1/departments': {
+      get: {
+        tags: ['Departments'],
+        summary: 'List departments',
+        description: 'Returns all departments on the requestor\'s campus.',
+        responses: { 200: { description: 'List of departments', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Department' } } } } } },
+      },
+      post: {
+        tags: ['Departments'],
+        summary: 'Create department',
+        description: 'Campus Admin only.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name'],
+                properties: {
+                  name: { type: 'string', minLength: 2 },
+                  headEmployeeId: { type: 'string', description: 'Internal employee ID to assign as head' },
+                },
+              },
+            },
+          },
+        },
+        responses: { 201: { description: 'Department created' }, 409: { description: 'Name already exists on campus' } },
+      },
+    },
+    '/api/v1/departments/{id}': {
+      delete: {
+        tags: ['Departments'],
+        summary: 'Delete department',
+        description: 'Only possible if department has no employees. Campus Admin only.',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Deleted' }, 400: { description: 'Cannot delete department with employees' } },
+      },
+    },
+    '/api/v1/departments/{id}/head': {
+      patch: {
+        tags: ['Departments'],
+        summary: 'Assign/Change department head',
+        description: 'Promotes new head to DEPARTMENT_HEAD and demotes old one if applicable. Campus Admin only.',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['employeeId'],
+                properties: { employeeId: { type: 'string' } },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Head assigned' }, 404: { description: 'Employee or Department not found' } },
+      },
+    },
     '/api/v1/campuses': {
       get: {
         tags: ['Campuses'],
@@ -705,12 +795,22 @@ export const openApiSpec: Record<string, any> = {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['code', 'name'],
+                required: ['code', 'name', 'initialAdmin'],
                 properties: {
-                  code: { type: 'string' },
+                  code: { type: 'string', description: 'Unique campus code (e.g., MAIN)' },
                   name: { type: 'string' },
                   description: { type: 'string' },
                   timezone: { type: 'string', default: 'Africa/Addis_Ababa' },
+                  initialAdmin: {
+                    type: 'object',
+                    required: ['employeeId', 'email', 'name'],
+                    properties: {
+                      employeeId: { type: 'string' },
+                      email: { type: 'string', format: 'email' },
+                      name: { type: 'string' },
+                      password: { type: 'string', minLength: 8, description: 'Optional. Auto-generated if omitted.' },
+                    },
+                  },
                 },
               },
             },
@@ -754,6 +854,32 @@ export const openApiSpec: Record<string, any> = {
         summary: 'Get users in campus',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: { 200: { description: 'Users in campus' }, 404: { description: 'Not found' } },
+      },
+    },
+    '/api/v1/campuses/{id}/readiness': {
+      get: {
+        tags: ['Campuses'],
+        summary: 'Get campus activation readiness status',
+        description: 'Checks if the campus has the minimum required roles and all departments have heads.',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: {
+            description: 'Readiness status',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    isReady: { type: 'boolean' },
+                    missingCampusRoles: { type: 'array', items: { type: 'string' } },
+                    deptsWithoutHead: { type: 'array', items: { type: 'string' } },
+                  },
+                },
+              },
+            },
+          },
+          404: { description: 'Campus not found' },
+        },
       },
     },
   },
