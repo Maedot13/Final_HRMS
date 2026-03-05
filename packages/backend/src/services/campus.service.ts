@@ -138,6 +138,9 @@ export const createCampus = async (
   const result = await prisma.$transaction(
     async (tx) => {
       // 1. Create campus — inactive by default
+      // isPatternLocked is set to true immediately: the prefix is committed at
+      // creation time (the initial admin already carries it), so it must never
+      // be changed once employees exist.
       const campus = await tx.campus.create({
         data: {
           code: dto.code.trim().toUpperCase(),
@@ -147,6 +150,7 @@ export const createCampus = async (
           isActive: false, // must be explicitly activated after staffing
           employeeIdPrefix: dto.employeeIdPrefix.trim().toUpperCase(),
           employeeNumericLength: dto.employeeNumericLength,
+          isPatternLocked: true, // locked from creation: initial admin already uses this prefix
         },
       });
 
@@ -230,7 +234,9 @@ export const updateCampus = async (id: number, data: UpdateCampusInput, updatedB
 
   if (data.employeeIdPrefix !== undefined || data.employeeNumericLength !== undefined) {
     if (campus.isPatternLocked) {
-      throw new Error('Employee ID pattern is locked and cannot be changed.');
+      throw new Error(
+        `Employee ID pattern is locked and cannot be changed. Current prefix: "${campus.employeeIdPrefix}", numeric length: ${campus.employeeNumericLength}.`
+      );
     }
   }
 

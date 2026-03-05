@@ -79,6 +79,10 @@ export const updateCampus = async (req: Request, res: Response) => {
     if (error.code === 'P2025' || error.message === 'Campus not found') {
       return sendError(res, 404, ErrorCode.NOT_FOUND, 'Campus not found', null, req);
     }
+    // ID pattern is locked — business rule violation
+    if (error.message.includes('pattern is locked')) {
+      return sendError(res, 400, ErrorCode.VALIDATION_ERROR, error.message, null, req);
+    }
     // Activation readiness failure
     if (error.message.includes('cannot be activated')) {
       return sendError(res, 422, ErrorCode.VALIDATION_ERROR, error.message, null, req);

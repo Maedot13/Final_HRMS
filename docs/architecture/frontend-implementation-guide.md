@@ -1,151 +1,208 @@
-# Full Codebase Analysis & Frontend Implementation Guide
-**Project:** Bahir Dar University HRMS
-**Target Role:** Senior Full-Stack Developer
+# HRMS Frontend Implementation Guide
 
-This document provides a comprehensive analysis of the existing backend architecture and a highly structured, execution-ready roadmap for the frontend implementation.
+This document is the **definitive blueprint** for implementing the frontend of the HRMS application. It maps the backend architecture (documented in `backend-analysis.md`) to actionable frontend components, data requirements, state management, and user flows.
 
 ---
 
-## Phase 1: Comprehensive Backend Analysis
+## 1. Project Setup & Architecture
 
-### 1.1 Project Architecture & Structure
-The backend is a robust Node.js application built with **Express, TypeScript, and Prisma ORM** against a **PostgreSQL** database. It utilizes **Redis** for caching and **BullMQ** for event-driven async processing. The architecture is modularly separated into routes, controllers, services, schemas (Zod), and middleware, ensuring strong separation of concerns.
+### Tech Stack Recommendations
+*   **Framework**: Next.js (App Router) or React (Vite) for fast SPA interaction.
+*   **State Management**:
+    *   **Server State (API)**: React Query (`@tanstack/react-query`) or SWR. Crucial for caching, retries, and background refetching of employee lists and dashboard KPIs.
+    *   **Client State (UI UI/Auth)**: Zustand or React Context for holding the `User` object, `Tokens`, and active `Campus` context.
+*   **Styling**: Tailwind CSS combined with shadcn/ui or MUI for fast, enterprise-grade component building.
+*   **Forms**: React Hook Form combined with Zod (using the same backend schemas ideally) for robust client-side validation.
+*   **HTTP Client**: Axios with global interceptors.
 
-### 1.2 Implemented Features & Business Logic Flow
-The backend is highly mature and implements the following core domains:
-*   **Authentication & Security:** Robust JWT-based auth with refresh tokens, CSRF protection, and bcrypt password hashing. Includes forced password changing for new accounts.
-*   **Multi-Campus Tenancy:** Data is rigidly scoped by `campusId`. Users have scopes (`CAMPUS` vs `UNIVERSITY`).
-*   **Role-Based Access Control (RBAC):** Six strict roles: `ADMIN`, `HR_OFFICER`, `DEPARTMENT_HEAD`, `FINANCE_OFFICER`, `RECRUITMENT_COMMITTEE`, `EMPLOYEE`.
-*   **Employee Management:** Core profiles merging generic `User` auth accounts with `Employee` HR details (service years, salary, contract data).
-*   **Leave Management:** Multi-step workflows for Annual, Sick, Maternity, Paternity, and Unpaid leave. Includes automated overlapping request checks and balance tracking.
-*   **Sabbatical Requests:** Specialized workflows requiring document uploads (`planDocumentUrl`) and specific approvers.
-*   **Clearance & Exit:** Multi-unit clearance processes (e.g., Library, IT, Finance) approving sequentially or in parallel, triggering final `PayrollTransfer` records upon completion.
-*   **Internal Recruitment:** Job postings by HR, applications by employees (with CVs and cover letters), status tracking, and strict conflict-of-interest checks (e.g., HR/Committee members cannot apply).
-*   **Notifications & Event Bus:** Systemic alerts (e.g., when an application is updated or a leave is approved) driven by an internal EventBus and stored in the database.
-*   **Auditing:** Exhaustive tracking of 19 distinct actions (Logins, Leave Approvals, Employee Updates, etc.) via `AuditLog` service.
-
-### 1.3 Missing, Incomplete, or Technical Considerations
-*   **File Uploads:** Endpoints expecting `attachmentUrl` or `cvUrl` imply the frontend must handle `multipart/form-data` uploads (via Multer on the backend) or direct S3 signed URLs if configured.
-*   **WebSockets vs Polling:** Notifications currently rely on REST (`/api/notifications/unread-count`). The frontend must use short-polling or React Query background refetching.
-*   **Data Separation:** The UI must gracefully handle the conceptual split between a `User` (auth/sys-admin context) and an `Employee` (HR context).
-
-### 1.4 Complete Backend Scope Definition
-*   **Fully Implemented:** Auth, RBAC, Multi-campus scoping, CRUD for Users/Employees, Leave/Sabbatical flows, Clearance flows, Job Board, Notifications, Audit Logs, Redis caching, Email notifications.
-*   **Partially Implemented:** Reports/Analytics endpoints exist but rely heavily on how the frontend visualizes the aggregated data.
-*   **Required Frontend Abstractions:** Axios interceptors for smooth token refresh, strictly typed Zod forms mapping to backend schemas, caching strategies using React Query.
+### Axial Interceptor Logic
+*   **Request Interceptor**: Attach `Authorization: Bearer <token>` to all requests (except `/auth/*`).
+*   **Response Interceptor**:
+    *   Catch `401 AUTHENTICATION_FAILED` -> Trigger silent refresh (`POST /api/v1/auth/refresh`). If refresh fails, log out and redirect to `/login`.
+    *   Catch `403 PASSWORD_CHANGE_REQUIRED` -> Redirect to `/force-password-change`.
+    *   Catch `400 VALIDATION_ERROR` -> Map `details` payload to React Hook Form `setError` functions.
 
 ---
 
-## Phase 2: Frontend Architecture & Alignment Strategy
+## 2. Global State & Data Models
 
-Act strictly as a **Senior Frontend Architect** adhering to these guidelines:
-
-### 2.1 Core Tech Stack
-*   **Framework:** React 18 with TypeScript via Vite.
-*   **Routing:** React Router v6 (Data Router API with loaders/actions).
-*   **State Management:**
-    *   **Server State:** TanStack Query (React Query) v5 for all API interactions, caching, and invalidation.
-    *   **Client State:** Zustand for lightweight global state (Auth User, Theme, Sidebar state).
-*   **Form Management:** React Hook Form integrated with `@hookform/resolvers/zod`. Share `packages/types` schemas if possible, or mirror backend Zod schemas identically.
-*   **UI Library:** Material-UI (MUI v5) or TailwindCSS + Radix UI (shadcn/ui). Both are acceptable; ensure high-quality data tables (pagination, sorting, filtering).
-*   **HTTP Client:** Axios with global request interceptors (attaching JWT) and response interceptors (handling 401 token refresh logic and generic 500 Toast fallbacks).
-
-### 2.2 Recommended Folder Structure
-```text
-packages/frontend/src/
-├── api/             # Axios instance, generic fetchers, interceptors (api.client.ts)
-├── assets/          # Static assets, SVG icons, logo
-├── components/      # Shared UI (Button, Modal, CoreTable, FileUploader)
-├── config/          # Environment variables, constants, UI enums
-├── features/        # Feature-based modular structure
-│   ├── auth/        # Auth APIs, forms, contexts, components
-│   ├── leaves/      # Leave requests list, approval modals, forms
-│   ├── clearance/   # Multi-unit clearance flows
-│   ├── employees/   # Directory, profile cards
-│   └── recruitment/ # Job board, application forms
-├── hooks/           # Global custom hooks (useDebounce, useRoleAccess)
-├── layouts/         # DashboardLayout (Sidebar, Topbar), AuthLayout
-├── routes/          # Route definitions, ProtectedRoute, RoleGuard wrappers
-├── store/           # Zustand stores (useAuthStore.ts, useUIStore.ts)
-├── types/           # Frontend-focused TS types (merging backend types)
-└── utils/           # Formatters (dates, currency, file-size), error extractors
+### 2.1. Authentication Store (`useAuthStore`)
+```typescript
+interface AuthState {
+  user: {
+    id: number;
+    employeeId: string;
+    email: string;
+    role: 'ADMIN' | 'HR_OFFICER' | 'DEPARTMENT_HEAD' | 'FINANCE_OFFICER' | 'RECRUITMENT_COMMITTEE' | 'EMPLOYEE';
+    scope: 'CAMPUS' | 'UNIVERSITY';
+    campusId: number | null;
+  } | null;
+  accessToken: string | null;
+  isAuthenticated: boolean;
+  login: (data: LoginResponse) => void;
+  logout: () => void;
+}
 ```
 
-### 2.3 Form Validation & Error Handling Strategy
-*   **Validation:** Use Zod. If the backend schema dictates `leaveType: z.enum(['ANNUAL', 'SICK'])`, mirror it perfectly.
-*   **Error Handling:**
-    *   Extract backend error messages from `error.response?.data?.message`.
-    *   Bind field-specific validation errors from `400 Bad Request` directly to React Hook Form inputs using `setError()`.
-    *   For `500` or network errors, use a global Toast notification (e.g., `react-hot-toast` or `sonner`).
+---
 
-### 2.4 Role-Based UI Handling
-*   Create a `<RoleGuard expectedRoles={['ADMIN', 'HR_OFFICER']}>` wrapper component to conditionally render sensitive buttons (e.g., "Delete User").
-*   Implement `CampusContext` for `UNIVERSITY` scope users to switch between campuses, attaching `?campusId=X` to all API queries automatically via an Axios interceptor or React Query default params.
+## 3. Folder Structure Mapping
+
+```text
+/src
+  /api          # Axios setup, interceptors, React Query hooks per feature (e.g., useLeave.ts)
+  /components   # Reusable UI (Buttons, Modals, Tables, Status Badges)
+  /layouts      # Core layouts (AuthLayout, DashboardLayout with Sidebar/Topbar)
+  /pages        # Route-level components mapped below
+  /store        # Zustand stores (useAuthStore, useUIStore)
+  /types        # TypeScript interfaces matching backed schema
+  /utils        # Formatters (date, currency), error parsers
+```
 
 ---
 
-## Phase 3: Phase-by-Phase Execution Plan
+## 4. Pages, Routes & Feature Modules
 
-### Phase 3.1: Foundation & Authentication (Week 1)
-*   **What needs to be built:** Vite scaffolding, Axios setup, Auth Context, Login Screen, Password Reset Screen.
-*   **Why it is needed:** Establishes the secure shell of the application. No other features can be built without verified identity and token refresh mechanics.
-*   **Implementation steps:**
-    1.  Setup Vite React TS project. Configure aliases (`@/*`).
-    2.  Build `Axios` instance. Inject Bearer token from local storage/memory. Implement `axios.interceptors.response` intercepting 401s to call `/api/auth/refresh` and retry the original request.
-    3.  Create Zustand `useAuthStore` to track `user`, `role`, `scope`, and `isAuthenticated`.
-    4.  Build `/login` page using React Hook Form. Route to `/dashboard` on success.
-    5.  Handle the `mustChangePassword` edge case by intercepting login responses and redirecting to a forced `/change-password` route.
+### 4.1. Authentication & Security
+**Route**: `/login`
+*   **Purpose**: Initial entry point.
+*   **API**: `POST /api/v1/auth/login` (`{employeeId, password}`)
+*   **Components**: LoginForm (employeeId text input, password input, submit button).
+*   **Flow**: On success, set Zustand store -> redirect to `/dashboard`. If `mustChangePassword` flag applies, intercept and redirect to `/force-password-change`.
 
-### Phase 3.2: Dashboard & Core Directory (Week 2)
-*   **What needs to be built:** Main App Layout (Sidebar, Header), Employee Directory, User Management.
-*   **Why it is needed:** Provides navigation and the ability for HR/Admins to manage the foundational data (people) that all other workflows depend on.
-*   **Implementation steps:**
-    1.  Build `DashboardLayout` with a responsive sidebar containing links guarded by `useAuthStore().role`.
-    2.  Implement `NotificationsMenu` in the header, querying `/api/notifications/unread-count` every 60s using React Query `refetchInterval`.
-    3.  Build `/employees` data table. Use React Query `useQuery(['employees', page, filters])`. Implement server-side pagination.
-    4.  Build `EmployeeProfile` drawer/page displaying `contactInfo`, `salaryDetails`, and `leaveBalances`.
-    5.  Build `/users` management (ADMIN only) allowing role assignments.
-
-### Phase 3.3: Leave & Sabbatical Workflows (Week 3)
-*   **What needs to be built:** Leave request forms, Sabbatical forms, and Approvals Dashboard for Department Heads.
-*   **Why it is needed:** Core HR operational feature.
-*   **Implementation steps:**
-    1.  **Forms:** Build `/leaves/request` using `FormData` if `attachmentUrl` requires uploading a file to Multer endpoints. Utilize date pickers enforcing `startDate < endDate`.
-    2.  **Lists:** Employee view (`getEmployeeRequests`) vs Approver view (`getPendingRequests`).
-    3.  **Actions:** Department Head view requires inline "Approve" / "Reject" (with modal for comments) mutating state via `useMutation` and calling `queryClient.invalidateQueries({ queryKey: ['leaves'] })`.
-
-### Phase 3.4: Clearance & Exit Management (Week 4)
-*   **What needs to be built:** Clearance initiation, Multi-Unit check interfaces, and Payroll Transfer views.
-*   **Why it is needed:** Handles the complex offboarding process interactively.
-*   **Implementation steps:**
-    1.  **Employee initiates:** Flow to submit resignation/clearance.
-    2.  **Unit Checking Board:** A Kanban or List view for users in various clearance units (Library, Finance) to fetch `getPendingChecksForUnit`.
-    3.  **Check Actions:** Mutate `/api/clearances/:id/checks/:unitId/approve`.
-    4.  **Edge cases:** Render the status of the overall clearance as a progress bar or timeline component (e.g., "3 of 5 units approved").
-
-### Phase 3.5: Recruitment & Job Board (Week 5)
-*   **What needs to be built:** Internal Job Postings UI, Application Form, Candidate Review Interface.
-*   **Why it is needed:** Facilitates internal mobility.
-*   **Implementation steps:**
-    1.  **Job Board:** Card-based UI for `/jobs` fetching `getJobPostings`.
-    2.  **Application Form:** `/jobs/:id/apply`. Critical requirement: Handle `cvUrl` file upload accurately. Must enforce UI validation preventing Committee members from applying.
-    3.  **Review Dashboard:** HR/Committee view (`getApplicationsForJob`) showing tabular list of candidates with a slide-out PDF viewer for CVs. Action buttons to update status to `SHORTLISTED` or `REJECTED`.
-
-### Phase 3.6: System Administration, Analytics & Polish (Week 6)
-*   **What needs to be built:** Audit Logs Viewer, Chart Dashboards, Loading States.
-*   **Why it is needed:** System transparency, compliance, and UX perfection.
-*   **Implementation steps:**
-    1.  **Audit Logs:** Build a high-performance grid for `/audit` with heavy filtering capabilities (Date range, Action type, User ID).
-    2.  **Dashboard Analytics:** Implement `Chart.js` or `Recharts` using `/api/reports/dashboard` to show beautiful visualizations of HR metrics.
-    3.  **UX Polish:** Add `NProgress` to router transitions. Add skeleton loaders for all major tables and profile cards to prevent UI layout jumps.
+**Route**: `/force-password-change`
+*   **Purpose**: Security measure for newly created accounts.
+*   **API**: `POST /api/v1/auth/change-password` (`{currentPassword, newPassword}`)
+*   **Components**: ChangePasswordForm (current pass, new pass, confirm new pass).
+*   **Validations**: Zod matches (new === confirm), minimum 8 chars.
 
 ---
 
-## Testing & Quality Assurance Strategy
-1.  **Component Tests (Vitest + React Testing Library):** Focus on rendering complex components like the Mult-Unit Clearance timeline and RoleGuard wrappers.
-2.  **State Testing:** Test custom hooks and Zustand logic independently from the UI.
-3.  **API Mocking (MSW):** Implement Mock Service Worker for robust testing of React Query mutations (e.g., simulating a 403 Forbidden on Leave Approval and ensuring the error toast appears).
-4.  **E2E (Playwright/Cypress):** Fully map three critical user journeys:
-    *   *Journey A:* HR Officer logs in -> Posts a new Job.
-    *   *Journey B:* Employee attempts to apply -> Uploads CV -> Submits.
-    *   *Journey C:* Department Head logs in -> Approves Leave.
+### 4.2. Dashboard (Home)
+**Route**: `/dashboard`
+*   **Purpose**: High-level overview based on role.
+*   **API**: `GET /api/v1/reports/summary`, `GET /api/v1/notifications/unread-count`
+*   **Components**: 
+    *   `StatCards`: (Total Employees, Pending Leaves, Open Jobs)
+    *   `QuickActions`: Direct links to "Request Leave", "Post Job", etc., restricted by role.
+    *   `RecentActivity`: Mini feed based on latest `/api/v1/audit-logs/my-logs`.
+*   **Loading State**: Skeletons for metric cards.
+
+---
+
+### 4.3. Employee Profiling
+**Route**: `/employees` (HR/Admin/Dept Head)
+*   **Purpose**: Employee directory.
+*   **API**: `GET /api/v1/employees`
+*   **Components**: 
+    *   `EmployeeDataTable`: Columns (ID, Name, Dept, Role, Status). Features: Pagination, Search, Filter by Dept.
+*   **Role Logic**: Employees cannot view this list.
+
+**Route**: `/employees/[id]` or `/profile` (Self)
+*   **API**: `GET /api/v1/employees/{id}`, `PATCH /api/v1/employees/{id}`
+*   **Components**: 
+    *   `ProfileHeader`: Avatar, Name, Job Title.
+    *   `ContactInfoForm`: Editable inputs for phone, address, emergency contact.
+*   **State Management**: React Query `useQuery(['employee', id])`. Optimistic update on form submit.
+
+---
+
+### 4.4. Leave Management Workflow
+**Route**: `/leave` (Self)
+*   **Purpose**: Request new leaves and view own history.
+*   **API**: `GET /api/v1/leave/my`, `POST /api/v1/leave`
+*   **Components**: 
+    *   `LeaveHistoryTable`: List past leaves and statuses (PENDING, APPROVED, REJECTED).
+    *   `LeaveRequestFormModal`: Fields: Type dropdown (ANNUAL, SICK, MATERNITY...), DatePickers (Start, End), Textarea (Reason).
+*   **Validations**: Start date must be before end date. Cannot submit without reasoning.
+
+**Route**: `/leave/approvals` (Dept Head / HR)
+*   **API**: `GET /api/v1/leave/pending`, `PATCH /api/v1/leave/{id}/approve`, `PATCH /api/v1/leave/{id}/reject`
+*   **Components**: 
+    *   `PendingLeavesList`: Cards or table row per request.
+    *   `DecisionModal`: Requires an input `comment` for rejects. Approve requires optional `comment`.
+
+---
+
+### 4.5. Exit Clearance Workflow (Critical Flow)
+**Route**: `/clearance` (Employee View)
+*   **Purpose**: Start clearance, track progress across departments.
+*   **API**: `POST /api/v1/clearance/requests`, `GET /api/v1/clearance/requests/{id}`
+*   **Components**: 
+    *   `InitiateClearanceForm`: Inputs (Reason, Last Working Day).
+    *   `ClearanceTracker`: Visual stepper or grid showing all required units (e.g., Library, IT) and their status (PENDING, APPROVED).
+
+**Route**: `/clearance/approvals` (Unit Heads / Admin)
+*   **API**: `GET /api/v1/clearance/units/{unitId}/pending`, `PATCH /api/v1/clearance/requests/{id}/approve-check`
+*   **Flow**: Department head logs in, navigates to approvals, sees employees waiting on their specific unit, clicks "Approve" (sends `unitId`).
+*   **Backend Hook Insight**: The frontend does not handle finalization. Once all units approve, the backend worker auto-creates the Payroll Transfer. The UI should just reflect `status: COMPLETED` via polling or refetch.
+
+---
+
+### 4.6. Internal Recruitment
+**Route**: `/jobs`
+*   **Purpose**: Job board.
+*   **API**: `GET /api/v1/recruitment/postings`
+*   **Components**: `JobCardGrid`. If HR, show "Create Job" CTA.
+
+**Route**: `/jobs/create` (HR / Recruitment Committee)
+*   **API**: `POST /api/v1/recruitment/postings`
+*   **Forms**: `JobPostingForm` (Title, Description WYSIWYG, Requirements, Deadline).
+
+**Route**: `/jobs/[id]`
+*   **Purpose**: Job details and apply button.
+*   **API**: `POST /api/v1/recruitment/apply`
+*   **Forms**: `ApplicationModal` (Cover Letter textarea, CV URL input).
+
+**Route**: `/jobs/[id]/applicants` (Recruitment Committee)
+*   **API**: `GET /api/v1/recruitment/postings/{id}/applications`, `PATCH /api/v1/recruitment/applications/{id}/status`
+*   **Components**: Kanban board or Table moving candidates from SUBMITTED -> SHORTLISTED.
+
+---
+
+### 4.7. System Administration & Audits
+**Route**: `/admin/departments`
+*   **API**: `GET /api/v1/departments`, `POST /api/v1/departments`, `PATCH /api/v1/departments/{id}/head`
+*   **Components**: `DepartmentList`. `AssignHeadModal` (Searchable dropdown of employees).
+
+**Route**: `/admin/audit-logs`
+*   **API**: `GET /api/v1/audit-logs`
+*   **Implementation Need**: Must implement **Cursor-based pagination**. The table cannot rely on standard `page=1`. It must use `nextCursor` from the API response for "Load More" or "Next Page" functionality.
+
+**Route**: `/super-admin/campuses` (Scope: UNIVERSITY Only)
+*   **API**: `GET /api/v1/campuses`, `POST /api/v1/campuses`
+*   **Flow**: Provide UI to spin up new campuses. Must supply `employeeIdPrefix` and `initialAdmin` JSON structure.
+
+---
+
+## 5. UI Elements & States
+
+### 5.1. Status Badges
+Consistent color mapping for statuses across Leave, Clearance, and Jobs:
+*   `PENDING`/`SUBMITTED`: Yellow / Warning
+*   `APPROVED`/`SHORTLISTED`/`OPEN`: Green / Success
+*   `REJECTED`/`CLOSED`: Red / Danger
+
+### 5.2. Skeleton Loaders
+*   Use skeleton representations instead of generic spinners for tables and dashboard metrics.
+*   React Query `isLoading` maps to skeleton rendering.
+
+### 5.3. Error Boundaries
+*   Wrap major route sections in React Error Boundaries to catch unhandled crashes.
+*   **API Errors**: Map `{ code, message, details }` from the backend to a global Toast Notification system (e.g., `react-hot-toast`). For `VALIDATION_ERROR`, map the output to form-level inline errors.
+
+---
+
+## 6. Priority / Implementation Order
+
+**Frontend developers (or AI) should implement the system in this exact chronological order:**
+
+1.  **Phase 1: Foundation**: Set up App framework, Axios interceptors, Auth Zustand store, Tailwind/UI library.
+2.  **Phase 2: Authentication**: `/login`, `/force-password-change`. Test JWT token persistence, interceptor token refresh, and basic role extraction.
+3.  **Phase 3: Core Layouts & Dashboard**: Sidebar navigation (conditional by role), Topbar (Notifications dropdown), Dashboard metric skeletons.
+4.  **Phase 4: Employee Directory**: `/profile`, `/employees`. Ensures basic CRUD and data-fetching patterns are solid.
+5.  **Phase 5: Self-Service Workflows**: `/leave` (Request forms), `/jobs` (Apply forms).
+6.  **Phase 6: Managerial Approvals**: `/leave/approvals`, `/jobs/[id]/applicants`.
+7.  **Phase 7: Clearance Complexity**: The multi-step clearance `/clearance`.
+8.  **Phase 8: Administration**: `/admin/*` routes, cursor-based pagination for Audit logs, Campus creation for supers.
+9.  **Phase 9: Polish**: Polish error handling, skeletons, toast notifications, responsive mobile views.

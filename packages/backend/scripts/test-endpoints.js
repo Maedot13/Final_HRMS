@@ -11,7 +11,26 @@
 
 const http = require('http');
 
-const BASE_URL = process.env.API_URL || 'http://localhost:5000';
+require('dotenv').config();
+
+// Default to localhost:5000 if not specified
+let BASE_URL = process.env.API_URL || 'http://localhost:5000';
+
+// Ensure the URL is valid, otherwise node's URL parser will throw an error
+try {
+    // Check if it's missing a protocol
+    if (!BASE_URL.startsWith('http')) {
+        BASE_URL = `http://${BASE_URL}`;
+    }
+    const parsedUrl = new URL(BASE_URL);
+    if (!parsedUrl.hostname) {
+        throw new Error('Missing hostname');
+    }
+} catch (e) {
+    console.error(`\x1b[31m[ERROR]\x1b[0m Invalid API_URL environment variable: "${process.env.API_URL}"`);
+    console.error(`\x1b[31m[ERROR]\x1b[0m Please ensure API_URL is a valid URL (e.g., http://localhost:5000)`);
+    process.exit(1);
+}
 const colors = {
     reset: '\x1b[0m',
     green: '\x1b[32m',
@@ -29,7 +48,13 @@ function log(message, color = colors.reset) {
 
 function makeRequest(method, path, data = null, headers = {}) {
     return new Promise((resolve, reject) => {
-        const url = new URL(path, BASE_URL);
+        let url;
+        try {
+            url = new URL(path, BASE_URL);
+        } catch (e) {
+            return reject(new Error(`Invalid URL construction: path="${path}", BASE_URL="${BASE_URL}". Error: ${e.message}`));
+        }
+
         const options = {
             method,
             hostname: url.hostname,
