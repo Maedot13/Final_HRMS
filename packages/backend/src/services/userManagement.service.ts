@@ -2,6 +2,9 @@
 import { UserRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
+import * as emailService from './email.service';
+import { logger } from '../utils/logger';
 
 export const getAllUsers = async (campusId?: number) => {
     return prisma.user.findMany({
@@ -66,12 +69,38 @@ export const toggleUserStatus = async (id: number, isActive: boolean) => {
     });
 };
 
-export const resetUserPassword = async (id: number, newPasswordSnippet: string) => {
-    const passwordHash = await bcrypt.hash(newPasswordSnippet, 10);
-    return prisma.user.update({
+export const resetUserPassword = async (id: number) => {
+    const user = await prisma.user.findUnique({
         where: { id },
-        data: { passwordHash }
+        include: { employee: true }
     });
+
+    if (!user) {
+        throw new Error('User not found');
+    }
+
+    // Generate a cryptographically secure temporary password
+    const tempPassword = crypto.randomBytes(8).toString('base64url');
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+    await prisma.user.update({
+        where: { id },
+        data: {
+            passwordHash,
+            mustChangePassword: true  // Force the user to change it on next login
+        }
+    });
+
+    // Send email asynchronously — don't let email failure block the reset response
+    const employeeName = user.employee?.name || 'Employee';
+    emailService.sendPasswordResetEmail({
+        to: user.email,
+        name: employeeName,
+        employeeId: user.employeeId,
+        tempPassword
+    }).catch(err => logger.error('Failed to send password reset email', err));
+
+    return { message: 'Password reset successfully. The user will receive an email with their temporary password.' };
 };
 
 export const deleteUser = async (id: number) => {

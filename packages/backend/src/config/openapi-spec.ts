@@ -248,6 +248,7 @@ export const openApiSpec: Record<string, any> = {
       patch: {
         tags: ['Employees'],
         summary: 'Update employee',
+        description: 'Update employee profile. Note: University Admins have read-only access and will receive a 403 Forbidden. Only Campus Admins/HR can modify local campus resources.',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         requestBody: {
           content: {
@@ -632,6 +633,7 @@ export const openApiSpec: Record<string, any> = {
       patch: {
         tags: ['Users'],
         summary: 'Update user role',
+        description: 'University Admins have read-only oversight (403). Only local Campus Admins can update roles.',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['role'], properties: { role: { type: 'string', enum: ['ADMIN', 'HR_OFFICER', 'DEPARTMENT_HEAD', 'FINANCE_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE'] } } } } } },
         responses: { 200: { description: 'Role updated' }, 403: { description: 'Forbidden' } },
@@ -641,6 +643,7 @@ export const openApiSpec: Record<string, any> = {
       patch: {
         tags: ['Users'],
         summary: 'Toggle user active status',
+        description: 'Toggle account access. University Admins have read-only oversight (403). Only local Campus Admins can toggle status.',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['isActive'], properties: { isActive: { type: 'boolean' } } } } } },
         responses: { 200: { description: 'Status updated' }, 403: { description: 'Forbidden' } },
@@ -650,6 +653,7 @@ export const openApiSpec: Record<string, any> = {
       post: {
         tags: ['Users'],
         summary: 'Reset user password',
+        description: 'Generates a new temporary password. University Admins have read-only oversight (403). Only local Campus Admins can reset passwords.',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['password'], properties: { password: { type: 'string', minLength: 8 } } } } } },
         responses: { 200: { description: 'Password reset' }, 403: { description: 'Cross-campus denied' } },
@@ -752,6 +756,29 @@ export const openApiSpec: Record<string, any> = {
       },
     },
     '/api/v1/departments/{id}': {
+      get: {
+        tags: ['Departments'],
+        summary: 'Get department by ID',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Department details' }, 404: { description: 'Not found' } },
+      },
+      patch: {
+        tags: ['Departments'],
+        summary: 'Update department',
+        description: 'Update department name. Campus Admin only.',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: { name: { type: 'string', minLength: 2 } },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Department updated' }, 404: { description: 'Not found' } },
+      },
       delete: {
         tags: ['Departments'],
         summary: 'Delete department',

@@ -44,6 +44,15 @@ export const createDepartment = async (req: Request, res: Response) => {
         if (error.message.includes('already exists')) {
             return sendError(res, 409, ErrorCode.UNIQUE_CONSTRAINT_VIOLATION, error.message, null, req);
         }
+        if (error.message.includes('already head of department')) {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, error.message, null, req);
+        }
+        if (error.message.includes('different campus')) {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, error.message, null, req);
+        }
+        if (error.message === 'Employee not found') {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, error.message, null, req);
+        }
         sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };

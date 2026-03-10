@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { logger } from '../utils/logger';
+import { templates } from '../utils/emailTemplates';
 
 // Create a single transporter instance
 const transporter = nodemailer.createTransport({
@@ -57,6 +58,30 @@ export const sendWelcomeEmail = async (data: {
         logger.error('Failed to send welcome email', { error, to: data.to });
         // Don't throw the error - we don't want to fail the registration if email fails
         // but we DO log it as an error.
+    }
+};
+
+export const sendPasswordResetEmail = async (data: {
+    to: string;
+    name: string;
+    employeeId: string;
+    tempPassword: string;
+}) => {
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+        logger.warn(`[DEV] SMTP not configured — Password reset for ${data.employeeId}. Temp password: ${data.tempPassword}`);
+        return;
+    }
+
+    try {
+        const info = await transporter.sendMail({
+            from: `"BDU HR System" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+            to: data.to,
+            subject: 'BDU HRMS — Your Password Has Been Reset',
+            html: templates.passwordReset(data.name, data.employeeId, data.tempPassword),
+        });
+        logger.info(`Password reset email sent successfully to ${data.to}`, { messageId: info.messageId });
+    } catch (error) {
+        logger.error('Failed to send password reset email', { error, to: data.to });
     }
 };
 

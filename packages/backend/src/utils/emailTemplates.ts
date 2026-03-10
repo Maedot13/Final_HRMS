@@ -76,4 +76,19 @@ export const templates = {
              <p>All departments have approved your clearance, and your final payroll transfer has been initiated.</p>
              <p>We wish you all the best in your future endeavors.</p>`
         ),
+
+    passwordReset: (name: string, employeeId: string, tempPassword: string) =>
+        getEmailTemplate(
+            'Your Password Has Been Reset',
+            `<p>Dear ${name},</p>
+             <p>Your account password has been reset by an administrator.</p>
+             <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                 <p style="margin: 0 0 10px 0;"><strong>Employee ID:</strong> ${employeeId}</p>
+                 <p style="margin: 0;"><strong>Temporary Password:</strong> <code style="background: #e9ecef; padding: 2px 6px; border-radius: 3px;">${tempPassword}</code></p>
+             </div>
+             <p style="color: #dc3545; font-weight: bold;">
+                 ⚠️ You must change this password immediately upon your next login.
+             </p>
+             <p>If you did not expect this change, please contact your system administrator immediately.</p>`
+        ),
 };

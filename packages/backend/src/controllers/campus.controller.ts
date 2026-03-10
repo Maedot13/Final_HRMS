@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import * as campusService from '../services/campus.service';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 import { createCampusSchema, updateCampusSchema } from '../schemas/campus.schema';
+import { assertSameCampus } from '../lib/campusScope';
 
 export const getCampuses = async (req: Request, res: Response) => {
   try {
@@ -97,12 +98,20 @@ export const getCampusUsers = async (req: Request, res: Response) => {
     if (isNaN(id)) {
       return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid campus ID', null, req);
     }
+
+    // Enforce campus isolation:
+    // UNIVERSITY scope can view any id. CAMPUS scope MUST match :id.
+    assertSameCampus(req, id);
+
     const result = await campusService.getCampusUsers(id);
     if (!result) {
       return sendError(res, 404, ErrorCode.NOT_FOUND, 'Campus not found', null, req);
     }
     sendSuccess(res, result);
   } catch (error: any) {
+    if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
+      return sendError(res, 403, ErrorCode.FORBIDDEN, error.message, null, req);
+    }
     sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
   }
 };

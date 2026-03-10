@@ -68,3 +68,34 @@ export function assertSameCampus(req: Request, resourceCampusId: number | null |
   }
 }
 
+/**
+ * Enforces that only CAMPUS-scoped admins can modify local resources.
+ * UNIVERSITY-scoped admins are restricted to READ-ONLY oversight for local 
+ * campus data (employees, local user roles, etc.) to maintain campus autonomy.
+ */
+export function assertCanWriteCampusResource(req: Request, resourceCampusId: number | null | undefined): void {
+  const ctx = getCampusScope(req);
+
+  // 1. If University Admin, block the write operation to local campus data.
+  if (ctx.scope === UserScope.UNIVERSITY) {
+    logger.warn('Campus isolation: University Admin blocked from writing to local campus resource', {
+      userId: req.user?.userId,
+      path: req.path,
+      method: req.method,
+    });
+    throw new Error('University admins have read-only access to local campus resources');
+  }
+
+  // 2. If Campus Admin, verify it's THEIR campus.
+  if (resourceCampusId == null || resourceCampusId !== ctx.campusId) {
+    logger.warn('Campus isolation: Cross-campus write access denied', {
+      userId: req.user?.userId,
+      userCampusId: ctx.campusId,
+      resourceCampusId: resourceCampusId ?? null,
+      path: req.path,
+      method: req.method,
+    });
+    throw new Error('Cross-campus access denied');
+  }
+}
+

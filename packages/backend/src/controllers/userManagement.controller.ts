@@ -7,7 +7,7 @@ import {
 } from '../schemas/userManagement.schema';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 import { auditUserUpdate, AuditAction } from '../utils/auditLog';
-import { getCampusScope, getCampusIdFilter, assertSameCampus } from '../lib/campusScope';
+import { getCampusScope, getCampusIdFilter, assertSameCampus, assertCanWriteCampusResource } from '../lib/campusScope';
 
 export const getAllUsers = async (req: Request, res: Response) => {
     try {
@@ -54,7 +54,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
         if (!targetUser) {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'User not found', null, req);
         }
-        assertSameCampus(req, targetUser.campusId);
+        assertCanWriteCampusResource(req, targetUser.campusId);
 
         const validation = updateUserRoleSchema.safeParse(req.body);
         if (!validation.success) {
@@ -75,8 +75,12 @@ export const updateUserRole = async (req: Request, res: Response) => {
         sendSuccess(res, user);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Internal error';
-        if (message === 'Cross-campus access denied' || message === 'Missing campus context for this user') {
-            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        if (
+            message === 'Cross-campus access denied' ||
+            message === 'Missing campus context for this user' ||
+            message === 'University admins have read-only access to local campus resources'
+        ) {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, message, null, req);
         }
         if (message.includes('Cannot demote the last active admin')) {
             return sendError(res, 403, ErrorCode.FORBIDDEN, message, null, req);
@@ -99,7 +103,7 @@ export const toggleUserStatus = async (req: Request, res: Response) => {
         if (!targetUser) {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'User not found', null, req);
         }
-        assertSameCampus(req, targetUser.campusId);
+        assertCanWriteCampusResource(req, targetUser.campusId);
 
         const validation = toggleUserStatusSchema.safeParse(req.body);
         if (!validation.success) {
@@ -120,8 +124,12 @@ export const toggleUserStatus = async (req: Request, res: Response) => {
         sendSuccess(res, user);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Internal error';
-        if (message === 'Cross-campus access denied' || message === 'Missing campus context for this user') {
-            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        if (
+            message === 'Cross-campus access denied' ||
+            message === 'Missing campus context for this user' ||
+            message === 'University admins have read-only access to local campus resources'
+        ) {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, message, null, req);
         }
         if (message.includes('Cannot deactivate the last active admin')) {
             return sendError(res, 403, ErrorCode.FORBIDDEN, message, null, req);
@@ -137,18 +145,17 @@ export const resetPassword = async (req: Request, res: Response) => {
         if (!targetUser) {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'User not found', null, req);
         }
-        assertSameCampus(req, targetUser.campusId);
+        assertCanWriteCampusResource(req, targetUser.campusId);
 
-        const validation = resetPasswordSchema.safeParse(req.body);
-        if (!validation.success) {
-            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid input', validation.error.format(), req);
-        }
-
-        await userManagementService.resetUserPassword(id, validation.data.password);
-        sendSuccess(res, { message: 'Password reset successfully' });
+        const result = await userManagementService.resetUserPassword(id);
+        sendSuccess(res, result);
     } catch (error: any) {
-        if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
-            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        if (
+            error?.message === 'Cross-campus access denied' ||
+            error?.message === 'Missing campus context for this user' ||
+            error?.message === 'University admins have read-only access to local campus resources'
+        ) {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, error.message, null, req);
         }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
