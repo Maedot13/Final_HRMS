@@ -73,6 +73,16 @@ model Employee {
   campus             Campus?             @relation(fields: [campusId], references: [id], onDelete: Restrict)
   department         Department?         @relation(fields: [departmentId], references: [id])
   user               User                @relation(fields: [userId], references: [id])
+  supervisorId       Int?
+  supervisor         Employee?           @relation("EmployeeSupervisor", fields: [supervisorId], references: [id])
+  subordinates       Employee[]          @relation("EmployeeSupervisor")
+  officeLocation     String?
+  employmentStatus   EmploymentStatus    @default(ACTIVE)
+  contractStartDate  DateTime?
+  contractEndDate    DateTime?
+  employmentType     EmploymentType      @default(PERMANENT)
+  payGrade           String?
+  taxInformation     Json?
   jobApplications    JobApplication[]
   leaveBalances      LeaveBalance[]
   leaveRequests      LeaveRequest[]
@@ -394,4 +404,15 @@ enum ApplicationStatus {
 enum SalaryType {
   MONTHLY
   DAILY
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  SUSPENDED
+  TRANSFERRED
+}
+
+enum EmploymentType {
+  PERMANENT
+  CONTRACT
 }

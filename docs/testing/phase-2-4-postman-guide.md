@@ -138,13 +138,18 @@ Set up a Postman Environment with the following. The suite is designed to be **s
 
 ## Folder 05: Employee Lifecycle Management
 
-### 5.1 Profile Update (RBAC Hardening)
+### 5.1 Profile Update (Simple Rule RBAC)
 - **PATCH** `{{baseUrl}}/employees/{{targetEmployeeId}}`
-- **Fields**: `grossSalary`, `position`, `departmentId`.
-- **Role 1 (HR Officer)**: `200 OK` (Allowed for own campus).
-- **Role 2 (Campus Admin)**: `200 OK` (Allowed for own campus).
-- **Role 3 (University Admin)**: `403 Forbidden`. **Logic**: "University admins have read-only access to local campus resources."
-- **Role 4 (Employee Self)**: `403 Forbidden` (BAC Test).
+- **New Fields**: `grossSalary`, `payGrade`, `officeLocation`, `employmentType`, `tinNumber`, `pensionNumber`.
+- **Validation Scenarios**:
+    - **Scenario A (Campus Admin)**: Send update with `officeLocation` and `grossSalary`.
+        - **Expectation**: `200 OK`. `officeLocation` is updated, but `grossSalary` is **silently stripped** (check response or GET).
+    - **Scenario B (University Admin)**: Send update with `grossSalary`.
+        - **Expectation**: `200 OK`. `grossSalary` is updated (Central HR oversight).
+    - **Scenario C (HR Officer)**: Send update with `position`.
+        - **Expectation**: `200 OK`.
+    - **Scenario D (Employee Self)**: Attempt update -> `403 Forbidden`.
+    - **Scenario E (Cross-Campus)**: Campus Admin 1 attempts to update Employee in Campus 2 -> `403 Forbidden`.
 
 ### 5.2 List Campus Users
 - **GET** `{{baseUrl}}/campuses/{{campusId}}/users`
@@ -161,13 +166,13 @@ Set up a Postman Environment with the following. The suite is designed to be **s
 
 ### 5.4 Update User Role
 - **PATCH** `{{baseUrl}}/users/{{targetEmployeeId}}/role`
-- **Auth**: `ADMIN` only.
+- **Auth**: `ADMIN` (Campus or University scope).
 - **Body**: `{ "role": "DEPARTMENT_HEAD" }`
 - **Note**: Cannot demote the last active admin on a campus.
 
 ### 5.5 Toggle User Status (Deactivate/Activate)
 - **PATCH** `{{baseUrl}}/users/{{targetEmployeeId}}/status`
-- **Auth**: `ADMIN` only.
+- **Auth**: `ADMIN` (Campus or University scope).
 - **Body**: `{ "isActive": false }`
 - **Note**: Cannot deactivate the last active admin.
 

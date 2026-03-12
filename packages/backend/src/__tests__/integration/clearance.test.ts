@@ -26,6 +26,18 @@ jest.mock('../../services/authorization.service', () => ({
     canApproveForUnit: jest.fn().mockResolvedValue(true)
 }));
 
+// Mock event bus
+jest.mock('../../services/eventBus.service', () => ({
+    dispatchEvent: jest.fn().mockResolvedValue(undefined),
+    SystemEventTypes: {
+        CLEARANCE_COMPLETED: 'CLEARANCE_COMPLETED',
+        CLEARANCE_UNIT_APPROVED: 'CLEARANCE_UNIT_APPROVED',
+        CLEARANCE_UNIT_REJECTED: 'CLEARANCE_UNIT_REJECTED'
+    }
+}));
+
+import { dispatchEvent, SystemEventTypes } from '../../services/eventBus.service';
+
 describe('Clearance Integration', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -183,6 +195,14 @@ describe('Clearance Integration', () => {
 
             prismaMock.clearanceCheck.count.mockResolvedValue(0); // 0 pending checks!
 
+            prismaMock.clearanceRequest.update.mockResolvedValue({
+                id: 100,
+                status: ClearanceStatus.APPROVED,
+                employee: { userId: 5, name: 'John Doe' }
+            } as any);
+
+            prismaMock.payrollTransfer.create.mockResolvedValue({} as any);
+
             prismaMock.$transaction.mockImplementation(async (callback: any) => await callback(prismaMock));
 
             const res = await request(app)
@@ -197,7 +217,7 @@ describe('Clearance Integration', () => {
                 where: { id: 100 },
                 data: { status: ClearanceStatus.APPROVED }
             }));
-            expect(prismaMock.payrollTransfer.create).toHaveBeenCalled();
+            expect(dispatchEvent).toHaveBeenCalledWith(SystemEventTypes.CLEARANCE_COMPLETED, expect.any(Object));
         });
     });
 });

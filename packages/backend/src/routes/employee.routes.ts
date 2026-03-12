@@ -105,6 +105,6 @@ router.get('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPA
  *       403:
  *         description: Forbidden
  */
-router.patch('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER]), validateBody(updateEmployeeSchema), employeeController.updateEmployee);
+router.patch('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER]), employeeController.updateEmployee);
 
 export default router;

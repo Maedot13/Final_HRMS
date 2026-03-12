@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import * as employeeService from '../services/employee.service';
-import { UserRole } from '@hrms/types';
+import { UserRole, UserScope } from '@hrms/types';
+import { operationalUpdateSchema, updateEmployeeSchema } from '../schemas/employee.schema';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 import { auditEmployeeUpdate, AuditAction } from '../utils/auditLog';
 import { assertSameCampus, assertCanWriteCampusResource } from '../lib/campusScope';
@@ -142,12 +143,26 @@ export const updateEmployee = async (req: Request, res: Response) => {
             );
         }
 
+        // Campus Admin vs Central HR Logic
+        let validatedData: any = {};
+        try {
+            if (user.scope === UserScope.UNIVERSITY) {
+                // Central HR can update financial & operational fields
+                validatedData = updateEmployeeSchema.parse(req.body);
+            } else {
+                // Campus Admin or self can ONLY update operational fields
+                validatedData = operationalUpdateSchema.parse(req.body);
+            }
+        } catch (validationError: any) {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid request data', validationError.errors, req);
+        }
+
         // Campus isolation: 
         // 1. Campus users can only update employees in their campus.
-        // 2. University Admins are RESTRICTED to read-only oversight for local data.
-        assertCanWriteCampusResource(req, employee.campusId);
+        // 2. University Admins are ALLOWED to write since they use financialUpdateSchema
+        assertCanWriteCampusResource(req, employee.campusId, { allowUniversity: true });
 
-        const updatedEmployee = await employeeService.updateEmployee(id, data);
+        const updatedEmployee = await employeeService.updateEmployee(id, validatedData);
 
         // Audit log (Diff tracking)
         // We log the fields that were requested to be changed

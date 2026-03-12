@@ -47,7 +47,15 @@ export const updateEmployee = async (id: number, data: Partial<Employee>): Promi
         hireDate,
         grossSalary,
         salaryType,
-        contactInfo
+        contactInfo,
+        officeLocation,
+        employmentStatus,
+        contractStartDate,
+        contractEndDate,
+        employmentType,
+        payGrade,
+        taxInformation,
+        supervisorId
     } = data;
 
     // Create a clean object with only the fields we want to update
@@ -63,6 +71,14 @@ export const updateEmployee = async (id: number, data: Partial<Employee>): Promi
     if (grossSalary !== undefined) safeUpdateData.grossSalary = grossSalary;
     if (salaryType !== undefined) safeUpdateData.salaryType = salaryType;
     if (contactInfo !== undefined) safeUpdateData.contactInfo = contactInfo;
+    if (officeLocation !== undefined) safeUpdateData.officeLocation = officeLocation;
+    if (employmentStatus !== undefined) safeUpdateData.employmentStatus = employmentStatus;
+    if (contractStartDate !== undefined) safeUpdateData.contractStartDate = contractStartDate;
+    if (contractEndDate !== undefined) safeUpdateData.contractEndDate = contractEndDate;
+    if (employmentType !== undefined) safeUpdateData.employmentType = employmentType;
+    if (payGrade !== undefined) safeUpdateData.payGrade = payGrade;
+    if (taxInformation !== undefined) safeUpdateData.taxInformation = taxInformation;
+    if (supervisorId !== undefined) safeUpdateData.supervisorId = supervisorId;
 
     const updatedEmployee = await prisma.employee.update({
         where: { id },

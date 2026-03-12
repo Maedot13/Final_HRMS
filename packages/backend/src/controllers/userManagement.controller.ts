@@ -54,7 +54,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
         if (!targetUser) {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'User not found', null, req);
         }
-        assertCanWriteCampusResource(req, targetUser.campusId);
+        assertCanWriteCampusResource(req, targetUser.campusId, { allowUniversity: true });
 
         const validation = updateUserRoleSchema.safeParse(req.body);
         if (!validation.success) {
@@ -103,7 +103,7 @@ export const toggleUserStatus = async (req: Request, res: Response) => {
         if (!targetUser) {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'User not found', null, req);
         }
-        assertCanWriteCampusResource(req, targetUser.campusId);
+        assertCanWriteCampusResource(req, targetUser.campusId, { allowUniversity: true });
 
         const validation = toggleUserStatusSchema.safeParse(req.body);
         if (!validation.success) {
@@ -145,7 +145,7 @@ export const resetPassword = async (req: Request, res: Response) => {
         if (!targetUser) {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'User not found', null, req);
         }
-        assertCanWriteCampusResource(req, targetUser.campusId);
+        assertCanWriteCampusResource(req, targetUser.campusId, { allowUniversity: true });
 
         const result = await userManagementService.resetUserPassword(id);
         sendSuccess(res, result);

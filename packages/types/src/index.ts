@@ -67,6 +67,17 @@ export enum SalaryType {
     CONTRACT = 'CONTRACT'
 }
 
+export enum EmploymentStatus {
+    ACTIVE = 'ACTIVE',
+    SUSPENDED = 'SUSPENDED',
+    TRANSFERRED = 'TRANSFERRED'
+}
+
+export enum EmploymentType {
+    PERMANENT = 'PERMANENT',
+    CONTRACT = 'CONTRACT'
+}
+
 // Employee Interface
 export interface Employee {
     id: number;
@@ -84,6 +95,14 @@ export interface Employee {
         address: string;
         emergencyContact: string;
     };
+    officeLocation?: string;
+    employmentStatus: EmploymentStatus;
+    contractStartDate?: string;
+    contractEndDate?: string;
+    employmentType: EmploymentType;
+    payGrade?: string;
+    taxInformation?: any;
+    supervisorId?: number;
 }
 
 // Leave Types

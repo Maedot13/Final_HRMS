@@ -73,11 +73,18 @@ export function assertSameCampus(req: Request, resourceCampusId: number | null |
  * UNIVERSITY-scoped admins are restricted to READ-ONLY oversight for local 
  * campus data (employees, local user roles, etc.) to maintain campus autonomy.
  */
-export function assertCanWriteCampusResource(req: Request, resourceCampusId: number | null | undefined): void {
+export function assertCanWriteCampusResource(
+  req: Request,
+  resourceCampusId: number | null | undefined,
+  options: { allowUniversity?: boolean } = {}
+): void {
   const ctx = getCampusScope(req);
 
-  // 1. If University Admin, block the write operation to local campus data.
+  // 1. If University Admin, block the write operation to local campus data UNLESS allowed
   if (ctx.scope === UserScope.UNIVERSITY) {
+    if (options.allowUniversity) {
+      return; // Central HR / Admin is allowed to write specific fields
+    }
     logger.warn('Campus isolation: University Admin blocked from writing to local campus resource', {
       userId: req.user?.userId,
       path: req.path,
