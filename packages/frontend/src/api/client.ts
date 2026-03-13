@@ -1,0 +1,66 @@
+import axios, { AxiosError } from 'axios';
+import { useAuthStore } from '../store/useAuthStore';
+
+const apiClient = axios.create({
+    baseURL: '/api/v1',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+});
+
+apiClient.interceptors.request.use(
+    (config) => {
+        const token = useAuthStore.getState().accessToken;
+        if (token && config.headers) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
+
+apiClient.interceptors.response.use(
+    (response) => response,
+    async (error: AxiosError) => {
+        const originalRequest = error.config;
+
+        // Handle 401 Unauthorized
+        if (error.response?.status === 401 && originalRequest && !(originalRequest as typeof originalRequest & { _retry?: boolean })._retry) {
+            (originalRequest as typeof originalRequest & { _retry?: boolean })._retry = true;
+            try {
+                const refreshToken = useAuthStore.getState().refreshToken;
+                if (refreshToken) {
+                    const res = await axios.post('/api/v1/auth/refresh', { refreshToken });
+                    const { accessToken, refreshToken: newRefreshToken } = res.data;
+
+                    useAuthStore.getState().setAuth(
+                        useAuthStore.getState().user!,
+                        accessToken,
+                        newRefreshToken
+                    );
+
+                    if (originalRequest.headers) {
+                        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+                    }
+                    return apiClient(originalRequest);
+                }
+            } catch (refreshError) {
+                useAuthStore.getState().logout();
+                window.location.href = '/login';
+                return Promise.reject(refreshError);
+            }
+        }
+
+        // Handle 403 Force Password Change
+        if (error.response?.status === 403) {
+            const data = error.response.data as { code?: string };
+            if (data?.code === 'PASSWORD_CHANGE_REQUIRED') {
+                window.location.href = '/force-password-change';
+            }
+        }
+
+        return Promise.reject(error);
+    }
+);
+
+export default apiClient;
