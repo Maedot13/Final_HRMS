@@ -3,6 +3,8 @@ import ComponentSandboxPage from '../pages/ComponentSandboxPage';
 import CampusesPage from '../pages/CampusesPage';
 import CampusDetailPage from '../pages/CampusDetailPage';
 import DepartmentsPage from '../pages/DepartmentsPage';
+import UsersPage from '../pages/UsersPage';
+import EmployeeDetailPage from '../pages/EmployeeDetailPage';
 import { AuthLayout } from '../layouts/AuthLayout';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { RequireAuth, RequireNoAuth } from './guards';
@@ -55,6 +57,14 @@ const router = createBrowserRouter([
             {
                 path: 'departments',
                 element: <DepartmentsPage />,
+            },
+            {
+                path: 'users',
+                element: <UsersPage />,
+            },
+            {
+                path: 'employees/:id',
+                element: <EmployeeDetailPage />,
             },
         ],
     },

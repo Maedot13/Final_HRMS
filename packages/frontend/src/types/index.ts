@@ -72,3 +72,77 @@ export interface CampusUser {
     role: string;
     employee?: { name: string; deptLegacy?: string };
 }
+
+/** User list item from GET /users */
+export interface UserListItem {
+    id: number;
+    employeeId: string;
+    email: string;
+    role: string;
+    isActive: boolean;
+    mustChangePassword?: boolean;
+    campusId?: number | null;
+    employee?: {
+        id: number;
+        name: string;
+        department?: string;
+        deptLegacy?: string;
+        position?: string;
+    };
+}
+
+/** Full user detail from GET /users/:id */
+export interface UserDetail extends Omit<UserListItem, 'employee'> {
+    employee?: EmployeeDetail | null;
+}
+
+/** Employee detail from GET /employees/:id */
+export interface EmployeeDetail {
+    id: number;
+    userId: number;
+    employeeId: string;
+    name: string;
+    deptLegacy?: string;
+    department?: string;
+    departmentId?: number | null;
+    position: string;
+    hireDate: string;
+    serviceYears?: number;
+    grossSalary?: number;
+    salaryType?: string;
+    contactInfo?: ContactInfo;
+    officeLocation?: string | null;
+    employmentStatus?: string;
+    contractStartDate?: string | null;
+    contractEndDate?: string | null;
+    employmentType?: string;
+    payGrade?: string | null;
+    taxInformation?: Record<string, unknown> | null;
+    supervisorId?: number | null;
+    user?: { role: string; isActive: boolean; createdAt?: string };
+    leaveBalances?: unknown[];
+}
+
+export interface ContactInfo {
+    phone?: string;
+    address?: string;
+    emergencyContact?: string | { name: string; relationship: string; phone: string };
+}
+
+/** Payload for PATCH /employees/:id */
+export interface EmployeeUpdatePayload {
+    name?: string;
+    departmentId?: number;
+    position?: string;
+    hireDate?: string;
+    grossSalary?: number;
+    salaryType?: string;
+    contactInfo?: ContactInfo;
+    officeLocation?: string;
+    employmentStatus?: string;
+    contractStartDate?: string;
+    contractEndDate?: string;
+    employmentType?: string;
+    payGrade?: string;
+    supervisorId?: number;
+}
