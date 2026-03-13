@@ -74,7 +74,7 @@ describe('Employee Update Rules', () => {
             );
         });
 
-        it('Campus Admin (CAMPUS scope) updating financial fields strips the financial fields', async () => {
+        it('Campus Admin (CAMPUS scope) updating financial fields returns a validation error', async () => {
             (tokenUtils.verifyToken as jest.Mock).mockReturnValue(campusAHR);
 
             const res = await request(app)
@@ -82,20 +82,9 @@ describe('Employee Update Rules', () => {
                 .set('Authorization', `Bearer ${validToken}`)
                 .send({ grossSalary: 90000, payGrade: 'A1', position: 'Manager' });
 
-            expect(res.status).toBe(200);
-
-            // Zod strip will ignore unknown fields, meaning the data object should be empty for financial
-            // but 'position' should still be updated since it's operational
-            expect(prismaMock.employee.update).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    data: expect.objectContaining({ position: 'Manager' })
-                })
-            );
-
-            // Verify grossSalary is not present in the update call
-            const updateCall = prismaMock.employee.update.mock.calls[0][0];
-            expect(updateCall.data).not.toHaveProperty('grossSalary');
-            expect(updateCall.data).not.toHaveProperty('payGrade');
+            expect(res.status).toBe(400);
+            expect(res.body.code).toBe('VALIDATION_ERROR');
+            expect(prismaMock.employee.update).not.toHaveBeenCalled();
         });
 
         it('Central HR (UNIVERSITY scope) updating financial fields succeeds', async () => {

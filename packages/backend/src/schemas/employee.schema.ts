@@ -18,7 +18,7 @@ export const operationalUpdateSchema = z.object({
     contractEndDate: z.string().datetime().optional(),
     employmentType: z.enum(['PERMANENT', 'CONTRACT']).optional(),
     supervisorId: z.number().int().positive().optional(),
-});
+}).strict();
 
 export const financialUpdateSchema = z.object({
     grossSalary: z.number().min(0).optional(),
