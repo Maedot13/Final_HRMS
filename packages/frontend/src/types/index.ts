@@ -34,7 +34,41 @@ export interface PaginatedResponse<T> {
 export interface ApiError {
     code: string;
     message: string;
-    details?: Record<string, unknown>;
+    details?: Record<string, unknown> | { fieldErrors?: Record<string, string[]>; formErrors?: string[] };
     timestamp?: string;
     requestId?: string;
+}
+
+export interface Campus {
+    id: number;
+    code: string;
+    name: string;
+    description?: string | null;
+    isActive: boolean;
+    timezone?: string | null;
+    employeeIdPrefix: string;
+    employeeNumericLength: number;
+    _count?: { users: number; employees: number };
+}
+
+export interface CampusReadiness {
+    isReady: boolean;
+    missingCampusRoles: string[];
+    deptsWithoutHead: string[];
+}
+
+export interface Department {
+    id: number;
+    name: string;
+    headEmployeeId?: number | null;
+    head?: { name: string; employeeId: string; position?: string } | null;
+    _count?: { employees: number };
+}
+
+export interface CampusUser {
+    id: number;
+    employeeId: string;
+    email: string;
+    role: string;
+    employee?: { name: string; deptLegacy?: string };
 }

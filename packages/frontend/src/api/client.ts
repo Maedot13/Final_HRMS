@@ -29,12 +29,13 @@ apiClient.interceptors.response.use(
             (originalRequest as typeof originalRequest & { _retry?: boolean })._retry = true;
             try {
                 const refreshToken = useAuthStore.getState().refreshToken;
-                if (refreshToken) {
+                const user = useAuthStore.getState().user;
+                if (refreshToken && user) {
                     const res = await axios.post('/api/v1/auth/refresh', { refreshToken });
                     const { accessToken, refreshToken: newRefreshToken } = res.data;
 
                     useAuthStore.getState().setAuth(
-                        useAuthStore.getState().user!,
+                        user,
                         accessToken,
                         newRefreshToken
                     );

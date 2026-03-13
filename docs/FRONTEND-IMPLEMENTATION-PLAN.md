@@ -144,9 +144,9 @@ The development effort is orchestrated across professional delivery phases to gu
 - **Backend Integration:** `GET/POST/PATCH` on `/campuses` and `/departments`, `GET /campuses/:id/readiness`.
 - **Dependencies:** Phase 3.
 - **Deliverables:** System-wide operational settings are configurable visually.
-- **Validation Checklist:** 
-  - [ ] Forms properly map and display `VALIDATION_ERROR` payloads from the server.
-  - [ ] Campus creation reflects correctly on table list refreshes.
+- **Validation Checklist:**
+  - [x] Forms properly map and display `VALIDATION_ERROR` payloads from the server.
+  - [x] Campus creation reflects correctly on table list refreshes.
 
 ### Phase 5: Workforce Directory & HR Profiles
 
