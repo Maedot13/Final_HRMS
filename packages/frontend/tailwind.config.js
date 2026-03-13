@@ -6,6 +6,12 @@ export default {
     ],
     theme: {
         extend: {
+            borderRadius: {
+                'card': '12px',
+                'input': '8px',
+                'button': '8px',
+                'badge': '6px',
+            },
             colors: {
                 primary: {
                     light: '#E8F6EE',

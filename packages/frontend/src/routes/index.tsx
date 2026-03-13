@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router-dom';
+import ComponentSandboxPage from '../pages/ComponentSandboxPage';
 
 const router = createBrowserRouter([
     {
@@ -12,6 +13,10 @@ const router = createBrowserRouter([
     {
         path: '/force-password-change',
         element: <div>Force Password Change Pending</div>,
+    },
+    {
+        path: '/sandbox',
+        element: <ComponentSandboxPage />,
     },
 ]);
 
