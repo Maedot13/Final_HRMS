@@ -9,9 +9,13 @@ import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { ProfileHeader } from '../components/shared/ProfileHeader';
 import { ContactInfoForm } from '../features/employee/ContactInfoForm';
+import { HrInfoEditForm } from '../features/employee/HrInfoEditForm';
+import { ContractEditForm } from '../features/employee/ContractEditForm';
 import { RoleManagerModal } from '../features/employee/RoleManagerModal';
 import { Badge } from '../components/ui/Badge';
 import { format } from 'date-fns';
+import { departmentApi } from '../api/departments';
+import { toast } from 'react-toastify';
 
 type TabId = 'basic' | 'contract' | 'job';
 
@@ -28,6 +32,8 @@ export default function EmployeeDetailPage() {
     const [activeTab, setActiveTab] = useState<TabId>('basic');
     const [roleModalOpen, setRoleModalOpen] = useState(false);
     const [contactEditMode, setContactEditMode] = useState(false);
+    const [hrEditMode, setHrEditMode] = useState(false);
+    const [contractEditMode, setContractEditMode] = useState(false);
     const [updateError, setUpdateError] = useState<ApiError | null>(null);
 
     const employeeId = id ? parseInt(id, 10) : NaN;
@@ -51,16 +57,35 @@ export default function EmployeeDetailPage() {
         enabled: !!employee?.userId && (user?.role === 'ADMIN' || user?.role === 'HR_OFFICER'),
     });
 
+    const { data: departments = [] } = useQuery({
+        queryKey: ['departments'],
+        queryFn: async () => {
+            const res = await departmentApi.list();
+            return Array.isArray(res.data) ? res.data : [];
+        },
+        enabled: user?.role === 'ADMIN' || user?.role === 'HR_OFFICER',
+    });
+
     const updateMutation = useMutation({
-        mutationFn: (data: { contactInfo?: ContactInfo }) =>
-            employeesApi.update(employeeId, data),
+        mutationFn: (data: Partial<EmployeeDetail>) => {
+            const payload: import('../types').EmployeeUpdatePayload = { ...data } as import('../types').EmployeeUpdatePayload;
+            if (payload.departmentId === null) {
+                payload.departmentId = undefined;
+            }
+            return employeesApi.update(employeeId, payload);
+        },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['employee', employeeId] });
             setContactEditMode(false);
+            setHrEditMode(false);
+            setContractEditMode(false);
             setUpdateError(null);
+            toast.success('Employee updated successfully');
         },
         onError: (err: { response?: { data?: ApiError } }) => {
-            setUpdateError(err.response?.data ?? { code: 'ERROR', message: 'Update failed' });
+            const error = err.response?.data ?? { code: 'ERROR', message: 'Update failed' };
+            setUpdateError(error);
+            toast.error(error.message);
         },
     });
 
@@ -99,6 +124,14 @@ export default function EmployeeDetailPage() {
         await updateMutation.mutateAsync({ contactInfo: data });
     };
 
+    const handleHrSubmit = async (data: Partial<EmployeeDetail>) => {
+        await updateMutation.mutateAsync(data);
+    };
+
+    const handleContractSubmit = async (data: Partial<EmployeeDetail>) => {
+        await updateMutation.mutateAsync(data);
+    };
+
     if (isNaN(employeeId)) {
         return (
             <div className="rounded-card border border-warning bg-amber-50 p-6 text-center">
@@ -127,10 +160,10 @@ export default function EmployeeDetailPage() {
                     user={
                         userDetail
                             ? {
-                                  role: userDetail.role,
-                                  isActive: userDetail.isActive,
-                                  email: userDetail.email,
-                              }
+                                role: userDetail.role,
+                                isActive: userDetail.isActive,
+                                email: userDetail.email,
+                            }
                             : null
                     }
                     showRole={canEdit}
@@ -155,11 +188,10 @@ export default function EmployeeDetailPage() {
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
-                            className={`border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
-                                activeTab === tab.id
-                                    ? 'border-primary text-primary'
-                                    : 'border-transparent text-text-secondary hover:border-gray-300 hover:text-text-primary'
-                            }`}
+                            className={`border-b-2 px-1 py-3 text-sm font-medium transition-colors ${activeTab === tab.id
+                                ? 'border-primary text-primary'
+                                : 'border-transparent text-text-secondary hover:border-gray-300 hover:text-text-primary'
+                                }`}
                         >
                             {tab.label}
                         </button>
@@ -211,15 +243,15 @@ export default function EmployeeDetailPage() {
                                     <p>
                                         <span className="text-text-secondary">Emergency:</span>{' '}
                                         {typeof (contactInfo as ContactInfo).emergencyContact ===
-                                        'object' &&
-                                        (contactInfo as ContactInfo).emergencyContact !== null
+                                            'object' &&
+                                            (contactInfo as ContactInfo).emergencyContact !== null
                                             ? (() => {
-                                                  const ec = (contactInfo as ContactInfo)
-                                                      .emergencyContact as Record<string, string>;
-                                                  return [ec?.name, ec?.relationship, ec?.phone]
-                                                      .filter(Boolean)
-                                                      .join(' · ') || '—';
-                                              })()
+                                                const ec = (contactInfo as ContactInfo)
+                                                    .emergencyContact as Record<string, string>;
+                                                return [ec?.name, ec?.relationship, ec?.phone]
+                                                    .filter(Boolean)
+                                                    .join(' · ') || '—';
+                                            })()
                                             : String((contactInfo as ContactInfo).emergencyContact)}
                                     </p>
                                 )}
@@ -230,110 +262,169 @@ export default function EmployeeDetailPage() {
             )}
 
             {activeTab === 'contract' && (
-                <Card>
-                    <CardHeader title="Contract details" />
-                    <dl className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Employment status
-                            </dt>
-                            <dd className="mt-0.5">
-                                <Badge variant="neutral">
-                                    {employee.employmentStatus ?? '—'}
-                                </Badge>
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Employment type
-                            </dt>
-                            <dd className="mt-0.5">{employee.employmentType ?? '—'}</dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Contract start
-                            </dt>
-                            <dd className="mt-0.5">
-                                {employee.contractStartDate
-                                    ? format(
-                                          new Date(employee.contractStartDate),
-                                          'MMM d, yyyy'
-                                      )
-                                    : '—'}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Contract end
-                            </dt>
-                            <dd className="mt-0.5">
-                                {employee.contractEndDate
-                                    ? format(
-                                          new Date(employee.contractEndDate),
-                                          'MMM d, yyyy'
-                                      )
-                                    : '—'}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Gross salary
-                            </dt>
-                            <dd className="mt-0.5">
-                                {employee.grossSalary != null
-                                    ? new Intl.NumberFormat('en-US', {
-                                          style: 'currency',
-                                          currency: 'ETB',
-                                      }).format(employee.grossSalary)
-                                    : '—'}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Salary type
-                            </dt>
-                            <dd className="mt-0.5">{employee.salaryType ?? '—'}</dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Pay grade
-                            </dt>
-                            <dd className="mt-0.5">{employee.payGrade ?? '—'}</dd>
-                        </div>
-                    </dl>
-                </Card>
+                <div className="space-y-4">
+                    <Card>
+                        <CardHeader
+                            title="Contract details"
+                            action={
+                                canEdit &&
+                                !contractEditMode && (
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => setContractEditMode(true)}
+                                    >
+                                        Edit
+                                    </Button>
+                                )
+                            }
+                        />
+                        {contractEditMode ? (
+                            <ContractEditForm
+                                employee={employee as EmployeeDetail}
+                                onSubmit={handleContractSubmit}
+                                onCancel={() => {
+                                    setContractEditMode(false);
+                                    setUpdateError(null);
+                                }}
+                                apiError={updateError}
+                                isSubmitting={updateMutation.isPending}
+                            />
+                        ) : (
+                            <dl className="grid gap-4 sm:grid-cols-2 p-6 pt-0">
+                                <div>
+                                    <dt className="text-xs font-medium text-text-secondary">
+                                        Employment status
+                                    </dt>
+                                    <dd className="mt-0.5">
+                                        <Badge variant="neutral">
+                                            {employee.employmentStatus ?? '—'}
+                                        </Badge>
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs font-medium text-text-secondary">
+                                        Employment type
+                                    </dt>
+                                    <dd className="mt-0.5">{employee.employmentType ?? '—'}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs font-medium text-text-secondary">
+                                        Contract start
+                                    </dt>
+                                    <dd className="mt-0.5">
+                                        {employee.contractStartDate
+                                            ? format(
+                                                new Date(employee.contractStartDate),
+                                                'MMM d, yyyy'
+                                            )
+                                            : '—'}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs font-medium text-text-secondary">
+                                        Contract end
+                                    </dt>
+                                    <dd className="mt-0.5">
+                                        {employee.contractEndDate
+                                            ? format(
+                                                new Date(employee.contractEndDate),
+                                                'MMM d, yyyy'
+                                            )
+                                            : '—'}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs font-medium text-text-secondary">
+                                        Gross salary
+                                    </dt>
+                                    <dd className="mt-0.5">
+                                        {employee.grossSalary != null
+                                            ? new Intl.NumberFormat('en-US', {
+                                                style: 'currency',
+                                                currency: 'ETB',
+                                            }).format(employee.grossSalary)
+                                            : '—'}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs font-medium text-text-secondary">
+                                        Salary type
+                                    </dt>
+                                    <dd className="mt-0.5">{employee.salaryType ?? '—'}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs font-medium text-text-secondary">
+                                        Pay grade
+                                    </dt>
+                                    <dd className="mt-0.5">{employee.payGrade ?? '—'}</dd>
+                                </div>
+                            </dl>
+                        )}
+                    </Card>
+                </div>
             )}
 
             {activeTab === 'job' && (
-                <Card>
-                    <CardHeader title="Job information" />
-                    <dl className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">Position</dt>
-                            <dd className="mt-0.5">{employee.position ?? '—'}</dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">Department</dt>
-                            <dd className="mt-0.5">
-                                {employee.deptLegacy ?? employee.department ?? '—'}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">Hire date</dt>
-                            <dd className="mt-0.5">
-                                {employee.hireDate
-                                    ? format(new Date(employee.hireDate), 'MMM d, yyyy')
-                                    : '—'}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Office location
-                            </dt>
-                            <dd className="mt-0.5">{employee.officeLocation ?? '—'}</dd>
-                        </div>
-                    </dl>
-                </Card>
+                <div className="space-y-4">
+                    <Card>
+                        <CardHeader
+                            title="Job information"
+                            action={
+                                canEdit &&
+                                !hrEditMode && (
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => setHrEditMode(true)}
+                                    >
+                                        Edit
+                                    </Button>
+                                )
+                            }
+                        />
+                        {hrEditMode ? (
+                            <HrInfoEditForm
+                                employee={employee as EmployeeDetail}
+                                departments={departments}
+                                onSubmit={handleHrSubmit}
+                                onCancel={() => {
+                                    setHrEditMode(false);
+                                    setUpdateError(null);
+                                }}
+                                apiError={updateError}
+                                isSubmitting={updateMutation.isPending}
+                            />
+                        ) : (
+                            <dl className="grid gap-4 sm:grid-cols-2 p-6 pt-0">
+                                <div>
+                                    <dt className="text-xs font-medium text-text-secondary">Position</dt>
+                                    <dd className="mt-0.5">{employee.position ?? '—'}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs font-medium text-text-secondary">Department</dt>
+                                    <dd className="mt-0.5">
+                                        {employee.deptLegacy ?? employee.department ?? '—'}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs font-medium text-text-secondary">Hire date</dt>
+                                    <dd className="mt-0.5">
+                                        {employee.hireDate
+                                            ? format(new Date(employee.hireDate), 'MMM d, yyyy')
+                                            : '—'}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs font-medium text-text-secondary">
+                                        Office location
+                                    </dt>
+                                    <dd className="mt-0.5">{employee.officeLocation ?? '—'}</dd>
+                                </div>
+                            </dl>
+                        )}
+                    </Card>
+                </div>
             )}
 
             {canManageRoles && employee.userId && userDetail && (

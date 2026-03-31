@@ -64,8 +64,9 @@ export function ChangePasswordForm() {
             setTimeout(() => {
                 navigate('/', { replace: true });
             }, 800);
-        } catch (error: any) {
-            const apiError = error.response?.data as ApiError | undefined;
+        } catch (error: unknown) {
+            const err = error as { response?: { data?: ApiError } };
+            const apiError = err.response?.data;
             if (apiError?.message) {
                 setFormError(apiError.message);
             } else {

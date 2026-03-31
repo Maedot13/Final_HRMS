@@ -7,6 +7,16 @@ jest.mock('./prisma', () => ({
     prisma: mockDeep<PrismaClient>(),
 }));
 
+jest.mock('bullmq', () => ({
+    Queue: jest.fn().mockImplementation(() => ({
+        add: jest.fn().mockResolvedValue({ id: 'mock-job-id' }),
+    })),
+    Worker: jest.fn().mockImplementation(() => ({
+        on: jest.fn(),
+        close: jest.fn().mockResolvedValue(true),
+    })),
+}));
+
 export const prismaMock = prisma as unknown as DeepMockProxy<PrismaClient>;
 
 beforeEach(() => {

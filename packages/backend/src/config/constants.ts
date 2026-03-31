@@ -32,7 +32,7 @@ export const RATE_LIMITS = {
     },
     AUTH: {
         WINDOW_MS: 15 * 60 * 1000 as number,
-        // 50 in development (frequent logins during testing), 20 in production
-        MAX_REQUESTS: process.env.NODE_ENV === 'production' ? 20 : 50 as number,
+        // 5 in test, 50 in development (frequent logins during testing), 20 in production
+        MAX_REQUESTS: process.env.NODE_ENV === 'test' ? 5 : (process.env.NODE_ENV === 'production' ? 20 : 50) as number,
     },
 };

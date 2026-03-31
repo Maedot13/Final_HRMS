@@ -21,14 +21,7 @@ const variantStyles: Record<BadgeVariant, string> = {
     purple: 'bg-purple-light text-purple border-purple/30',
 };
 
-/** Maps API status strings to Badge variants for consistency */
-export function statusToVariant(status: string): StatusVariant {
-    const s = status?.toUpperCase() ?? '';
-    if (s === 'PENDING') return 'pending';
-    if (s === 'APPROVED') return 'approved';
-    if (s === 'REJECTED') return 'rejected';
-    return 'info';
-}
+
 
 export function Badge({
     variant = 'neutral',

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'react-toastify';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Select, type SelectOption } from '../../components/ui/Select';
@@ -38,20 +39,19 @@ export function RoleManagerModal({
     const [roleLoading, setRoleLoading] = useState(false);
     const [statusLoading, setStatusLoading] = useState(false);
     const [pwdLoading, setPwdLoading] = useState(false);
-    const [roleError, setRoleError] = useState<string | null>(null);
 
     const handleRoleSubmit = async () => {
         if (role === currentRole) return;
-        setRoleError(null);
         setRoleLoading(true);
         try {
             await onUpdateRole(role);
+            toast.success('Role updated successfully');
             onClose();
         } catch (err: unknown) {
             const msg = err && typeof err === 'object' && 'response' in err
                 ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
-                : 'Failed to update role';
-            setRoleError(msg ?? 'Failed to update role');
+                : undefined;
+            toast.error(msg ?? 'Failed to update role');
         } finally {
             setRoleLoading(false);
         }
@@ -61,7 +61,10 @@ export function RoleManagerModal({
         setStatusLoading(true);
         try {
             await onToggleStatus(!isActive);
+            toast.success(`Account ${isActive ? 'deactivated' : 'activated'} successfully`);
             onClose();
+        } catch {
+            toast.error('Failed to update account status');
         } finally {
             setStatusLoading(false);
         }
@@ -71,7 +74,10 @@ export function RoleManagerModal({
         setPwdLoading(true);
         try {
             await onResetPassword();
+            toast.success('Temporary password sent via email');
             onClose();
+        } catch {
+            toast.error('Failed to reset password');
         } finally {
             setPwdLoading(false);
         }
@@ -89,9 +95,6 @@ export function RoleManagerModal({
                             onChange={(e) => setRole(e.target.value)}
                         />
                     </FormField>
-                    {roleError && (
-                        <p className="mt-1 text-sm text-danger">{roleError}</p>
-                    )}
                     <Button
                         size="sm"
                         className="mt-2"

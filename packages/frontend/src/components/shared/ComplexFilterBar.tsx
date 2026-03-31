@@ -21,25 +21,36 @@ export interface FilterState {
     search: string;
     role: string;
     status: string;
+    department?: string;
 }
 
 interface ComplexFilterBarProps {
     filters: FilterState;
     onFiltersChange: (filters: FilterState) => void;
     searchPlaceholder?: string;
+    departments?: { id: number; name: string }[];
 }
 
 export function ComplexFilterBar({
     filters,
     onFiltersChange,
     searchPlaceholder = 'Search by name, email, or employee ID...',
+    departments,
 }: ComplexFilterBarProps) {
     const setFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
         onFiltersChange({ ...filters, [key]: value });
     };
 
+    const deptOptions: SelectOption[] = [
+        { value: '', label: 'All departments' },
+        ...(departments?.map((d) => ({
+            value: String(d.id),
+            label: d.name,
+        })) ?? []),
+    ];
+
     return (
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:gap-4">
             <div className="min-w-0 flex-1">
                 <Input
                     placeholder={searchPlaceholder}
@@ -48,8 +59,18 @@ export function ComplexFilterBar({
                     className="w-full"
                 />
             </div>
-            <div className="flex flex-wrap gap-4 sm:flex-nowrap">
-                <div className="w-full sm:w-40">
+            <div className="flex flex-wrap gap-4 md:flex-nowrap">
+                {departments && (
+                    <div className="w-full md:w-48">
+                        <Select
+                            options={deptOptions}
+                            value={filters.department ?? ''}
+                            onChange={(e) => setFilter('department', e.target.value)}
+                            placeholder="Department"
+                        />
+                    </div>
+                )}
+                <div className="w-full md:w-40">
                     <Select
                         options={ROLE_OPTIONS}
                         value={filters.role}
@@ -57,7 +78,7 @@ export function ComplexFilterBar({
                         placeholder="Role"
                     />
                 </div>
-                <div className="w-full sm:w-40">
+                <div className="w-full md:w-36">
                     <Select
                         options={STATUS_OPTIONS}
                         value={filters.status}

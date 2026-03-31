@@ -10,6 +10,7 @@ import { DashboardLayout } from '../layouts/DashboardLayout';
 import { RequireAuth, RequireNoAuth } from './guards';
 import { LoginForm } from '../features/auth/LoginForm';
 import { ChangePasswordForm } from '../features/auth/ChangePasswordForm';
+import ProfilePage from '../pages/ProfilePage';
 
 const router = createBrowserRouter([
     {
@@ -65,6 +66,10 @@ const router = createBrowserRouter([
             {
                 path: 'employees/:id',
                 element: <EmployeeDetailPage />,
+            },
+            {
+                path: 'profile',
+                element: <ProfilePage />,
             },
         ],
     },

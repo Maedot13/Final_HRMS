@@ -50,6 +50,10 @@ const navItems: NavItem[] = [
         to: '/jobs',
         roles: ['ADMIN', 'HR_OFFICER', 'RECRUITMENT_COMMITTEE'],
     },
+    {
+        label: 'My Profile',
+        to: '/profile',
+    },
 ];
 
 export function Sidebar() {

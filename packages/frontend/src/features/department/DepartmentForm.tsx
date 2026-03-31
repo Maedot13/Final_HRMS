@@ -1,4 +1,4 @@
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from '../../utils/validation';
 import { Card } from '../../components/ui/Card';
@@ -39,7 +39,7 @@ export function DepartmentForm({
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -49,7 +49,7 @@ export function DepartmentForm({
     },
   });
 
-  const headEmployeeId = watch('headEmployeeId');
+  const headEmployeeId = useWatch({ control, name: 'headEmployeeId' });
 
   const getError = (field: string) =>
     (errors as Record<string, { message?: string }>)[field]?.message ?? fieldErrors[field];
@@ -69,7 +69,7 @@ export function DepartmentForm({
             {apiError.message}
           </div>
         )}
-        <FormField label="Name" htmlFor="name" required error={getError('name') ? { message: getError('name')!} : undefined}>
+        <FormField label="Name" htmlFor="name" required error={getError('name') ? { message: getError('name')! } : undefined}>
           <Input id="name" placeholder="e.g. Engineering" {...register('name')} />
         </FormField>
         <UserSearchSelect

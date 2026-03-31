@@ -1,4 +1,4 @@
-export { Badge, statusToVariant } from './Badge';
+export { Badge } from './Badge';
 export type { BadgeVariant, StatusVariant } from './Badge';
 export { Button } from './Button';
 export { Card, CardHeader } from './Card';
