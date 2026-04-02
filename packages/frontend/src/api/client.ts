@@ -6,14 +6,42 @@ const apiClient = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
+    withCredentials: true,
 });
 
+let csrfToken: string | null = null;
+let csrfTokenPromise: Promise<string> | null = null;
+
+const getCsrfToken = async () => {
+    if (csrfToken) return csrfToken;
+    if (csrfTokenPromise) return csrfTokenPromise;
+
+    csrfTokenPromise = axios.get('/api/v1/csrf-token', { withCredentials: true }).then(res => {
+        csrfToken = res.data.csrfToken;
+        return csrfToken as string;
+    }).finally(() => {
+        csrfTokenPromise = null;
+    });
+
+    return csrfTokenPromise;
+};
+
 apiClient.interceptors.request.use(
-    (config) => {
+    async (config) => {
         const token = useAuthStore.getState().accessToken;
         if (token && config.headers) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+
+        const isMutation = ['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase() || '');
+        if (isMutation) {
+            const token = await getCsrfToken();
+            if (token && config.headers) {
+                config.headers['X-CSRF-Token'] = token;
+                config.headers['csrf-token'] = token;
+            }
+        }
+
         return config;
     },
     (error) => Promise.reject(error)
@@ -32,7 +60,7 @@ apiClient.interceptors.response.use(
                 const user = useAuthStore.getState().user;
                 if (refreshToken && user) {
                     const res = await axios.post('/api/v1/auth/refresh', { refreshToken });
-                    const { accessToken, refreshToken: newRefreshToken } = res.data;
+                    const { token: accessToken, refreshToken: newRefreshToken } = res.data;
 
                     useAuthStore.getState().setAuth(
                         user,

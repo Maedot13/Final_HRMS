@@ -19,7 +19,7 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 interface LoginResponse {
-    accessToken: string;
+    token: string;
     refreshToken: string;
     user: User;
 }
@@ -51,7 +51,7 @@ export function LoginForm() {
         setFormError(null);
         try {
             const response = await apiClient.post<LoginResponse>('/auth/login', values);
-            const { accessToken, refreshToken, user } = response.data;
+            const { token: accessToken, refreshToken, user } = response.data;
 
             setAuth(user, accessToken, refreshToken);
 
