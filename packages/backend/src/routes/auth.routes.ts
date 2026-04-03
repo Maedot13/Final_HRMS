@@ -61,7 +61,7 @@ const router = Router();
  *       403:
  *         description: Forbidden (insufficient permissions)
  */
-router.post('/register', authenticate, authorize([UserRole.ADMIN, UserRole.HR_OFFICER]), authController.register);
+router.post('/register', authenticate, authorize([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.HR_OFFICER]), authController.register);
 
 /**
  * @swagger

@@ -47,6 +47,29 @@ import { initiateClearanceSchema, approveCheckSchema, rejectCheckSchema } from '
  *       400:
  *         description: Validation error or active clearance exists
  */
+/**
+ * @swagger
+ * /api/v1/clearance/requests:
+ *   get:
+ *     summary: List clearance requests
+ *     tags: [Clearance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [PENDING, APPROVED, REJECTED, ALL]
+ *     responses:
+ *       200:
+ *         description: List of clearance requests
+ */
+router.get('/requests',
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]),
+    clearanceController.listClearanceRequests
+);
+
 router.post('/requests', validateBody(initiateClearanceSchema), clearanceController.initiateClearance);
 
 /**

@@ -27,8 +27,10 @@ export const verifyToken = (token: string): TokenPayload => {
     }
 };
 
+import crypto from 'crypto';
+
 export const generateRefreshToken = (payload: TokenPayload): string => {
-    return jwt.sign(payload, env.JWT_REFRESH_SECRET, {
+    return jwt.sign({ ...payload, jti: crypto.randomUUID() }, env.JWT_REFRESH_SECRET, {
         expiresIn: env.JWT_REFRESH_EXPIRES_IN as jwt.SignOptions['expiresIn'],
     });
 };

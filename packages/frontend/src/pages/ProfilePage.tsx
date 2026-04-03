@@ -11,13 +11,17 @@ import { Badge } from '../components/ui/Badge';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 
-type TabId = 'basic' | 'contract' | 'job';
+import { leaveApi } from '../api/leave';
+
+type TabId = 'basic' | 'contract' | 'job' | 'leave';
 
 const tabs: { id: TabId; label: string }[] = [
     { id: 'basic', label: 'Basic Info' },
     { id: 'contract', label: 'Contract' },
     { id: 'job', label: 'Job Info' },
+    { id: 'leave', label: 'Leave Balance' },
 ];
+
 
 export default function ProfilePage() {
     const queryClient = useQueryClient();
@@ -37,6 +41,17 @@ export default function ProfilePage() {
         },
         enabled: !!employeeId,
     });
+
+    const { data: balances } = useQuery({
+        queryKey: ['leaveBalances', employeeId],
+        queryFn: async () => {
+            if (!employeeId) return null;
+            const res = await leaveApi.getBalances(employeeId);
+            return res.data;
+        },
+        enabled: !!employeeId,
+    });
+
 
     const updateMutation = useMutation({
         mutationFn: (data: { contactInfo?: ContactInfo }) =>
@@ -272,6 +287,39 @@ export default function ProfilePage() {
                     </dl>
                 </Card>
             )}
+            {activeTab === 'leave' && (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <Card padding="md">
+                        <div className="text-center">
+                            <p className="text-xs font-medium text-text-secondary uppercase tracking-wider">Annual Leave</p>
+                            <p className="mt-2 text-3xl font-bold text-primary">{balances?.annualBalance ?? 0}</p>
+                            <p className="mt-1 text-xs text-text-secondary italic underline decoration-dotted">days remaining</p>
+                        </div>
+                    </Card>
+                    <Card padding="md">
+                        <div className="text-center">
+                            <p className="text-xs font-medium text-text-secondary uppercase tracking-wider">Sick Leave</p>
+                            <p className="mt-2 text-3xl font-bold text-orange-600">{balances?.sickBalance ?? 0}</p>
+                            <p className="mt-1 text-xs text-text-secondary italic underline decoration-dotted">days remaining</p>
+                        </div>
+                    </Card>
+                    <Card padding="md">
+                        <div className="text-center">
+                            <p className="text-xs font-medium text-text-secondary uppercase tracking-wider">Maternity</p>
+                            <p className="mt-2 text-3xl font-bold text-pink-600">{balances?.maternityBalance ?? 0}</p>
+                            <p className="mt-1 text-xs text-text-secondary italic underline decoration-dotted">days remaining</p>
+                        </div>
+                    </Card>
+                    <Card padding="md">
+                        <div className="text-center">
+                            <p className="text-xs font-medium text-text-secondary uppercase tracking-wider">Paternity</p>
+                            <p className="mt-2 text-3xl font-bold text-blue-600">{balances?.paternityBalance ?? 0}</p>
+                            <p className="mt-1 text-xs text-text-secondary italic underline decoration-dotted">days remaining</p>
+                        </div>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 }
+

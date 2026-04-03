@@ -305,3 +305,29 @@ export const rejectRequest = async (
 
     return updatedRequest;
 };
+
+export const getLeaveRequestById = async (id: number) => {
+    return prisma.leaveRequest.findUnique({
+        where: { id },
+        include: { 
+            employee: { 
+                select: { 
+                    name: true, 
+                    deptLegacy: true, 
+                    employeeId: true 
+                } 
+            } 
+        }
+    });
+};
+
+export const getLeaveBalances = async (employeeId: number, year: number) => {
+    return prisma.leaveBalance.findUnique({
+        where: {
+            employeeId_year: {
+                employeeId,
+                year
+            }
+        }
+    });
+};

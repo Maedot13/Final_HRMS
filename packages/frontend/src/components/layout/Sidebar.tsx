@@ -1,5 +1,18 @@
 import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore';
+import {
+    FiGrid,
+    FiMapPin,
+    FiLayers,
+    FiUsers,
+    FiCalendar,
+    FiCheckSquare,
+    FiBriefcase,
+    FiFileText,
+    FiSettings,
+    FiUser,
+    FiPhone,
+} from 'react-icons/fi';
 
 type Role =
     | 'ADMIN'
@@ -13,46 +26,72 @@ interface NavItem {
     label: string;
     to: string;
     roles?: Role[];
+    icon: React.ReactNode;
 }
 
 const navItems: NavItem[] = [
     {
         label: 'Dashboard',
         to: '/',
+        icon: <FiGrid className="w-4 h-4" />,
     },
     {
         label: 'Campuses',
         to: '/campuses',
         roles: ['ADMIN'],
+        icon: <FiMapPin className="w-4 h-4" />,
     },
     {
         label: 'Departments',
         to: '/departments',
         roles: ['ADMIN', 'HR_OFFICER'],
+        icon: <FiLayers className="w-4 h-4" />,
     },
     {
         label: 'Employees',
         to: '/users',
         roles: ['ADMIN', 'HR_OFFICER', 'DEPARTMENT_HEAD'],
+        icon: <FiUsers className="w-4 h-4" />,
     },
     {
         label: 'Leave',
         to: '/leave',
         roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR_OFFICER'],
+        icon: <FiCalendar className="w-4 h-4" />,
     },
     {
         label: 'Clearance',
         to: '/clearance',
         roles: ['ADMIN', 'HR_OFFICER'],
+        icon: <FiCheckSquare className="w-4 h-4" />,
     },
     {
         label: 'Jobs',
         to: '/jobs',
         roles: ['ADMIN', 'HR_OFFICER', 'RECRUITMENT_COMMITTEE'],
+        icon: <FiBriefcase className="w-4 h-4" />,
+    },
+    {
+        label: 'Audit Logs',
+        to: '/audit-logs',
+        roles: ['ADMIN', 'HR_OFFICER'],
+        icon: <FiFileText className="w-4 h-4" />,
+    },
+    {
+        label: 'Settings',
+        to: '/settings',
+        roles: ['ADMIN'],
+        icon: <FiSettings className="w-4 h-4" />,
+    },
+    {
+        label: 'Contacts',
+        to: '/contacts',
+        icon: <FiPhone className="w-4 h-4" />,
     },
     {
         label: 'My Profile',
         to: '/profile',
+        icon: <FiUser className="w-4 h-4" />,
     },
 ];
 
@@ -78,13 +117,14 @@ export function Sidebar() {
                                 end={item.to === '/'}
                                 className={({ isActive }) =>
                                     [
-                                        'flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                                        'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors',
                                         isActive
                                             ? 'bg-primary text-white'
                                             : 'text-text-secondary hover:bg-gray-100 hover:text-text-primary',
                                     ].join(' ')
                                 }
                             >
+                                {item.icon}
                                 {item.label}
                             </NavLink>
                         </li>

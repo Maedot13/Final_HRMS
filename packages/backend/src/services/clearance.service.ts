@@ -110,6 +110,33 @@ export const initiateClearance = async (employeeId: number, reason: string, last
     return clearance;
 };
 
+// 1b. List Clearance Requests (with optional status filter and campus isolation)
+export const listClearanceRequests = async (params: { status?: string; campusId?: number; limit?: number; offset?: number }) => {
+    const where: any = {};
+    if (params.status && params.status !== 'ALL') {
+        where.status = params.status;
+    }
+    if (params.campusId != null) {
+        where.campusId = params.campusId;
+    }
+
+    const [data, total] = await Promise.all([
+        prisma.clearanceRequest.findMany({
+            where,
+            include: {
+                employee: { select: { employeeId: true, name: true, deptLegacy: true } },
+                checks: { include: { unit: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: params.limit || 50,
+            skip: params.offset || 0,
+        }),
+        prisma.clearanceRequest.count({ where }),
+    ]);
+
+    return { data, total };
+};
+
 // 2. Get Clearance Details
 export const getClearance = async (id: number) => {
     return prisma.clearanceRequest.findUnique({
@@ -216,6 +243,25 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
                 employeeUserId: clearanceWithEmployee.employee.userId,
                 unitName: unit?.name || 'Unknown'
             });
+
+            // PROACTIVE: If only HR is left, notify HR specifically for "Final Sign-off"
+            if (pendingChecks === 1) {
+                const finalCheck = await tx.clearanceCheck.findFirst({
+                    where: { clearanceId, status: ClearanceStatus.PENDING },
+                    include: { unit: true }
+                });
+
+                if (finalCheck?.unit?.name.toUpperCase() === 'HR') {
+                    await notifyRole('HR_OFFICER', {
+                        type: 'CLEARANCE_FINAL_SIGN_OFF',
+                        title: 'Final Clearance Sign-off Required',
+                        message: `All units except HR have approved ${clearanceWithEmployee.employee.name}'s clearance. Final HR action is now required to complete the process.`,
+                        relatedId: clearanceId,
+                        relatedType: 'CLEARANCE_REQUEST',
+                        campusId: approverCampusId
+                    });
+                }
+            }
         }
 
         return { status: 'PROGRESS', message: 'Unit approved, others pending' };

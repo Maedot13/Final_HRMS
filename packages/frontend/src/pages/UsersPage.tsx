@@ -13,6 +13,7 @@ import {
 } from '../components/shared/ComplexFilterBar';
 import { useAuthStore } from '../store/useAuthStore';
 import { RoleManagerModal } from '../features/employee/RoleManagerModal';
+import { CreateEmployeeModal } from '../features/employee/CreateEmployeeModal';
 import { departmentApi } from '../api/departments';
 import { useQuery } from '@tanstack/react-query';
 
@@ -33,6 +34,7 @@ export default function UsersPage() {
     const queryClient = useQueryClient();
 
     const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
     const { data: departments } = useQuery({
         queryKey: ['departments'],
@@ -61,7 +63,7 @@ export default function UsersPage() {
             return res.data;
         },
         initialPageParam: undefined as string | undefined,
-        getNextPageParam: (lastPage) => lastPage.pagination.nextCursor,
+        getNextPageParam: (lastPage) => lastPage?.pagination?.nextCursor,
     });
 
     const updateRoleMutation = useMutation({
@@ -114,8 +116,12 @@ export default function UsersPage() {
             {
                 key: 'department',
                 header: 'Department',
-                render: (r) =>
-                    r.employee?.department ?? (r.employee as { deptLegacy?: string })?.deptLegacy ?? '—',
+                render: (r) => {
+                    const dept = r.employee?.department;
+                    const deptName = typeof dept === 'object' && dept !== null ? (dept as any).name : dept;
+                    const legacy = (r.employee as { deptLegacy?: string })?.deptLegacy;
+                    return deptName || legacy || '—';
+                },
             },
             {
                 key: 'role',
@@ -161,6 +167,13 @@ export default function UsersPage() {
                 <CardHeader
                     title="Workforce directory"
                     subtitle="View and manage employees across your campus"
+                    action={
+                        (user?.role === 'ADMIN' || user?.role === 'HR_OFFICER') ? (
+                            <Button variant="primary" onClick={() => setIsCreateModalOpen(true)}>
+                                + Add Employee
+                            </Button>
+                        ) : undefined
+                    }
                 />
             </Card>
             <div className="rounded-card border border-[#E5E7EB] bg-white p-4 shadow-card">
@@ -199,6 +212,12 @@ export default function UsersPage() {
                     onResetPassword={() => resetPasswordMutation.mutateAsync()}
                 />
             )}
+
+            <CreateEmployeeModal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                departments={departments ?? []}
+            />
         </div>
     );
 }

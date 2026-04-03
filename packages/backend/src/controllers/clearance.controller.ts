@@ -61,6 +61,32 @@ export const initiateClearance = async (req: Request, res: Response) => {
 
 // ... (initiateClearance above)
 
+export const listClearanceRequests = async (req: Request, res: Response) => {
+    try {
+        const user = req.user;
+        if (!user) return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+
+        const { status, limit, offset } = req.query;
+
+        const campusCtx = getCampusScope(req);
+        const campusIdFilter = getCampusIdFilter(campusCtx);
+
+        const result = await clearanceService.listClearanceRequests({
+            status: status as string | undefined,
+            campusId: campusIdFilter,
+            limit: limit ? parseInt(limit as string) : undefined,
+            offset: offset ? parseInt(offset as string) : undefined,
+        });
+
+        sendSuccess(res, result.data);
+    } catch (error: any) {
+        if (error?.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
 export const getClearance = async (req: Request, res: Response) => {
     try {
         const clearanceId = parseInt(req.params.id);

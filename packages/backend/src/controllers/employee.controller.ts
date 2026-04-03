@@ -67,7 +67,18 @@ export const getEmployee = async (req: Request, res: Response) => {
         // Campus isolation: campus users can only view employees in their campus
         assertSameCampus(req, employee.campusId);
 
-        sendSuccess(res, employee);
+        // EXTRA SECURITY: Strip sensitive data for non-admins
+        // Only SUPER_ADMIN, ADMIN, and HR_OFFICER can see salaries
+        const canSeeSalary = user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN || user.role === UserRole.HR_OFFICER;
+
+        const responseData = { ...employee };
+        if (!canSeeSalary) {
+            delete (responseData as any).grossSalary;
+            // Also redact other sensitive fields if they exist
+            if ((responseData as any).taxInformation) delete (responseData as any).taxInformation;
+        }
+
+        sendSuccess(res, responseData);
     } catch (error: any) {
         if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);

@@ -11,6 +11,14 @@ import { RequireAuth, RequireNoAuth } from './guards';
 import { LoginForm } from '../features/auth/LoginForm';
 import { ChangePasswordForm } from '../features/auth/ChangePasswordForm';
 import ProfilePage from '../pages/ProfilePage';
+import ErrorPage from '../pages/ErrorPage';
+import DashboardPage from '../pages/DashboardPage';
+import LeaveManagementPage from '../pages/LeaveManagementPage';
+import ClearancePage from '../pages/ClearancePage';
+import RecruitmentPage from '../pages/RecruitmentPage';
+import AuditLogsPage from '../pages/AuditLogsPage';
+import SettingsPage from '../pages/SettingsPage';
+import ContactDirectoryPage from '../pages/ContactDirectoryPage';
 
 const router = createBrowserRouter([
     {
@@ -22,6 +30,7 @@ const router = createBrowserRouter([
                 </AuthLayout>
             </RequireNoAuth>
         ),
+        errorElement: <ErrorPage />,
     },
     {
         path: '/force-password-change',
@@ -38,10 +47,31 @@ const router = createBrowserRouter([
                 <DashboardLayout />
             </RequireAuth>
         ),
+        errorElement: <ErrorPage />,
         children: [
             {
                 index: true,
-                element: <div>Dashboard Content Pending</div>,
+                element: <DashboardPage />,
+            },
+            {
+                path: 'leave',
+                element: <LeaveManagementPage />,
+            },
+            {
+                path: 'clearance',
+                element: <ClearancePage />,
+            },
+            {
+                path: 'jobs',
+                element: <RecruitmentPage />,
+            },
+            {
+                path: 'audit-logs',
+                element: <AuditLogsPage />,
+            },
+            {
+                path: 'settings',
+                element: <SettingsPage />,
             },
             {
                 path: 'sandbox',
@@ -70,6 +100,10 @@ const router = createBrowserRouter([
             {
                 path: 'profile',
                 element: <ProfilePage />,
+            },
+            {
+                path: 'contacts',
+                element: <ContactDirectoryPage />,
             },
         ],
     },

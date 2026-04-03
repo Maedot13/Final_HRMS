@@ -16,8 +16,8 @@ model Campus {
   timezone                String?             @default("Africa/Addis_Ababa")
   createdAt               DateTime            @default(now())
   updatedAt               DateTime            @updatedAt
-  employeeIdPrefix        String              @default("EMP")
-  employeeNumericLength   Int                 @default(4)
+  employeeIdPrefix        String              @default("BDU")
+  employeeNumericLength   Int                 @default(5)
   employeeSequenceCurrent Int                 @default(0)
   isPatternLocked         Boolean             @default(false)
   auditLogs               AuditLog[]
@@ -360,6 +360,7 @@ enum AuditAction {
 }
 
 enum UserRole {
+  SUPER_ADMIN
   ADMIN
   HR_OFFICER
   DEPARTMENT_HEAD

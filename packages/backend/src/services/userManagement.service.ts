@@ -6,20 +6,37 @@ import crypto from 'crypto';
 import * as emailService from './email.service';
 import { logger } from '../utils/logger';
 
-export const getAllUsers = async (campusId?: number) => {
-    return prisma.user.findMany({
-        where: campusId != null ? { campusId } : undefined,
-        include: {
-            employee: {
-                select: {
-                    name: true,
-                    department: true,
-                    position: true
+export const getAllUsers = async (campusId?: number, page = 1, limit = 50) => {
+    const where = campusId != null ? { campusId } : undefined;
+    const [users, total] = await Promise.all([
+        prisma.user.findMany({
+            where,
+            include: {
+                employee: {
+                    select: {
+                        name: true,
+                        department: true,
+                        position: true
+                    }
                 }
-            }
-        },
-        orderBy: { createdAt: 'desc' }
-    });
+            },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            skip: (page - 1) * limit
+        }),
+        prisma.user.count({ where })
+    ]);
+
+    return {
+        data: users,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+            nextCursor: total > page * limit ? page + 1 : null
+        }
+    };
 };
 
 export const getUserById = async (id: number) => {

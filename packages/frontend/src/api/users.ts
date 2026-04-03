@@ -17,4 +17,12 @@ export const usersApi = {
 
     resetPassword: (id: number) =>
         apiClient.post<{ message: string }>(`/users/${id}/reset-password`),
+
+    create: (data: {
+        name: string;
+        email: string;
+        role: string;
+        departmentId?: number;
+        department?: string;
+    }) => apiClient.post('/auth/register', data),
 };

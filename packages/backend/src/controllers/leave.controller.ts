@@ -176,3 +176,64 @@ export const rejectRequest = async (req: Request, res: Response) => {
         sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
+
+export const getLeaveRequest = async (req: Request, res: Response) => {
+    try {
+        const id = parseInt(req.params.id);
+        const user = req.user;
+
+        if (!user) {
+            return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+        }
+
+        const request = await leaveService.getLeaveRequestById(id);
+
+        if (!request) {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, 'Leave request not found', null, req);
+        }
+
+        // Authorization: Requester or (Role-based reviewer)
+        if (request.employeeId !== user.employeeId && 
+            user.role !== UserRole.ADMIN && 
+            user.role !== UserRole.HR_OFFICER && 
+            user.role !== UserRole.DEPARTMENT_HEAD) {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
+
+        sendSuccess(res, request);
+    } catch (error: any) {
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
+export const getLeaveBalances = async (req: Request, res: Response) => {
+    try {
+        const employeeId = parseInt(req.params.employeeId);
+        const user = req.user;
+        const year = new Date().getFullYear();
+
+        if (!user) {
+            return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+        }
+
+        // Only allow self or admin/HR/Dept Head to see balances
+        if (employeeId !== user.employeeId && 
+            user.role !== UserRole.ADMIN && 
+            user.role !== UserRole.HR_OFFICER && 
+            user.role !== UserRole.DEPARTMENT_HEAD) {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
+
+        const balance = await leaveService.getLeaveBalances(employeeId, year);
+        sendSuccess(res, balance || {
+            annualBalance: 0,
+            sickBalance: 0,
+            maternityBalance: 0,
+            paternityBalance: 0,
+            year
+        });
+    } catch (error: any) {
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+

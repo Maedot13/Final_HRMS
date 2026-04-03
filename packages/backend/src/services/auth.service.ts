@@ -1,6 +1,6 @@
 
 import { LoginRequest, RegisterRequest, AuthResponse, UserRole, UserScope } from '@hrms/types';
-import { hashPassword, comparePassword } from '../utils/password';
+import { hashPassword, comparePassword, generateInitialPassword } from '../utils/password';
 import { verifyRefreshToken, TokenPayload } from '../utils/token';
 import { createTokenPair, rotateTokenPair } from './token.service';
 import { prisma } from '../lib/prisma';
@@ -101,9 +101,20 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
         }
     }
 
-    const rawPassword = password || crypto.randomBytes(8).toString('base64url');
-    const mustChangePassword = !password; // True if auto-generated
-    const hashedPassword = await hashPassword(rawPassword);
+    // Role Hierarchical Check
+    const targetRole = (role as UserRole) || UserRole.EMPLOYEE;
+    const creatorRole = creatorContext.role as UserRole;
+
+    if (creatorRole === UserRole.SUPER_ADMIN) {
+        // Super Admin can create any role
+    } else if (creatorRole === UserRole.ADMIN || creatorRole === UserRole.HR_OFFICER) {
+        // Admin and HR can ONLY create EMPLOYEE
+        if (targetRole !== UserRole.EMPLOYEE) {
+            throw new Error(`As an ${creatorRole}, you only have permission to register accounts with the EMPLOYEE role.`);
+        }
+    } else {
+        throw new Error('You do not have permission to register new users.');
+    }
 
     let warning: string | undefined;
     if (departmentId) {
@@ -116,13 +127,25 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
         }
     }
 
-    // import generator
+    // import generator — keep dynamic to avoid circular dependencies if any
     const { generateNextEmployeeId } = await import('../utils/idGenerator');
+
+    // Declare variables to hold the generated raw password and ID for the welcome email
+    let finalRawPassword = password || '';
+    let finalGeneratedEmployeeId = '';
 
     // Use transaction to create User and Employee atomically
     const result = await prisma.$transaction(async (tx) => {
-        // Generate atomic ID
-        const generatedEmployeeId = await generateNextEmployeeId(assignedCampusId, tx as any);
+        // 1. Generate atomic ID first (Concurrency safe)
+        finalGeneratedEmployeeId = await generateNextEmployeeId(assignedCampusId, tx as any);
+
+        // 2. Generate initial password if none provided (Uses the now-known ID)
+        if (!finalRawPassword) {
+            finalRawPassword = generateInitialPassword(finalGeneratedEmployeeId);
+        }
+
+        const mustChangePassword = !password; // True if system-generated
+        const hashedPassword = await hashPassword(finalRawPassword);
 
         const newUser = await tx.user.create({
             data: {
@@ -132,7 +155,7 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
                 role: (role as any) || UserRole.EMPLOYEE,
                 scope: 'CAMPUS',
                 campusId: assignedCampusId,
-                employeeId: generatedEmployeeId,
+                employeeId: finalGeneratedEmployeeId,
             }
         });
 
@@ -140,7 +163,7 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
             data: {
                 campusId: assignedCampusId,
                 userId: newUser.id,
-                employeeId: generatedEmployeeId,
+                employeeId: finalGeneratedEmployeeId,
                 name,
                 deptLegacy: deptLegacy || 'TBD',
                 departmentId: departmentId || null,
@@ -150,16 +173,16 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
             }
         });
 
-        return { newUser, newEmployee };
+        return { newUser, newEmployee, rawPassword: finalRawPassword };
     });
 
     // Send welcome email asynchronously if password was generated
-    if (mustChangePassword) {
+    if (!password) {
         emailService.sendWelcomeEmail({
             to: email,
             name,
             employeeId: result.newUser.employeeId,
-            tempPassword: rawPassword
+            tempPassword: result.rawPassword
         }).catch(err => logger.error('Async welcome email failed', err));
     }
 
@@ -197,6 +220,7 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
     return {
         ...tokenPair,
         user: userResponse as unknown as AuthResponse['user'],
+        rawPassword: result.rawPassword,
         warning
     };
 };

@@ -148,6 +148,46 @@ router.get('/pending',
 
 /**
  * @swagger
+ * /api/v1/leave/balances/{employeeId}:
+ *   get:
+ *     summary: Get leave balances for an employee
+ *     tags: [Leave]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Leave balances
+ */
+router.get('/balances/:employeeId', leaveController.getLeaveBalances);
+
+/**
+ * @swagger
+ * /api/v1/leave/{id}:
+ *   get:
+ *     summary: Get leave request details
+ *     tags: [Leave]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Leave request details
+ */
+router.get('/:id', leaveController.getLeaveRequest);
+
+/**
+ * @swagger
  * /api/v1/leave/{id}/approve:
  *   patch:
  *     summary: Approve a leave request (Dept Head)
