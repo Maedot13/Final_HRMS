@@ -70,7 +70,7 @@ router.get('/requests',
     clearanceController.listClearanceRequests
 );
 
-router.post('/requests', validateBody(initiateClearanceSchema), clearanceController.initiateClearance);
+router.post('/requests', authorize([UserRole.HR_OFFICER]), validateBody(initiateClearanceSchema), clearanceController.initiateClearance);
 
 /**
  * @swagger
@@ -174,6 +174,16 @@ router.patch('/requests/:id/reject-check',
     clearanceController.rejectCheck
 );
 
+router.patch('/requests/:id/hr-approve',
+    authorize([UserRole.HR_OFFICER]),
+    clearanceController.approveCampusHR
+);
+
+router.patch('/requests/:id/final-approve',
+    authorize([UserRole.HEAD_HR]),
+    clearanceController.finalApproveClearance
+);
+
 /**
  * @swagger
  * /api/v1/clearance/units/{unitId}/pending:
@@ -195,6 +205,21 @@ router.patch('/requests/:id/reject-check',
 router.get('/units/:unitId/pending',
     authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]),
     clearanceController.getPendingChecksForUnit
+);
+
+router.get('/units',
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER]),
+    clearanceController.listClearanceUnits
+);
+
+router.post('/units',
+    authorize([UserRole.ADMIN]),
+    clearanceController.createClearanceUnit
+);
+
+router.patch('/units/:unitId',
+    authorize([UserRole.ADMIN]),
+    clearanceController.updateClearanceUnit
 );
 
 router.delete('/units/:unitId',

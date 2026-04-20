@@ -9,11 +9,10 @@ import { dispatchEvent, SystemEventTypes } from './eventBus.service';
 
 // 1. Initiate Clearance
 export const initiateClearance = async (employeeId: number, reason: string, lastWorkingDay: Date) => {
-    // Check if active clearance already exists
     const existing = await prisma.clearanceRequest.findFirst({
         where: {
             employeeId,
-            status: ClearanceStatus.PENDING
+            status: { notIn: [ClearanceStatus.REJECTED, ClearanceStatus.COMPLETED] }
         }
     });
 
@@ -46,7 +45,7 @@ export const initiateClearance = async (employeeId: number, reason: string, last
             employeeId,
             reason,
             lastWorkingDay,
-            status: ClearanceStatus.PENDING,
+            status: ClearanceStatus.BODY_APPROVAL_PENDING,
             checks: {
                 create: units.map((unit: { id: number }) => ({
                     unitId: unit.id,
@@ -211,22 +210,13 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
         });
 
         if (pendingChecks === 0) {
-            // All approved! Complete the clearance
-            const completedClearance = await tx.clearanceRequest.update({
+            // All bodies approved! Move to HR Approval
+            await tx.clearanceRequest.update({
                 where: { id: clearanceId },
-                data: { status: ClearanceStatus.APPROVED },
-                include: { employee: true }
+                data: { status: ClearanceStatus.HR_APPROVAL_PENDING }
             });
 
-            // Dispatch async side-effects (notifications, email, payroll) to BullMQ worker
-            await dispatchEvent(SystemEventTypes.CLEARANCE_COMPLETED, {
-                clearanceId,
-                employeeUserId: completedClearance.employee.userId,
-                employeeName: completedClearance.employee.name,
-                approverId
-            });
-
-            return { status: 'COMPLETED', message: 'Clearance fully approved and Payroll Transfer initiated' };
+            return { status: 'HR_APPROVAL_PENDING', message: 'All clearance bodies approved. Waiting for Campus HR approval.' };
         }
 
         // Fetch employee userId for notification dispatch
@@ -319,6 +309,16 @@ export const rejectCheck = async (clearanceId: number, unitId: number, approverI
             }
         });
 
+        // REJECT the entire clearance request
+        await tx.clearanceRequest.update({
+            where: { id: clearanceId },
+            data: {
+                status: ClearanceStatus.REJECTED,
+                rejectedAt: new Date(),
+                rejectionReason: `Rejected by unit ${unitId}${comment ? ': ' + comment : ''}`
+            }
+        });
+
         // Fetch employee + unit data for the async event payload
         const clearanceWithEmployee = await tx.clearanceRequest.findUnique({
             where: { id: clearanceId },
@@ -357,6 +357,38 @@ export const getPendingChecksForUnit = async (unitId: number, campusId?: number)
     });
 };
 
+export const listClearanceUnits = async (campusId?: number) => {
+    return prisma.clearanceUnit.findMany({
+        where: campusId ? { campusId } : {},
+        orderBy: { name: 'asc' }
+    });
+};
+
+export const createClearanceUnit = async (data: { name: string; description?: string; campusId: number }) => {
+    return prisma.clearanceUnit.create({
+        data: {
+            name: data.name,
+            description: data.description,
+            campusId: data.campusId,
+            isSystemGenerated: false,
+            isActive: true
+        }
+    });
+};
+
+export const updateClearanceUnit = async (unitId: number, data: { name?: string; description?: string; isActive?: boolean }) => {
+    const unit = await prisma.clearanceUnit.findUnique({ where: { id: unitId } });
+    if (!unit) throw new Error('Clearance unit not found');
+
+    if (unit.isSystemGenerated && data.name) {
+        throw new Error('Cannot rename system-generated clearance units');
+    }
+
+    return prisma.clearanceUnit.update({
+        where: { id: unitId },
+        data
+    });
+};
 export const deleteClearanceUnit = async (unitId: number) => {
     const unit = await prisma.clearanceUnit.findUnique({
         where: { id: unitId }
@@ -370,5 +402,106 @@ export const deleteClearanceUnit = async (unitId: number) => {
 
     return prisma.clearanceUnit.delete({
         where: { id: unitId }
+    });
+};
+
+// 5. approveCampusHR - HR Officer approval step
+export const approveCampusHR = async (clearanceId: number, campusId: number, approverId: number, isApprove: boolean, notes?: string) => {
+    return prisma.$transaction(async (tx) => {
+        const clearance = await tx.clearanceRequest.findUnique({
+            where: { id: clearanceId },
+            include: { checks: { include: { unit: true } } }
+        });
+
+        if (!clearance) throw new Error('Clearance request not found');
+        if (clearance.status !== ClearanceStatus.HR_APPROVAL_PENDING) {
+            throw new Error(`Clearance is not in HR approval phase (${clearance.status})`);
+        }
+
+        const taskStatus = isApprove ? ClearanceStatus.APPROVED : ClearanceStatus.REJECTED;
+
+        await tx.clearanceApproval.upsert({
+            where: { clearanceId_campusId: { clearanceId, campusId } },
+            create: { clearanceId, campusId, approvedById: approverId, status: taskStatus, approvedAt: new Date(), notes },
+            update: { approvedById: approverId, status: taskStatus, approvedAt: new Date(), notes }
+        });
+
+        if (!isApprove) {
+            return tx.clearanceRequest.update({
+                where: { id: clearanceId },
+                data: { status: ClearanceStatus.REJECTED, rejectedAt: new Date(), rejectionReason: notes }
+            });
+        }
+
+        const allCampusIds = [...new Set(clearance.checks.map(c => c.unit.campusId).filter(id => id !== null))];
+
+        const approvedCount = await tx.clearanceApproval.count({
+            where: { clearanceId, status: ClearanceStatus.APPROVED }
+        });
+
+        if (approvedCount >= allCampusIds.length) {
+            return tx.clearanceRequest.update({
+                where: { id: clearanceId },
+                data: { status: ClearanceStatus.HR_APPROVED }
+            });
+        }
+
+        return tx.clearanceRequest.findUnique({ where: { id: clearanceId }});
+    });
+};
+
+// 6. finalApproveClearance - Head HR
+export const finalApproveClearance = async (clearanceId: number, approverId: number, isApprove: boolean, reason?: string) => {
+    return prisma.$transaction(async (tx) => {
+        const clearance = await tx.clearanceRequest.findUnique({
+            where: { id: clearanceId },
+            include: { employee: true }
+        });
+
+        if (!clearance) throw new Error('Clearance request not found');
+        if (clearance.status !== ClearanceStatus.HR_APPROVED) {
+            throw new Error(`Clearance is not in Final approval phase (${clearance.status})`);
+        }
+
+        if (!isApprove) {
+            return tx.clearanceRequest.update({
+                where: { id: clearanceId },
+                data: { status: ClearanceStatus.REJECTED, rejectedAt: new Date(), rejectionReason: reason, finalApprovedById: approverId }
+            });
+        }
+
+        const completed = await tx.clearanceRequest.update({
+            where: { id: clearanceId },
+            data: { status: ClearanceStatus.COMPLETED, finalApprovedById: approverId, finalApprovedAt: new Date() },
+            include: { employee: true }
+        });
+
+        // 1. Deactivate Employee
+        await tx.employee.update({
+            where: { id: clearance.employeeId },
+            data: { employmentStatus: 'SUSPENDED' }
+        });
+
+        // 2. Disable User
+        await tx.user.update({
+            where: { id: clearance.employee.userId },
+            data: { isActive: false }
+        });
+
+        // 3. Revoke sessions
+        await tx.refreshToken.updateMany({
+            where: { userId: clearance.employee.userId, revoked: false },
+            data: { revoked: true }
+        });
+
+        // Event
+        await dispatchEvent(SystemEventTypes.CLEARANCE_COMPLETED, {
+            clearanceId,
+            employeeUserId: clearance.employee.userId,
+            employeeName: clearance.employee.name,
+            approverId
+        });
+
+        return completed;
     });
 };

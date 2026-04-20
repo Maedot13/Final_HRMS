@@ -17,8 +17,10 @@ import LeaveManagementPage from '../pages/LeaveManagementPage';
 import ClearancePage from '../pages/ClearancePage';
 import RecruitmentPage from '../pages/RecruitmentPage';
 import AuditLogsPage from '../pages/AuditLogsPage';
-import SettingsPage from '../pages/SettingsPage';
 import ContactDirectoryPage from '../pages/ContactDirectoryPage';
+import AdminOrgPage from '../pages/admin/AdminOrgPage';
+import ClearanceBodiesPage from '../pages/admin/ClearanceBodiesPage';
+import PrivilegesPage from '../pages/admin/PrivilegesPage';
 
 const router = createBrowserRouter([
     {
@@ -70,8 +72,16 @@ const router = createBrowserRouter([
                 element: <AuditLogsPage />,
             },
             {
-                path: 'settings',
-                element: <SettingsPage />,
+                path: 'admin/org',
+                element: <AdminOrgPage />,
+            },
+            {
+                path: 'admin/clearance-bodies',
+                element: <ClearanceBodiesPage />,
+            },
+            {
+                path: 'admin/privileges',
+                element: <PrivilegesPage />,
             },
             {
                 path: 'sandbox',

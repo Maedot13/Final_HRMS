@@ -5,6 +5,16 @@ export interface ClearanceRequestPayload {
     lastWorkingDay: string; // ISO Date
 }
 
+export interface ClearanceUnit {
+    id: number;
+    name: string;
+    description: string | null;
+    isActive: boolean;
+    campusId: number | null;
+    isSystemGenerated: boolean;
+}
+
+
 export const clearanceApi = {
     // List clearance requests (with optional filters)
     list: (params?: { status?: string; limit?: number; offset?: number }) =>
@@ -24,7 +34,6 @@ export const clearanceApi = {
     rejectCheck: (requestId: number, unitId: number, comment: string) =>
         apiClient.patch(`/clearance/requests/${requestId}/reject-check`, { unitId, comment }),
 
-    // Combined helper for backwards-compatible processCheck calls
     processCheck: (requestId: number, unitId: number, data: { status: 'APPROVED' | 'REJECTED'; comment?: string }) => {
         if (data.status === 'APPROVED') {
             return apiClient.patch(`/clearance/requests/${requestId}/approve-check`, { unitId, comment: data.comment });
@@ -32,4 +41,10 @@ export const clearanceApi = {
             return apiClient.patch(`/clearance/requests/${requestId}/reject-check`, { unitId, comment: data.comment });
         }
     },
+
+    // Units CRUD
+    listUnits: () => apiClient.get<ClearanceUnit[]>('/clearance/units'),
+    createUnit: (data: { name: string; description?: string }) => apiClient.post<ClearanceUnit>('/clearance/units', data),
+    updateUnit: (unitId: number, data: { name?: string; description?: string; isActive?: boolean }) => apiClient.patch<ClearanceUnit>(`/clearance/units/${unitId}`, data),
+    deleteUnit: (unitId: number) => apiClient.delete(`/clearance/units/${unitId}`),
 };

@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import * as employeeController from '../controllers/employee.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
+import { upload } from '../middleware/upload.middleware';
 import { UserRole } from '@hrms/types';
 
 const router = Router();
@@ -59,7 +60,36 @@ import { updateEmployeeSchema } from '../schemas/employee.schema';
  *       404:
  *         description: Employee not found
  */
+// List employees in the campus
+router.get(
+    '/',
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD]),
+    employeeController.listEmployees
+);
+
+// Create a new employee (delegates to auth.register internally)
+router.post(
+    '/',
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER]),
+    employeeController.createEmployee
+);
+
 router.get('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]), employeeController.getEmployee);
+
+// Activate / deactivate an employee account
+router.post(
+    '/:id/activate',
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER]),
+    employeeController.activateEmployee
+);
+
+// Upload documents for an employee
+router.post(
+    '/:id/documents',
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER]),
+    upload.single('document'),
+    employeeController.uploadDocument
+);
 
 /**
  * @swagger

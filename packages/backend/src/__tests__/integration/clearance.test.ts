@@ -178,7 +178,7 @@ describe('Clearance Integration', () => {
             }));
         });
 
-        it('should complete clearance when last check is approved', async () => {
+        it('should change status to HR_APPROVAL_PENDING when last check is approved', async () => {
             prismaMock.clearanceRequest.findUnique.mockResolvedValue({
                 id: 100,
                 campusId: 1,
@@ -197,7 +197,7 @@ describe('Clearance Integration', () => {
 
             prismaMock.clearanceRequest.update.mockResolvedValue({
                 id: 100,
-                status: ClearanceStatus.APPROVED,
+                status: ClearanceStatus.HR_APPROVAL_PENDING,
                 employee: { userId: 5, name: 'John Doe' }
             } as any);
 
@@ -209,15 +209,12 @@ describe('Clearance Integration', () => {
                 .patch('/api/v1/clearance/requests/100/approve-check')
                 .send({ unitId: 1 });
 
-
-
             expect(res.status).toBe(200);
-            expect(res.body.status).toBe('COMPLETED');
+            expect(res.body.status).toBe('HR_APPROVAL_PENDING');
             expect(prismaMock.clearanceRequest.update).toHaveBeenCalledWith(expect.objectContaining({
                 where: { id: 100 },
-                data: { status: ClearanceStatus.APPROVED }
+                data: { status: ClearanceStatus.HR_APPROVAL_PENDING }
             }));
-            expect(dispatchEvent).toHaveBeenCalledWith(SystemEventTypes.CLEARANCE_COMPLETED, expect.any(Object));
         });
     });
 });

@@ -8,6 +8,7 @@ interface TokenPayloadArgs {
     scope: UserScope;
     campusId: number | null;
     employeeId: string;
+    employeePkId?: number | null;
     mustChangePassword?: boolean;
 }
 

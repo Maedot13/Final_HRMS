@@ -168,6 +168,20 @@ router.get('/balances/:employeeId', leaveController.getLeaveBalances);
 
 /**
  * @swagger
+ * /api/v1/leave/balance:
+ *   get:
+ *     summary: Get leave balance for current employee
+ *     tags: [Leave]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Leave balances
+ */
+router.get('/balance', attachEmployee, leaveController.getMyLeaveBalance);
+
+/**
+ * @swagger
  * /api/v1/leave/{id}:
  *   get:
  *     summary: Get leave request details

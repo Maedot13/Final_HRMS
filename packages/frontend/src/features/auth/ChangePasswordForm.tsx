@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
-import { z } from '../../utils/validation';
+import { z, passwordSchema } from '../../utils/validation';
 import apiClient from '../../api/client';
 import type { ApiError } from '../../types';
 import { Card } from '../../components/ui/Card';
@@ -13,9 +13,7 @@ import { FormField } from '../../components/shared/FormField';
 const changePasswordSchema = z
     .object({
         currentPassword: z.string().min(1, 'Current password is required'),
-        newPassword: z
-            .string()
-            .min(8, 'New password must be at least 8 characters long'),
+        newPassword: passwordSchema,
         confirmPassword: z.string().min(1, 'Please confirm your new password'),
     })
     .refine((data) => data.newPassword === data.confirmPassword, {
@@ -113,6 +111,9 @@ export function ChangePasswordForm() {
                         autoComplete="new-password"
                         {...register('newPassword')}
                     />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        Must contain at least 8 characters, including uppercase, lowercase, numbers, and special characters.
+                    </p>
                 </FormField>
                 <FormField
                     label="Confirm new password"

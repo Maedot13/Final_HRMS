@@ -12,7 +12,6 @@ const createCampusSchema = z.object({
     code: z.string().min(2).max(20).regex(/^[A-Z0-9_-]+$/i, 'Code: letters, numbers, hyphens, underscores only'),
     name: z.string().min(3, 'Name must be at least 3 characters').max(100),
     description: z.string().max(500).optional().or(z.literal('')),
-    timezone: z.string().optional().or(z.literal('')),
     employeeIdPrefix: z.string().min(1).max(10).regex(/^[A-Z]+$/i, 'Prefix: uppercase letters only'),
     employeeNumericLength: z.number().min(3).max(6),
     initialAdminEmployeeId: z.string().min(3, 'Admin employee ID required').max(50),
@@ -28,7 +27,6 @@ export interface CampusFormProps {
         code: string;
         name: string;
         description?: string;
-        timezone?: string;
         employeeIdPrefix: string;
         employeeNumericLength: number;
         initialAdmin: { employeeId: string; email: string; name: string; password?: string };
@@ -50,7 +48,6 @@ export function CampusForm({ onSubmit, onCancel, apiError }: CampusFormProps) {
             code: '',
             name: '',
             description: '',
-            timezone: 'Africa/Addis_Ababa',
             employeeIdPrefix: 'EMP',
             employeeNumericLength: 4,
             initialAdminEmployeeId: '',
@@ -76,7 +73,6 @@ export function CampusForm({ onSubmit, onCancel, apiError }: CampusFormProps) {
             code: values.code,
             name: values.name,
             description: values.description || undefined,
-            timezone: values.timezone || undefined,
             employeeIdPrefix: values.employeeIdPrefix.toUpperCase(),
             employeeNumericLength: values.employeeNumericLength,
             initialAdmin: {
@@ -115,9 +111,6 @@ export function CampusForm({ onSubmit, onCancel, apiError }: CampusFormProps) {
                         <Input id="employeeNumericLength" type="number" min={3} max={6} {...register('employeeNumericLength', { valueAsNumber: true })} />
                     </FormField>
                 </div>
-                <FormField label="Timezone" htmlFor="timezone" error={getError('timezone') ? { message: getError('timezone')!} : undefined}>
-                    <Input id="timezone" placeholder="Africa/Addis_Ababa" {...register('timezone')} />
-                </FormField>
                 <hr className="border-[#E5E7EB]" />
                 <h4 className="text-sm font-medium text-text-primary">Initial campus admin</h4>
                 <div className="grid gap-4 sm:grid-cols-2">

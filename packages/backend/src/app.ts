@@ -29,6 +29,7 @@ import notificationRoutes from './routes/notification.routes';
 import reportRoutes from './routes/report.routes';
 import userRoutes from './routes/userManagement.routes';
 import auditRoutes from './routes/audit.routes';
+import privilegeRoutes from './routes/privilege.routes';
 import campusRoutes from './routes/campus.routes';
 import departmentRoutes from './routes/department.routes';
 
@@ -149,6 +150,8 @@ app.use('/api/v1/notifications', authenticate, blockIfPasswordChangeRequired, no
 app.use('/api/v1/reports', authenticate, blockIfPasswordChangeRequired, reportRoutes);
 app.use('/api/v1/users', authenticate, blockIfPasswordChangeRequired, userRoutes);
 app.use('/api/v1/audit-logs', authenticate, blockIfPasswordChangeRequired, auditRoutes);
+app.use('/api/v1/activity-logs', authenticate, blockIfPasswordChangeRequired, auditRoutes); // alias based on spec
+app.use('/api/v1/privileges', authenticate, blockIfPasswordChangeRequired, privilegeRoutes);
 app.use('/api/v1/campuses', authenticate, blockIfPasswordChangeRequired, campusRoutes);
 app.use('/api/v1/departments', authenticate, blockIfPasswordChangeRequired, departmentRoutes);
 

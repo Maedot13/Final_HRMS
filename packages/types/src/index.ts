@@ -1,6 +1,7 @@
 // User Roles
 export enum UserRole {
     SUPER_ADMIN = 'SUPER_ADMIN',
+    HEAD_HR = 'HEAD_HR',
     ADMIN = 'ADMIN',
     HR_OFFICER = 'HR_OFFICER',
     DEPARTMENT_HEAD = 'DEPARTMENT_HEAD',
@@ -60,6 +61,7 @@ export interface AuthResponse {
     token: string;
     refreshToken?: string;
     user: User;
+    rawPassword?: string;
 }
 
 export enum SalaryType {
@@ -172,7 +174,14 @@ export interface SabbaticalRequest {
 export enum ClearanceStatus {
     PENDING = 'PENDING',
     APPROVED = 'APPROVED',
-    REJECTED = 'REJECTED'
+    REJECTED = 'REJECTED',
+    IN_PROGRESS = 'IN_PROGRESS',
+    BODY_APPROVAL_PENDING = 'BODY_APPROVAL_PENDING',
+    BODY_APPROVED = 'BODY_APPROVED',
+    HR_APPROVAL_PENDING = 'HR_APPROVAL_PENDING',
+    HR_APPROVED = 'HR_APPROVED',
+    FINAL_APPROVED = 'FINAL_APPROVED',
+    COMPLETED = 'COMPLETED'
 }
 
 // Clearance Department Interface

@@ -3,6 +3,8 @@ import * as leaveService from '../services/leave.service';
 import { UserRole } from '@hrms/types';
 import { LeaveType } from '@prisma/client';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
+import { assertSameCampus } from '../lib/campusScope';
+import { prisma } from '../lib/prisma';
 import { getCampusScope, getCampusIdFilter } from '../lib/campusScope';
 
 
@@ -193,9 +195,9 @@ export const getLeaveRequest = async (req: Request, res: Response) => {
         }
 
         // Authorization: Requester or (Role-based reviewer)
-        if (request.employeeId !== user.employeeId && 
-            user.role !== UserRole.ADMIN && 
-            user.role !== UserRole.HR_OFFICER && 
+        if (request.employeeId !== user.employeePkId && 
+            user.role !== UserRole.ADMIN &&
+            user.role !== UserRole.HR_OFFICER &&
             user.role !== UserRole.DEPARTMENT_HEAD) {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
         }
@@ -216,15 +218,46 @@ export const getLeaveBalances = async (req: Request, res: Response) => {
             return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
         }
 
+        const targetEmployee = await prisma.employee.findUnique({
+            where: { id: employeeId },
+            select: { campusId: true, userId: true }
+        });
+
+        if (!targetEmployee) {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, 'Employee not found', null, req);
+        }
+
+        const isSelf = targetEmployee.userId === user.userId;
+        const isAdminOrHR = user.role === UserRole.ADMIN || user.role === UserRole.HR_OFFICER || user.role === UserRole.DEPARTMENT_HEAD;
+
         // Only allow self or admin/HR/Dept Head to see balances
-        if (employeeId !== user.employeeId && 
-            user.role !== UserRole.ADMIN && 
-            user.role !== UserRole.HR_OFFICER && 
-            user.role !== UserRole.DEPARTMENT_HEAD) {
+        if (!isSelf && !isAdminOrHR) {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
         }
 
+        if (!isSelf) {
+            assertSameCampus(req, targetEmployee.campusId);
+        }
+
         const balance = await leaveService.getLeaveBalances(employeeId, year);
+        sendSuccess(res, balance || {
+            annualBalance: 0,
+            sickBalance: 0,
+            maternityBalance: 0,
+            paternityBalance: 0,
+            year
+        });
+    } catch (error: any) {
+        if (error?.message?.includes('campus')) return sendError(res, 403, ErrorCode.FORBIDDEN, error.message, null, req);
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
+export const getMyLeaveBalance = async (req: Request, res: Response) => {
+    try {
+        const employee = req.employee!;
+        const year = new Date().getFullYear();
+        const balance = await leaveService.getLeaveBalances(employee.id, year);
         sendSuccess(res, balance || {
             annualBalance: 0,
             sickBalance: 0,

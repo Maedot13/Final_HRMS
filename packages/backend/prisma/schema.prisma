@@ -31,6 +31,7 @@ model Campus {
   notifications           Notification[]
   sabbaticalRequests      SabbaticalRequest[]
   users                   User[]
+  clearanceApprovals      ClearanceApproval[]
 }
 
 model User {
@@ -50,6 +51,7 @@ model User {
   notifications      Notification[]
   refreshTokens      RefreshToken[]
   campus             Campus?        @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  clearanceApprovals ClearanceApproval[]
 
   @@index([campusId])
 }
@@ -165,7 +167,13 @@ model ClearanceRequest {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   campusId        Int?
+  initiatedById   Int?
+  finalApprovedById Int?
+  finalApprovedAt DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
   checks          ClearanceCheck[]
+  hrApprovals     ClearanceApproval[]
   campus          Campus?          @relation(fields: [campusId], references: [id], onDelete: Restrict)
   employee        Employee         @relation(fields: [employeeId], references: [id])
   payrollTransfer PayrollTransfer?
@@ -202,6 +210,25 @@ model ClearanceCheck {
   @@unique([clearanceId, unitId])
   @@index([unitId, status])
   @@index([clearanceId, status])
+}
+
+model ClearanceApproval {
+  id           Int              @id @default(autoincrement())
+  clearanceId  Int
+  campusId     Int
+  approvedById Int
+  status       ClearanceStatus  @default(PENDING)
+  approvedAt   DateTime?
+  notes        String?
+  createdAt    DateTime         @default(now())
+
+  clearance    ClearanceRequest @relation(fields: [clearanceId], references: [id], onDelete: Cascade)
+  campus       Campus           @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  approvedBy   User             @relation(fields: [approvedById], references: [id])
+
+  @@unique([clearanceId, campusId])
+  @@index([clearanceId])
+  @@index([campusId])
 }
 
 model PayrollTransfer {
@@ -361,6 +388,7 @@ enum AuditAction {
 
 enum UserRole {
   SUPER_ADMIN
+  HEAD_HR
   ADMIN
   HR_OFFICER
   DEPARTMENT_HEAD
@@ -388,6 +416,13 @@ enum ClearanceStatus {
   PENDING
   APPROVED
   REJECTED
+  IN_PROGRESS
+  BODY_APPROVAL_PENDING
+  BODY_APPROVED
+  HR_APPROVAL_PENDING
+  HR_APPROVED
+  FINAL_APPROVED
+  COMPLETED
 }
 
 enum JobStatus {

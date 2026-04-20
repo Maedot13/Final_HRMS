@@ -9,9 +9,9 @@ import {
     FiCheckSquare,
     FiBriefcase,
     FiFileText,
-    FiSettings,
     FiUser,
     FiPhone,
+    FiShield
 } from 'react-icons/fi';
 
 type Role =
@@ -68,7 +68,7 @@ const navItems: NavItem[] = [
     {
         label: 'Jobs',
         to: '/jobs',
-        roles: ['ADMIN', 'HR_OFFICER', 'RECRUITMENT_COMMITTEE'],
+        roles: ['HR_OFFICER', 'RECRUITMENT_COMMITTEE'],
         icon: <FiBriefcase className="w-4 h-4" />,
     },
     {
@@ -78,10 +78,22 @@ const navItems: NavItem[] = [
         icon: <FiFileText className="w-4 h-4" />,
     },
     {
-        label: 'Settings',
-        to: '/settings',
+        label: 'Org Setup',
+        to: '/admin/org',
         roles: ['ADMIN'],
-        icon: <FiSettings className="w-4 h-4" />,
+        icon: <FiLayers className="w-4 h-4" />,
+    },
+    {
+        label: 'Clearance Bodies',
+        to: '/admin/clearance-bodies',
+        roles: ['ADMIN'],
+        icon: <FiCheckSquare className="w-4 h-4" />,
+    },
+    {
+        label: 'Privileges',
+        to: '/admin/privileges',
+        roles: ['ADMIN'],
+        icon: <FiShield className="w-4 h-4" />,
     },
     {
         label: 'Contacts',

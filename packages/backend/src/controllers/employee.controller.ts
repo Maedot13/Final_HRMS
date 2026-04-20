@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import * as employeeService from '../services/employee.service';
+import * as authService from '../services/auth.service';
 import { UserRole, UserScope } from '@hrms/types';
 import { operationalUpdateSchema, updateEmployeeSchema } from '../schemas/employee.schema';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 import { auditEmployeeUpdate, AuditAction } from '../utils/auditLog';
 import { assertSameCampus, assertCanWriteCampusResource } from '../lib/campusScope';
+import { prisma } from '../lib/prisma';
 
 export const getEmployee = async (req: Request, res: Response) => {
     try {
@@ -206,5 +208,98 @@ export const updateEmployee = async (req: Request, res: Response) => {
             null,
             req
         );
+    }
+};
+
+// ─── List Employees ──────────────────────────────────────────────────────────
+export const listEmployees = async (req: Request, res: Response) => {
+    try {
+        const user = req.user!;
+        const campusId = user.campusId;
+        const { search, status, cursor, limit } = req.query as Record<string, string>;
+
+        const employees = await prisma.employee.findMany({
+            where: {
+                ...(campusId ? { campusId } : {}),
+                ...(search ? {
+                    OR: [
+                        { name: { contains: search, mode: 'insensitive' } },
+                        { employeeId: { contains: search, mode: 'insensitive' } },
+                    ]
+                } : {}),
+                ...(status === 'INACTIVE' ? { user: { isActive: false } } : status === 'ACTIVE' ? { user: { isActive: true } } : {}),
+                ...(cursor ? { id: { gt: parseInt(cursor) } } : {}),
+            },
+            include: { user: { select: { id: true, email: true, role: true, isActive: true } } },
+            take: limit ? parseInt(limit) : 50,
+            orderBy: { id: 'asc' },
+        });
+
+        sendSuccess(res, employees);
+    } catch (error: any) {
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
+// ─── Create Employee ─────────────────────────────────────────────────────────
+export const createEmployee = async (req: Request, res: Response) => {
+    try {
+        const user = req.user!;
+        const creatorContext = {
+            userId: user.userId,
+            role: user.role,
+            scope: user.scope,
+            campusId: user.campusId,
+            employeeId: user.employeeId,
+            employeePkId: user.employeePkId,
+        } as any;
+
+        const result = await authService.register(req.body, creatorContext);
+        return res.status(201).json({ success: true, data: result.user, rawPassword: result.rawPassword, warning: result.warning });
+    } catch (error: any) {
+        const status = error.message?.includes('already in use') ? 409 : 400;
+        sendError(res, status, ErrorCode.VALIDATION_ERROR, error.message, null, req);
+    }
+};
+
+// ─── Activate / Deactivate Employee ─────────────────────────────────────────
+export const activateEmployee = async (req: Request, res: Response) => {
+    try {
+        const id = parseInt(req.params.id);
+        const { isActive } = req.body;
+
+        if (typeof isActive !== 'boolean') {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, '`isActive` boolean is required', null, req);
+        }
+
+        const employee = await prisma.employee.findUnique({ where: { id }, select: { userId: true, campusId: true } });
+        if (!employee) return sendError(res, 404, ErrorCode.NOT_FOUND, 'Employee not found', null, req);
+
+        assertSameCampus(req, employee.campusId);
+
+        await prisma.user.update({ where: { id: employee.userId }, data: { isActive } });
+        sendSuccess(res, { message: `Employee account ${isActive ? 'activated' : 'deactivated'}` });
+    } catch (error: any) {
+        if (error?.message?.includes('campus')) return sendError(res, 403, ErrorCode.FORBIDDEN, error.message, null, req);
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
+// ─── Upload Document ─────────────────────────────────────────────────────────
+export const uploadDocument = async (req: Request, res: Response) => {
+    try {
+        const id = parseInt(req.params.id);
+        if (!req.file) return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'No file uploaded', null, req);
+
+        const employee = await prisma.employee.findUnique({ where: { id }, select: { campusId: true } });
+        if (!employee) return sendError(res, 404, ErrorCode.NOT_FOUND, 'Employee not found', null, req);
+
+        assertSameCampus(req, employee.campusId);
+
+        const fileUrl = `/uploads/${req.file.filename}`;
+        sendSuccess(res, { url: fileUrl, originalName: req.file.originalname });
+    } catch (error: any) {
+        if (error?.message?.includes('campus')) return sendError(res, 403, ErrorCode.FORBIDDEN, error.message, null, req);
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };

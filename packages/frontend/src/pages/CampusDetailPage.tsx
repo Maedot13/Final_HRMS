@@ -97,10 +97,6 @@ export default function CampusDetailPage() {
                         <span className="text-xs font-medium text-text-secondary uppercase">Status</span>
                         <p className="mt-1"><Badge variant={campus!.isActive ? 'approved' : 'neutral'}>{campus!.isActive ? 'Active' : 'Inactive'}</Badge></p>
                     </div>
-                    <div>
-                        <span className="text-xs font-medium text-text-secondary uppercase">Timezone</span>
-                        <p className="mt-1 text-sm text-text-primary">{campus!.timezone ?? '—'}</p>
-                    </div>
                     {campus!.description && (
                         <div className="sm:col-span-2">
                             <span className="text-xs font-medium text-text-secondary uppercase">Description</span>

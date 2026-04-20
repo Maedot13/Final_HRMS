@@ -202,6 +202,71 @@ export const rejectCheck = async (req: Request, res: Response) => {
     }
 };
 
+export const approveCampusHR = async (req: Request, res: Response) => {
+    try {
+        const clearanceId = parseInt(req.params.id);
+        const user = req.user;
+        if (!user) return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+
+        // Optional notes from body
+        const { notes, action } = req.body;
+        const sanitizedNotes = notes ? sanitizeInput(notes) : undefined;
+        // Action could be 'APPROVE' or 'REJECT'
+        const isApprove = action !== 'REJECT';
+
+        const campusCtx = getCampusScope(req);
+        if (campusCtx.scope !== 'CAMPUS' || !campusCtx.campusId) {
+             return sendError(res, 403, ErrorCode.FORBIDDEN, 'HR must be assigned to a specific campus to approve the campus portion', null, req);
+        }
+
+        const result = await clearanceService.approveCampusHR(clearanceId, campusCtx.campusId, user.userId, isApprove, sanitizedNotes);
+
+        await logAction({
+            userId: user.userId,
+            action: isApprove ? AuditAction.CLEARANCE_APPROVE : AuditAction.CLEARANCE_REJECT,
+            entityType: 'ClearanceApproval',
+            entityId: clearanceId,
+            changes: { status: isApprove ? 'APPROVED' : 'REJECTED', notes: sanitizedNotes },
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+        });
+
+        sendSuccess(res, result);
+    } catch (error: any) {
+        if (error?.message?.includes('Forbidden') || error?.message?.includes('access denied')) return sendError(res, 403, ErrorCode.FORBIDDEN, error.message, null, req);
+        sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
+export const finalApproveClearance = async (req: Request, res: Response) => {
+    try {
+        const clearanceId = parseInt(req.params.id);
+        const user = req.user;
+        if (!user) return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+
+        const { action, reason } = req.body;
+        const isApprove = action !== 'REJECT';
+        const sanitizedReason = reason ? sanitizeInput(reason) : undefined;
+
+        const result = await clearanceService.finalApproveClearance(clearanceId, user.userId, isApprove, sanitizedReason);
+
+        await logAction({
+            userId: user.userId,
+            action: isApprove ? AuditAction.CLEARANCE_APPROVE : AuditAction.CLEARANCE_REJECT,
+            entityType: 'ClearanceRequest',
+            entityId: clearanceId,
+            changes: { phase: 'FINAL', action: isApprove ? 'APPROVE' : 'REJECT' },
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+        });
+
+        sendSuccess(res, result);
+    } catch (error: any) {
+        sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
+
 // Get pending checks for a specific unit (for approver dashboard)
 export const getPendingChecksForUnit = async (req: Request, res: Response) => {
     try {
@@ -250,12 +315,58 @@ export const deleteClearanceUnit = async (req: Request, res: Response) => {
         const result = await clearanceService.deleteClearanceUnit(unitId);
         sendSuccess(res, result);
     } catch (error: any) {
-        if (error.message === 'Clearance unit not found') {
-            return sendError(res, 404, ErrorCode.NOT_FOUND, error.message, null, req);
-        }
-        if (error.message === 'System-generated clearance units cannot be deleted') {
+        if (error?.message === 'Clearance unit not found' || error?.message === 'System-generated clearance units cannot be deleted') {
             return sendError(res, 400, ErrorCode.VALIDATION_ERROR, error.message, null, req);
         }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
+export const listClearanceUnits = async (req: Request, res: Response) => {
+    try {
+        const campusCtx = getCampusScope(req);
+        const campusId = campusCtx.scope === 'CAMPUS' ? campusCtx.campusId : undefined;
+        
+        const units = await clearanceService.listClearanceUnits(campusId);
+        sendSuccess(res, units);
+    } catch (error: any) {
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
+export const createClearanceUnit = async (req: Request, res: Response) => {
+    try {
+        const { name, description } = req.body;
+        const campusCtx = getCampusScope(req);
+        
+        if (campusCtx.scope !== 'CAMPUS' || !campusCtx.campusId) {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Must be a campus admin to create clearance units', null, req);
+        }
+
+        if (!name) return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Name is required', null, req);
+
+        const unit = await clearanceService.createClearanceUnit({
+            name,
+            description,
+            campusId: campusCtx.campusId
+        });
+        
+        sendSuccess(res, unit, 201);
+    } catch (error: any) {
+        const status = error.message.includes('Unique constraint failed') ? 409 : 500;
+        sendError(res, status, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
+export const updateClearanceUnit = async (req: Request, res: Response) => {
+    try {
+        const id = parseInt(req.params.unitId);
+        const { name, description, isActive } = req.body;
+        
+        const unit = await clearanceService.updateClearanceUnit(id, { name, description, isActive });
+        sendSuccess(res, unit);
+    } catch (error: any) {
+        const status = error.message.includes('not found') || error.message.includes('Cannot rename') ? 400 : 500;
+        sendError(res, status, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };

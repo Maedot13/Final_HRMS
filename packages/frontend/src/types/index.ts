@@ -1,7 +1,9 @@
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'HEAD_HR' | 'HR_OFFICER' | 'DEPARTMENT_HEAD' | 'FINANCE_OFFICER' | 'RECRUITMENT_COMMITTEE' | 'EMPLOYEE';
+
 export interface User {
-    id: string;
+    id: number;
     email: string;
-    role: 'ADMIN' | 'HR_OFFICER' | 'DEPARTMENT_HEAD' | 'FINANCE_OFFICER' | 'RECRUITMENT_COMMITTEE' | 'EMPLOYEE';
+    role: UserRole;
     isActive: boolean;
     mustChangePassword?: boolean;
     campusId?: string;
@@ -9,11 +11,11 @@ export interface User {
 }
 
 export interface Employee {
-    id: string;
+    id: number;
     firstName: string;
     lastName: string;
     employeeId: string;
-    departmentId?: string;
+    departmentId?: number;
     hireDate?: string;
     grossSalary?: number;
 }

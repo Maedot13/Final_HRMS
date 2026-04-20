@@ -39,6 +39,7 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
         scope,
         campusId: user.campusId ?? null,
         employeeId: user.employeeId,
+        employeePkId: user.employee?.id ?? null,
         mustChangePassword: user.mustChangePassword
     });
 
@@ -105,7 +106,7 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
     const targetRole = (role as UserRole) || UserRole.EMPLOYEE;
     const creatorRole = creatorContext.role as UserRole;
 
-    if (creatorRole === UserRole.SUPER_ADMIN) {
+    if (creatorRole === (UserRole.SUPER_ADMIN as any)) {
         // Super Admin can create any role
     } else if (creatorRole === UserRole.ADMIN || creatorRole === UserRole.HR_OFFICER) {
         // Admin and HR can ONLY create EMPLOYEE
@@ -192,6 +193,7 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
         scope: UserScope.CAMPUS,
         campusId: result.newUser.campusId ?? null,
         employeeId: result.newUser.employeeId,
+        employeePkId: result.newEmployee.id,
         mustChangePassword: result.newUser.mustChangePassword
     });
 
@@ -294,7 +296,8 @@ export const refreshToken = async (token: string): Promise<AuthResponse> => {
         role: user.role as UserRole,
         scope,
         campusId: user.campusId ?? null,
-        employeeId: user.employeeId
+        employeeId: user.employeeId,
+        employeePkId: user.employee?.id ?? null
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

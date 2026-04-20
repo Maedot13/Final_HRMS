@@ -18,7 +18,7 @@ describe('Clearance Service', () => {
     });
 
     describe('approveCheck', () => {
-        it('should approve check and complete clearance if all approved', async () => {
+        it('should approve check and transition to HR_APPROVAL_PENDING if all approved', async () => {
             // Mock Transaction
             prismaMock.$transaction.mockImplementation(async (callback: any) => {
                 return callback(prismaMock);
@@ -42,7 +42,7 @@ describe('Clearance Service', () => {
             prismaMock.clearanceRequest.update.mockResolvedValue({
                 id: mockClearanceId,
                 employeeId: 100,
-                status: ClearanceStatus.APPROVED,
+                status: ClearanceStatus.HR_APPROVAL_PENDING,
                 employee: { userId: 999, name: 'Test Employee' }
             } as any);
 
@@ -53,7 +53,7 @@ describe('Clearance Service', () => {
             prismaMock.clearanceRequest.findUnique.mockResolvedValue({
                 id: mockClearanceId,
                 employeeId: 100,
-                status: ClearanceStatus.APPROVED,
+                status: ClearanceStatus.HR_APPROVAL_PENDING,
                 employee: { userId: 999 }
             } as any);
 
@@ -63,9 +63,9 @@ describe('Clearance Service', () => {
             // approveCheck(clearanceId, unitId, approverId, userId, approverCampusId, comment)
             const result = await approveCheck(mockClearanceId, mockUnitId, mockApproverId, 999, null, 'Approved');
 
-            expect(result.status).toBe('COMPLETED');
+            expect(result.status).toBe('HR_APPROVAL_PENDING');
             expect(prismaMock.clearanceRequest.update).toHaveBeenCalledWith(expect.objectContaining({
-                data: { status: ClearanceStatus.APPROVED }
+                data: { status: ClearanceStatus.HR_APPROVAL_PENDING }
             }));
         });
     });

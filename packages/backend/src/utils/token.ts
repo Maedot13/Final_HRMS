@@ -9,6 +9,7 @@ export interface TokenPayload {
     scope?: UserScope;
     campusId?: number | null;
     employeeId?: string | null;
+    employeePkId?: number | null;
     mustChangePassword?: boolean;
     exp?: number;
 }

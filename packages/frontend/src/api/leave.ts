@@ -44,4 +44,7 @@ export const leaveApi = {
 
     // Get leave balances for a specific employee
     getBalances: (employeeId: number) => apiClient.get(`/leave/balances/${employeeId}`),
+    
+    // Get leave balance for the currently logged-in employee (self-service)
+    getMyBalance: () => apiClient.get('/leave/balance'),
 };
