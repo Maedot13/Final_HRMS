@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { rateLimit } from 'express-rate-limit';
-import requestId from 'express-request-id';
+import { randomUUID } from 'crypto';
 import swaggerUi from 'swagger-ui-express';
 import cookieParser from 'cookie-parser';
 import csrf from 'csurf';
@@ -46,7 +46,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(cookieParser());
-app.use(requestId()); // Add request ID to all requests
+app.use((req: any, _res, next) => { req.id = randomUUID(); next(); }); // Inject request ID
 app.use(morgan('dev'));
 
 // Rate Limiting

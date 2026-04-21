@@ -1,7 +1,5 @@
-// User Roles
 export enum UserRole {
     SUPER_ADMIN = 'SUPER_ADMIN',
-    HEAD_HR = 'HEAD_HR',
     ADMIN = 'ADMIN',
     HR_OFFICER = 'HR_OFFICER',
     DEPARTMENT_HEAD = 'DEPARTMENT_HEAD',
@@ -14,6 +12,14 @@ export enum UserRole {
 export enum UserScope {
     CAMPUS = 'CAMPUS',
     UNIVERSITY = 'UNIVERSITY'
+}
+
+// Special Privileges (Additive)
+export enum SpecialPrivilege {
+    DEAN = 'DEAN',
+    DIRECTOR = 'DIRECTOR',
+    UNIVERSITY_PRESIDENT = 'UNIVERSITY_PRESIDENT',
+    VICE_PRESIDENT = 'VICE_PRESIDENT'
 }
 
 // Campus (multi-campus)
@@ -35,6 +41,8 @@ export interface User {
     campusId?: number | null;
     employeeId?: string;
     isActive: boolean;
+    isHeadHR: boolean;
+    specialPrivileges: SpecialPrivilege[];
     createdAt: string;
     updatedAt: string;
     employee?: Employee;

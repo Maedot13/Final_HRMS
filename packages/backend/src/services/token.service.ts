@@ -10,6 +10,8 @@ interface TokenPayloadArgs {
     employeeId: string;
     employeePkId?: number | null;
     mustChangePassword?: boolean;
+    isHeadHR?: boolean;
+    specialPrivileges?: string[];
 }
 
 export const getTokenExpiration = (token: string): Date => {

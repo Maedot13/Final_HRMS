@@ -1,10 +1,14 @@
-export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'HEAD_HR' | 'HR_OFFICER' | 'DEPARTMENT_HEAD' | 'FINANCE_OFFICER' | 'RECRUITMENT_COMMITTEE' | 'EMPLOYEE';
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'HR_OFFICER' | 'DEPARTMENT_HEAD' | 'FINANCE_OFFICER' | 'RECRUITMENT_COMMITTEE' | 'EMPLOYEE';
+
+export type SpecialPrivilege = 'DEAN' | 'DIRECTOR' | 'UNIVERSITY_PRESIDENT' | 'VICE_PRESIDENT';
 
 export interface User {
     id: number;
     email: string;
     role: UserRole;
     isActive: boolean;
+    isHeadHR: boolean;
+    specialPrivileges: SpecialPrivilege[];
     mustChangePassword?: boolean;
     campusId?: string;
     employee?: Employee;

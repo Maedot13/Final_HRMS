@@ -11,6 +11,8 @@ export interface TokenPayload {
     employeeId?: string | null;
     employeePkId?: number | null;
     mustChangePassword?: boolean;
+    isHeadHR?: boolean;
+    specialPrivileges?: string[];
     exp?: number;
 }
 

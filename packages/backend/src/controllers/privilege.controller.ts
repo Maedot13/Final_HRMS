@@ -8,10 +8,14 @@ export const listPrivilegedUsers = async (req: Request, res: Response) => {
     try {
         const campusCtx = getCampusScope(req);
         
-        // Find users with elevated roles
+        // Find users with elevated roles (SUPER_ADMIN) or any special privileges or isHeadHR
         const users = await prisma.user.findMany({
             where: {
-                role: { in: ['SUPER_ADMIN', 'HEAD_HR'] },
+                OR: [
+                    { role: 'SUPER_ADMIN' },
+                    { isHeadHR: true },
+                    { specialPrivileges: { hasSome: ['DEAN', 'DIRECTOR', 'UNIVERSITY_PRESIDENT', 'VICE_PRESIDENT'] } }
+                ],
                 ...(campusCtx.scope === 'CAMPUS' ? { campusId: campusCtx.campusId } : {})
             },
             include: {
@@ -28,21 +32,17 @@ export const listPrivilegedUsers = async (req: Request, res: Response) => {
 
 export const assignPrivilege = async (req: Request, res: Response) => {
     try {
-        const { userId, role } = req.body;
+        const { userId, role, isHeadHR, specialPrivileges } = req.body;
         
-        if (!userId || !role) {
-            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'userId and role are required', null, req);
-        }
-        
-        if (role !== 'SUPER_ADMIN' && role !== 'HEAD_HR') {
-            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid privilege role. Must be SUPER_ADMIN or HEAD_HR', null, req);
+        if (!userId) {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'userId is required', null, req);
         }
         
         const operator = req.user!;
         
         // Only SUPER_ADMIN can assign another SUPER_ADMIN
         if (role === 'SUPER_ADMIN' && operator.role !== UserRole.SUPER_ADMIN) {
-             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Only SUPER_ADMIN can assign SUPER_ADMIN privilege', null, req);
+             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Only SUPER_ADMIN can assign SUPER_ADMIN role', null, req);
         }
 
         const targetUser = await prisma.user.findUnique({ where: { id: userId } });
@@ -55,14 +55,17 @@ export const assignPrivilege = async (req: Request, res: Response) => {
              return sendError(res, 403, ErrorCode.FORBIDDEN, 'Cannot assign privileges outside your campus', null, req);
         }
         
-        // For resetting privilege we use the previous base role if we implemented it, or otherwise they revert to HR_OFFICER / ADMIN later.
-        // Actually, if they are given HEAD_HR, their role becomes HEAD_HR.
+        const updateData: any = {};
+        if (role === 'SUPER_ADMIN') updateData.role = 'SUPER_ADMIN';
+        if (isHeadHR !== undefined) updateData.isHeadHR = isHeadHR;
+        if (specialPrivileges !== undefined && Array.isArray(specialPrivileges)) updateData.specialPrivileges = specialPrivileges;
+
         const updated = await prisma.user.update({
             where: { id: userId },
-            data: { role: role }
+            data: updateData
         });
         
-        sendSuccess(res, { message: `Privilege ${role} assigned successfully`, user: { id: updated.id, role: updated.role } });
+        sendSuccess(res, { message: `Privileges updated successfully`, user: { id: updated.id, role: updated.role, isHeadHR: updated.isHeadHR, specialPrivileges: updated.specialPrivileges } });
     } catch (error: any) {
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
@@ -82,17 +85,19 @@ export const revokePrivilege = async (req: Request, res: Response) => {
              return sendError(res, 403, ErrorCode.FORBIDDEN, 'Cannot revoke privileges outside your campus', null, req);
         }
         
-        // By default when revoked, we fallback their role to their original. 
-        // If unknown, fallback to HR_OFFICER for HEAD_HR, ADMIN for SUPER_ADMIN.
-        let fallbackRole: 'HR_OFFICER' | 'ADMIN' | 'EMPLOYEE' = 'HR_OFFICER';
-        if (targetUser.role === 'SUPER_ADMIN') fallbackRole = 'ADMIN';
+        // Define fallback for SUPER_ADMIN
+        const fallbackRole = targetUser.role === 'SUPER_ADMIN' ? 'ADMIN' : targetUser.role;
 
         const updated = await prisma.user.update({
             where: { id: userId },
-            data: { role: fallbackRole }
+            data: { 
+                role: fallbackRole,
+                isHeadHR: false,
+                specialPrivileges: []
+            }
         });
         
-        sendSuccess(res, { message: 'Privilege revoked', user: { id: updated.id, role: updated.role } });
+        sendSuccess(res, { message: 'Privileges revoked', user: { id: updated.id, role: updated.role, isHeadHR: updated.isHeadHR, specialPrivileges: updated.specialPrivileges } });
     } catch (error: any) {
          sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }

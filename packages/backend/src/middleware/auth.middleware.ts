@@ -88,6 +88,32 @@ export const authorize = (allowedRoles: UserRole[]) => {
     };
 };
 
+export const authorizeHeadHR = (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+        return sendError(
+            res,
+            401,
+            ErrorCode.AUTHENTICATION_FAILED,
+            'User not authenticated',
+            null,
+            req
+        );
+    }
+    
+    // Allow SUPER_ADMIN or Head HR
+    if (req.user.role !== UserRole.SUPER_ADMIN && !req.user.isHeadHR) {
+        return sendError(
+            res,
+            403,
+            ErrorCode.FORBIDDEN,
+            'Head HR access required',
+            null,
+            req
+        );
+    }
+    next();
+};
+
 /** Requires ADMIN role and UNIVERSITY scope (university-level admin only). */
 export const requireUniversityAdmin = (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {

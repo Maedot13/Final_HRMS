@@ -40,7 +40,9 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
         campusId: user.campusId ?? null,
         employeeId: user.employeeId,
         employeePkId: user.employee?.id ?? null,
-        mustChangePassword: user.mustChangePassword
+        mustChangePassword: user.mustChangePassword,
+        isHeadHR: user.isHeadHR,
+        specialPrivileges: user.specialPrivileges
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -194,7 +196,9 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
         campusId: result.newUser.campusId ?? null,
         employeeId: result.newUser.employeeId,
         employeePkId: result.newEmployee.id,
-        mustChangePassword: result.newUser.mustChangePassword
+        mustChangePassword: result.newUser.mustChangePassword,
+        isHeadHR: result.newUser.isHeadHR,
+        specialPrivileges: result.newUser.specialPrivileges
     });
 
     const campus = await prisma.campus.findUnique({
@@ -297,7 +301,10 @@ export const refreshToken = async (token: string): Promise<AuthResponse> => {
         scope,
         campusId: user.campusId ?? null,
         employeeId: user.employeeId,
-        employeePkId: user.employee?.id ?? null
+        employeePkId: user.employee?.id ?? null,
+        mustChangePassword: user.mustChangePassword,
+        isHeadHR: user.isHeadHR,
+        specialPrivileges: user.specialPrivileges
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
