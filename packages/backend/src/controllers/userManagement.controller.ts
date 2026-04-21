@@ -13,7 +13,18 @@ export const getAllUsers = async (req: Request, res: Response) => {
     try {
         const campusCtx = getCampusScope(req);
         const campusId = getCampusIdFilter(campusCtx);
-        const users = await userManagementService.getAllUsers(campusId);
+        
+        const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+        const page = req.query.cursor ? parseInt(req.query.cursor as string) : 1;
+        
+        const filters = {
+            search: req.query.search as string | undefined,
+            role: req.query.role as string | undefined,
+            status: req.query.status as string | undefined,
+            department: req.query.department as string | undefined
+        };
+
+        const users = await userManagementService.getAllUsers(campusId, page, limit, filters);
         sendSuccess(res, users);
     } catch (error: any) {
         if (error?.message === 'Missing campus context for this user') {

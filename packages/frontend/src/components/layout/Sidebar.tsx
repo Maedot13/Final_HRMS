@@ -2,7 +2,6 @@ import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore';
 import {
     FiGrid,
-    FiMapPin,
     FiLayers,
     FiUsers,
     FiCalendar,
@@ -34,12 +33,6 @@ const navItems: NavItem[] = [
         label: 'Dashboard',
         to: '/',
         icon: <FiGrid className="w-4 h-4" />,
-    },
-    {
-        label: 'Campuses',
-        to: '/campuses',
-        roles: ['ADMIN'],
-        icon: <FiMapPin className="w-4 h-4" />,
     },
     {
         label: 'Departments',

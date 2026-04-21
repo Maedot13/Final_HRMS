@@ -6,8 +6,36 @@ import crypto from 'crypto';
 import * as emailService from './email.service';
 import { logger } from '../utils/logger';
 
-export const getAllUsers = async (campusId?: number, page = 1, limit = 50) => {
-    const where = campusId != null ? { campusId } : undefined;
+export const getAllUsers = async (
+    campusId?: number, 
+    page = 1, 
+    limit = 50,
+    filters?: { search?: string; role?: string; status?: string; department?: string }
+) => {
+    const where: any = {};
+    if (campusId != null) where.campusId = campusId;
+
+    if (filters) {
+        if (filters.search) {
+            where.OR = [
+                { email: { contains: filters.search, mode: 'insensitive' } },
+                { employeeId: { contains: filters.search, mode: 'insensitive' } },
+                { employee: { name: { contains: filters.search, mode: 'insensitive' } } }
+            ];
+        }
+        if (filters.role) {
+            where.role = filters.role;
+        }
+        if (filters.status) {
+            where.isActive = filters.status === 'active';
+        }
+        if (filters.department) {
+            where.employee = {
+                ...where.employee,
+                departmentId: parseInt(filters.department)
+            };
+        }
+    }
     const [users, total] = await Promise.all([
         prisma.user.findMany({
             where,

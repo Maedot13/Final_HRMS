@@ -4,7 +4,7 @@ import type { UserListItem, UserDetail } from '../types';
 export const usersApi = {
     list: () => apiClient.get<UserListItem[]>('/users'),
 
-    listPaginated: (params?: { cursor?: string; limit?: number; search?: string; role?: string; status?: string }) =>
+    listPaginated: (params?: { cursor?: string; limit?: number; search?: string; role?: string; status?: string; department?: string }) =>
         apiClient.get<import('../types').PaginatedResponse<UserListItem>>('/users', { params }),
 
     getById: (id: number) => apiClient.get<UserDetail>(`/users/${id}`),

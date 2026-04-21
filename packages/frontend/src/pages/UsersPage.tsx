@@ -59,6 +59,7 @@ export default function UsersPage() {
                 search: filters.search.trim() || undefined,
                 role: filters.role || undefined,
                 status: filters.status || undefined,
+                department: filters.department || undefined,
             });
             return res.data;
         },
