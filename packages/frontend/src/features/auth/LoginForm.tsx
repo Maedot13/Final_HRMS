@@ -57,6 +57,8 @@ export function LoginForm() {
 
             if (user.mustChangePassword) {
                 navigate('/force-password-change', { replace: true });
+            } else if (user.role === 'CLEARANCE_BODY') {
+                navigate('/clearance-body', { replace: true });
             } else {
                 navigate(from, { replace: true });
             }

@@ -151,7 +151,7 @@ export const getClearance = async (id: number) => {
 
 // 3. Approve Specific Check
 // unitId is the 'ClearanceUnit.id', checking against 'ClearanceCheck.unitId'
-export const approveCheck = async (clearanceId: number, unitId: number, approverId: number, userId: number, approverCampusId: number | null, comment?: string) => {
+export const approveCheck = async (clearanceId: number, unitId: number, approverId: number | null, userId: number, approverCampusId: number | null, comment?: string) => {
     // AUTHORIZATION CHECK
     const canApprove = await canApproveForUnit(userId, unitId);
     if (!canApprove) {
@@ -162,7 +162,7 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
     if (approverCampusId != null) {
         const clearance = await prisma.clearanceRequest.findUnique({
             where: { id: clearanceId },
-            select: { campusId: true }
+            select: { campusId: true, campus: { select: { isClearanceSequential: true } } }
         });
         if (!clearance || clearance.campusId !== approverCampusId) {
             logger.warn('Campus isolation: Cross-campus clearance approval denied', {
@@ -175,6 +175,26 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
     }
 
     return prisma.$transaction(async (tx) => {
+        // Enforce sequential clearance logic if active
+        const reqData = await tx.clearanceRequest.findUnique({
+            where: { id: clearanceId },
+            include: { campus: { select: { isClearanceSequential: true } } }
+        });
+        if (reqData?.campus?.isClearanceSequential) {
+            const currentUnit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
+            if (currentUnit) {
+                const earlierPending = await tx.clearanceCheck.count({
+                    where: {
+                        clearanceId,
+                        status: { not: ClearanceStatus.APPROVED },
+                        unit: { priorityOrder: { lt: currentUnit.priorityOrder } }
+                    }
+                });
+                if (earlierPending > 0) {
+                    throw new Error('Sequential clearance enforcement: You cannot evaluate this check until all prior units have approved.');
+                }
+            }
+        }
         // Find the specific check
         const check = await tx.clearanceCheck.findUnique({
             where: {
@@ -259,7 +279,7 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
 };
 
 // 4. Reject Specific Check
-export const rejectCheck = async (clearanceId: number, unitId: number, approverId: number, userId: number, approverCampusId: number | null, comment: string) => {
+export const rejectCheck = async (clearanceId: number, unitId: number, approverId: number | null, userId: number, approverCampusId: number | null, comment: string) => {
     // AUTHORIZATION CHECK
     const canApprove = await canApproveForUnit(userId, unitId);
     if (!canApprove) {
@@ -270,7 +290,7 @@ export const rejectCheck = async (clearanceId: number, unitId: number, approverI
     if (approverCampusId != null) {
         const clearance = await prisma.clearanceRequest.findUnique({
             where: { id: clearanceId },
-            select: { campusId: true }
+            select: { campusId: true, campus: { select: { isClearanceSequential: true } } }
         });
         if (!clearance || clearance.campusId !== approverCampusId) {
             logger.warn('Campus isolation: Cross-campus clearance rejection denied', {
@@ -283,6 +303,27 @@ export const rejectCheck = async (clearanceId: number, unitId: number, approverI
     }
 
     return prisma.$transaction(async (tx) => {
+        // Enforce sequential clearance logic if active
+        const reqData = await tx.clearanceRequest.findUnique({
+            where: { id: clearanceId },
+            include: { campus: { select: { isClearanceSequential: true } } }
+        });
+        if (reqData?.campus?.isClearanceSequential) {
+            const currentUnit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
+            if (currentUnit) {
+                const earlierPending = await tx.clearanceCheck.count({
+                    where: {
+                        clearanceId,
+                        status: { not: ClearanceStatus.APPROVED },
+                        unit: { priorityOrder: { lt: currentUnit.priorityOrder } }
+                    }
+                });
+                if (earlierPending > 0) {
+                    throw new Error('Sequential clearance enforcement: You cannot evaluate this check until all prior units have approved.');
+                }
+            }
+        }
+        
         // Find the specific check
         const check = await tx.clearanceCheck.findUnique({
             where: {
@@ -364,15 +405,37 @@ export const listClearanceUnits = async (campusId?: number) => {
     });
 };
 
-export const createClearanceUnit = async (data: { name: string; description?: string; campusId: number }) => {
-    return prisma.clearanceUnit.create({
-        data: {
-            name: data.name,
-            description: data.description,
-            campusId: data.campusId,
-            isSystemGenerated: false,
-            isActive: true
+export const createClearanceUnit = async (data: { name: string; description?: string; campusId: number; priorityOrder?: number; loginId?: string; loginPassword?: string }) => {
+    return prisma.$transaction(async (tx) => {
+        const unit = await tx.clearanceUnit.create({
+            data: {
+                name: data.name,
+                description: data.description,
+                campusId: data.campusId,
+                isSystemGenerated: false,
+                isActive: true,
+                priorityOrder: data.priorityOrder || 0
+            }
+        });
+
+        if (data.loginId && data.loginPassword) {
+            // Use bcrypt directly to hash the default clearance body password
+            const bcrypt = require('bcrypt');
+            const passwordHash = await bcrypt.hash(data.loginPassword, 10);
+            
+            await tx.user.create({
+                data: {
+                    email: `${data.loginId}@body.local`, // Mock email as Prisma forces unique email schema
+                    passwordHash,
+                    role: 'CLEARANCE_BODY',
+                    employeeId: data.loginId, // Explicit mapping to employeeId for login schema
+                    isActive: true,
+                    campusId: data.campusId,
+                    clearanceUnitId: unit.id
+                }
+            });
         }
+        return unit;
     });
 };
 
@@ -464,10 +527,19 @@ export const finalApproveClearance = async (clearanceId: number, approverId: num
         }
 
         if (!isApprove) {
-            return tx.clearanceRequest.update({
+            const rejectedReq = await tx.clearanceRequest.update({
                 where: { id: clearanceId },
                 data: { status: ClearanceStatus.REJECTED, rejectedAt: new Date(), rejectionReason: reason, finalApprovedById: approverId }
             });
+            await notifyRole('HR_OFFICER', {
+                type: 'CLEARANCE_FINAL_REJECTED',
+                title: 'Clearance Finally Rejected',
+                message: `Head HR rejected the clearance for ${clearance.employee.name}. Reason: ${reason}`,
+                relatedId: clearanceId,
+                relatedType: 'CLEARANCE_REQUEST',
+                campusId: clearance.campusId
+            });
+            return rejectedReq;
         }
 
         const completed = await tx.clearanceRequest.update({
@@ -500,6 +572,15 @@ export const finalApproveClearance = async (clearanceId: number, approverId: num
             employeeUserId: clearance.employee.userId,
             employeeName: clearance.employee.name,
             approverId
+        });
+
+        await notifyRole('HR_OFFICER', {
+            type: 'CLEARANCE_FULLY_APPROVED',
+            title: 'Clearance Fully Approved',
+            message: `Head HR has given final approval for ${clearance.employee.name}'s clearance. Employee is now deactivated.`,
+            relatedId: clearanceId,
+            relatedType: 'CLEARANCE_REQUEST',
+            campusId: clearance.campusId
         });
 
         return completed;

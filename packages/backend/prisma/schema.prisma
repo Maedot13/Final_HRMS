@@ -20,6 +20,7 @@ model Campus {
   employeeNumericLength   Int                 @default(5)
   employeeSequenceCurrent Int                 @default(0)
   isPatternLocked         Boolean             @default(false)
+  isClearanceSequential   Boolean             @default(false)
   auditLogs               AuditLog[]
   clearanceRequests       ClearanceRequest[]
   clearanceUnits          ClearanceUnit[]
@@ -48,6 +49,8 @@ model User {
   mustChangePassword Boolean            @default(false)
   isHeadHR           Boolean            @default(false)
   specialPrivileges  SpecialPrivilege[] @default([])
+  clearanceUnitId    Int?
+  clearanceUnit      ClearanceUnit? @relation(fields: [clearanceUnitId], references: [id])
   employee           Employee?
   jobPostings        JobPosting[]   @relation("JobCreator")
   notifications      Notification[]
@@ -56,6 +59,7 @@ model User {
   clearanceApprovals ClearanceApproval[]
 
   @@index([campusId])
+  @@index([clearanceUnitId])
 }
 
 model Employee {
@@ -191,6 +195,8 @@ model ClearanceUnit {
   createdAt         DateTime         @default(now())
   campusId          Int?
   isSystemGenerated Boolean          @default(false)
+  priorityOrder     Int              @default(0)
+  users             User[]
   checks            ClearanceCheck[]
   campus            Campus?          @relation(fields: [campusId], references: [id], onDelete: Restrict)
 
@@ -401,6 +407,7 @@ enum UserRole {
   DEPARTMENT_HEAD
   FINANCE_OFFICER
   RECRUITMENT_COMMITTEE
+  CLEARANCE_BODY
   EMPLOYEE
 }
 

@@ -12,7 +12,7 @@ export default function ClearanceBodiesPage() {
     const queryClient = useQueryClient();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUnit, setEditingUnit] = useState<ClearanceUnit | null>(null);
-    const [formData, setFormData] = useState({ name: '', description: '' });
+    const [formData, setFormData] = useState({ name: '', description: '', priorityOrder: 0, loginId: '', loginPassword: '' });
 
     const { data: units = [], isLoading } = useQuery({
         queryKey: ['clearanceUnits'],
@@ -60,7 +60,7 @@ export default function ClearanceBodiesPage() {
     const closeModal = () => {
         setIsModalOpen(false);
         setEditingUnit(null);
-        setFormData({ name: '', description: '' });
+        setFormData({ name: '', description: '', priorityOrder: 0, loginId: '', loginPassword: '' });
     };
 
     const handleSave = (e: React.FormEvent) => {
@@ -82,6 +82,11 @@ export default function ClearanceBodiesPage() {
             key: 'description',
             header: 'Description',
             render: (r) => r.description || '—',
+        },
+        {
+            key: 'priorityOrder',
+            header: 'Order (Seq)',
+            render: (r: any) => r.priorityOrder || 0,
         },
         {
             key: 'status',
@@ -107,7 +112,7 @@ export default function ClearanceBodiesPage() {
                         size="sm"
                         onClick={() => {
                             setEditingUnit(r);
-                            setFormData({ name: r.name, description: r.description || '' });
+                            setFormData({ name: r.name, description: r.description || '', priorityOrder: (r as any).priorityOrder || 0, loginId: '', loginPassword: '' });
                             setIsModalOpen(true);
                         }}
                     >
@@ -178,6 +183,42 @@ export default function ClearanceBodiesPage() {
                             onChange={(e) => setFormData(p => ({ ...p, description: e.target.value }))}
                         />
                     </div>
+
+                    <div className="space-y-1">
+                        <label className="text-sm font-medium text-gray-700">Priority Order (Sequential)</label>
+                        <Input 
+                            type="number"
+                            placeholder="e.g. 1"
+                            value={formData.priorityOrder}
+                            onChange={(e: any) => setFormData(p => ({ ...p, priorityOrder: parseInt(e.target.value) || 0 }))}
+                        />
+                    </div>
+
+                    {!editingUnit && (
+                        <div className="p-3 bg-gray-50 border rounded-md space-y-4">
+                            <h4 className="text-sm font-semibold text-gray-800">Clearance Body Account</h4>
+                            <p className="text-xs text-gray-500">Accounts are strictly required so that bodies can log into the dashboard securely.</p>
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-gray-700">Login ID / Username</label>
+                                <Input 
+                                    required
+                                    placeholder="e.g. IT-01"
+                                    value={formData.loginId}
+                                    onChange={(e: any) => setFormData(p => ({ ...p, loginId: e.target.value }))}
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-gray-700">Login Password</label>
+                                <Input 
+                                    required
+                                    type="password"
+                                    placeholder="Secure password"
+                                    value={formData.loginPassword}
+                                    onChange={(e: any) => setFormData(p => ({ ...p, loginPassword: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     <div className="pt-4 flex justify-end gap-2">
                         <Button type="button" variant="ghost" onClick={closeModal}>Cancel</Button>

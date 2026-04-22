@@ -26,6 +26,10 @@ export const canApproveForUnit = async (
 
     // Role-based unit authorization
     switch (user.role) {
+        case UserRole.CLEARANCE_BODY:
+            // They can approve only for their designated unit
+            return user.clearanceUnitId === unitId;
+
         case UserRole.HR_OFFICER:
             return unitName === 'HR' || unitName === 'HUMAN RESOURCES';
 

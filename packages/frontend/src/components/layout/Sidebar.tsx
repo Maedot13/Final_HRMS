@@ -19,6 +19,7 @@ type Role =
     | 'DEPARTMENT_HEAD'
     | 'FINANCE_OFFICER'
     | 'RECRUITMENT_COMMITTEE'
+    | 'CLEARANCE_BODY'
     | 'EMPLOYEE';
 
 interface NavItem {
@@ -32,6 +33,7 @@ const navItems: NavItem[] = [
     {
         label: 'Dashboard',
         to: '/',
+        roles: ['ADMIN', 'HR_OFFICER', 'DEPARTMENT_HEAD', 'FINANCE_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE'],
         icon: <FiGrid className="w-4 h-4" />,
     },
     {
@@ -55,7 +57,13 @@ const navItems: NavItem[] = [
     {
         label: 'Clearance',
         to: '/clearance',
-        roles: ['ADMIN', 'HR_OFFICER'],
+        roles: ['HR_OFFICER'],
+        icon: <FiCheckSquare className="w-4 h-4" />,
+    },
+    {
+        label: 'Body Dashboard',
+        to: '/clearance-body',
+        roles: ['CLEARANCE_BODY'],
         icon: <FiCheckSquare className="w-4 h-4" />,
     },
     {
@@ -91,6 +99,7 @@ const navItems: NavItem[] = [
     {
         label: 'Contacts',
         to: '/contacts',
+        roles: ['ADMIN', 'HR_OFFICER', 'DEPARTMENT_HEAD', 'FINANCE_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE'],
         icon: <FiPhone className="w-4 h-4" />,
     },
     {
@@ -134,6 +143,34 @@ export function Sidebar() {
                             </NavLink>
                         </li>
                     ))}
+                    
+                    {user?.isHeadHR && (
+                        <div className="pt-4 mt-4 border-t border-gray-200">
+                            <span className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                Head HR Control
+                            </span>
+                            <ul className="mt-2 space-y-1">
+                                <li>
+                                    <NavLink to="/hr/employees" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiUsers className="w-4 h-4"/> Employees</NavLink>
+                                </li>
+                                <li>
+                                    <NavLink to="/hr/leave/approvals" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiCalendar className="w-4 h-4"/> Leave Approvals</NavLink>
+                                </li>
+                                <li>
+                                    <NavLink to="/hr/performance" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiFileText className="w-4 h-4"/> Performance</NavLink>
+                                </li>
+                                <li>
+                                    <NavLink to="/hr/payroll" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiGrid className="w-4 h-4"/> Payroll</NavLink>
+                                </li>
+                                <li>
+                                    <NavLink to="/hr/clearance" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiCheckSquare className="w-4 h-4"/> Clearance</NavLink>
+                                </li>
+                                <li>
+                                    <NavLink to="/hr/experience" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiBriefcase className="w-4 h-4"/> Experience</NavLink>
+                                </li>
+                            </ul>
+                        </div>
+                    )}
                 </ul>
             </nav>
         </aside>

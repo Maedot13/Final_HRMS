@@ -76,6 +76,42 @@ export default function ProfilePage() {
         await updateMutation.mutateAsync({ contactInfo: data });
     };
 
+    if (user?.role === 'CLEARANCE_BODY') {
+        return (
+            <div className="space-y-6">
+                <Card padding="lg">
+                    <div className="text-center">
+                        <div className="mx-auto h-20 w-20 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-4">
+                            <span className="text-2xl font-bold">{user.clearanceUnit?.name?.[0] || 'C'}</span>
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-900">{user.clearanceUnit?.name || 'Unknown Unit'}</h2>
+                        <p className="text-sm text-gray-500 mt-1 uppercase tracking-wide">Clearance Body Account</p>
+                    </div>
+                </Card>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <Card padding="md">
+                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Login ID / Identity</h3>
+                        <p className="text-lg font-medium text-gray-900">{user.employeeId || 'System Managed'}</p>
+                    </Card>
+                    <Card padding="md">
+                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Assigned Campus</h3>
+                        <p className="text-lg font-medium text-gray-900">{user.campus?.name || 'Global System'}</p>
+                    </Card>
+                    <Card padding="md">
+                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Account Status</h3>
+                        <div className="mt-1">
+                            {user.isActive ? (
+                                <Badge variant="approved">Active</Badge>
+                            ) : (
+                                <Badge variant="rejected">Deactivated</Badge>
+                            )}
+                        </div>
+                    </Card>
+                </div>
+            </div>
+        );
+    }
+
     if (!employeeId) {
         return (
             <div className="rounded-card border border-warning bg-amber-50 p-6 text-center">

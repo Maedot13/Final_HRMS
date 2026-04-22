@@ -122,20 +122,20 @@ export const approveCheck = async (req: Request, res: Response) => {
         if (!validation.success) return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid input', validation.error.format(), req);
         const { unitId, comment } = validation.data;
 
-        if (![UserRole.ADMIN, UserRole.DEPARTMENT_HEAD, UserRole.HR_OFFICER].includes(user.role)) {
+        if (![UserRole.HR_OFFICER, UserRole.FINANCE_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.CLEARANCE_BODY, UserRole.SUPER_ADMIN].includes(user.role)) {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
         }
 
         const { getEmployeeByUserId } = await import('../services/employee.service');
-        const approver = await getEmployeeByUserId(user.userId);
-        if (!approver) return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Approver profile not found', null, req);
+        const approver = user.role !== UserRole.CLEARANCE_BODY ? await getEmployeeByUserId(user.userId) : null;
+        if (user.role !== UserRole.CLEARANCE_BODY && !approver) return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Approver profile not found', null, req);
 
         const sanitizedComment = comment ? sanitizeInput(comment) : undefined;
 
         const campusCtx = getCampusScope(req);
         const approverCampusId = campusCtx.scope === 'CAMPUS' ? campusCtx.campusId : null;
 
-        const result = await clearanceService.approveCheck(clearanceId, unitId, approver.id, user.userId, approverCampusId, sanitizedComment);
+        const result = await clearanceService.approveCheck(clearanceId, unitId, approver?.id ?? null, user.userId, approverCampusId, sanitizedComment);
 
         await logAction({
             userId: user.userId,
@@ -168,20 +168,20 @@ export const rejectCheck = async (req: Request, res: Response) => {
 
         if (!comment) return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Comment is required for rejection', null, req);
 
-        if (![UserRole.ADMIN, UserRole.DEPARTMENT_HEAD, UserRole.HR_OFFICER].includes(user.role)) {
+        if (![UserRole.HR_OFFICER, UserRole.FINANCE_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.CLEARANCE_BODY, UserRole.SUPER_ADMIN].includes(user.role)) {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
         }
 
         const { getEmployeeByUserId } = await import('../services/employee.service');
-        const approver = await getEmployeeByUserId(user.userId);
-        if (!approver) return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Approver profile not found', null, req);
+        const approver = user.role !== UserRole.CLEARANCE_BODY ? await getEmployeeByUserId(user.userId) : null;
+        if (user.role !== UserRole.CLEARANCE_BODY && !approver) return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Approver profile not found', null, req);
 
         const sanitizedComment = sanitizeInput(comment);
 
         const campusCtx = getCampusScope(req);
         const approverCampusId = campusCtx.scope === 'CAMPUS' ? campusCtx.campusId : null;
 
-        const result = await clearanceService.rejectCheck(clearanceId, unitId, approver.id, user.userId, approverCampusId, sanitizedComment);
+        const result = await clearanceService.rejectCheck(clearanceId, unitId, approver?.id ?? null, user.userId, approverCampusId, sanitizedComment);
 
         await logAction({
             userId: user.userId,
@@ -336,7 +336,7 @@ export const listClearanceUnits = async (req: Request, res: Response) => {
 
 export const createClearanceUnit = async (req: Request, res: Response) => {
     try {
-        const { name, description } = req.body;
+        const { name, description, priorityOrder, loginId, loginPassword } = req.body;
         const campusCtx = getCampusScope(req);
         
         if (campusCtx.scope !== 'CAMPUS' || !campusCtx.campusId) {
@@ -345,10 +345,17 @@ export const createClearanceUnit = async (req: Request, res: Response) => {
 
         if (!name) return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Name is required', null, req);
 
+        if (!loginId || !loginPassword) {
+             return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Login ID and Password strictly required for new bodies', null, req);
+        }
+
         const unit = await clearanceService.createClearanceUnit({
             name,
             description,
-            campusId: campusCtx.campusId
+            campusId: campusCtx.campusId,
+            priorityOrder: priorityOrder ? parseInt(priorityOrder) : 0,
+            loginId,
+            loginPassword
         });
         
         sendSuccess(res, unit, 201);

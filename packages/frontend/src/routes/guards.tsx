@@ -25,10 +25,22 @@ export function RequireAuth({ children }: RequireAuthProps) {
         if (user?.mustChangePassword && location.pathname !== '/force-password-change') {
             navigate('/force-password-change', { replace: true });
         }
+
+        // Complete lock-out of standard module pages for CLEARANCE_BODY
+        if (
+            user?.role === 'CLEARANCE_BODY' &&
+            (location.pathname === '/' || location.pathname === '/contacts' || location.pathname === '/departments')
+        ) {
+            navigate('/clearance-body', { replace: true });
+        }
     }, [isAuthenticated, user, location, navigate]);
 
     if (!isAuthenticated || (user?.mustChangePassword && location.pathname !== '/force-password-change')) {
         return null; // Or a loading spinner
+    }
+
+    if (user?.role === 'CLEARANCE_BODY' && (location.pathname === '/' || location.pathname === '/contacts' || location.pathname === '/departments')) {
+        return null;
     }
 
     return <>{children}</>;

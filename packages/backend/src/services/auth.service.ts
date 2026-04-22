@@ -14,7 +14,7 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
     // Strict login with Employee ID only as per requirement
     const user = await prisma.user.findUnique({
         where: { employeeId },
-        include: { employee: true, campus: true }
+        include: { employee: true, campus: true, clearanceUnit: true }
     });
 
     if (!user) {
@@ -59,7 +59,9 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
             ...user.employee,
             hireDate: user.employee.hireDate.toISOString()
         } : undefined,
-        campus: user.campus ? { id: user.campus.id, code: user.campus.code, name: user.campus.name, description: user.campus.description ?? undefined, isActive: user.campus.isActive, timezone: user.campus.timezone ?? undefined } : undefined
+        campus: user.campus ? { id: user.campus.id, code: user.campus.code, name: user.campus.name, description: user.campus.description ?? undefined, isActive: user.campus.isActive, timezone: user.campus.timezone ?? undefined } : undefined,
+        clearanceUnit: (user as any).clearanceUnit ? { id: (user as any).clearanceUnit.id, name: (user as any).clearanceUnit.name } : undefined,
+        employeeId: user.employeeId
     };
 
     return {

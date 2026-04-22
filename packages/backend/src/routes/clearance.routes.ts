@@ -66,7 +66,7 @@ import { initiateClearanceSchema, approveCheckSchema, rejectCheckSchema } from '
  *         description: List of clearance requests
  */
 router.get('/requests',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]),
+    authorize([UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]),
     clearanceController.listClearanceRequests
 );
 
@@ -93,7 +93,7 @@ router.post('/requests', authorize([UserRole.HR_OFFICER]), validateBody(initiate
  *         description: Request not found
  */
 router.get('/requests/:id',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]),
+    authorize([UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER, UserRole.CLEARANCE_BODY]),
     clearanceController.getClearance
 );
 
@@ -131,7 +131,7 @@ router.get('/requests/:id',
  *         description: Forbidden (Not authorized for this unit)
  */
 router.patch('/requests/:id/approve-check',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]),
+    authorize([UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER, UserRole.CLEARANCE_BODY]),
     validateBody(approveCheckSchema),
     clearanceController.approveCheck
 );
@@ -169,7 +169,7 @@ router.patch('/requests/:id/approve-check',
  *         description: Check rejected successfully
  */
 router.patch('/requests/:id/reject-check',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]),
+    authorize([UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER, UserRole.CLEARANCE_BODY]),
     validateBody(rejectCheckSchema),
     clearanceController.rejectCheck
 );
@@ -203,7 +203,7 @@ router.patch('/requests/:id/final-approve',
  *         description: List of pending checks
  */
 router.get('/units/:unitId/pending',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER, UserRole.CLEARANCE_BODY]),
     clearanceController.getPendingChecksForUnit
 );
 

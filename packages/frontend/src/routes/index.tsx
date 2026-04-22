@@ -21,6 +21,7 @@ import ContactDirectoryPage from '../pages/ContactDirectoryPage';
 import AdminOrgPage from '../pages/admin/AdminOrgPage';
 import ClearanceBodiesPage from '../pages/admin/ClearanceBodiesPage';
 import PrivilegesPage from '../pages/admin/PrivilegesPage';
+import ClearanceBodyDashboard from '../pages/ClearanceBodyDashboard';
 
 const router = createBrowserRouter([
     {
@@ -62,6 +63,10 @@ const router = createBrowserRouter([
             {
                 path: 'clearance',
                 element: <ClearancePage />,
+            },
+            {
+                path: 'clearance-body',
+                element: <ClearanceBodyDashboard />,
             },
             {
                 path: 'jobs',
@@ -117,6 +122,43 @@ const router = createBrowserRouter([
             },
         ],
     },
+    // Head HR Role Dashboard Routes
+    {
+        path: '/hr',
+        element: (
+            <RequireAuth>
+                <DashboardLayout />
+            </RequireAuth>
+        ),
+        errorElement: <ErrorPage />,
+        children: [
+            {
+                path: 'employees',
+                element: <UsersPage />, // Reuse UsersPage as employees listing
+            },
+            {
+                path: 'leave/approvals',
+                element: <LeaveManagementPage />,
+            },
+            {
+                path: 'performance',
+                // Placeholder if Page doesn't exist yet, wait, we don't have performance page yet, map to Dashboard
+                element: <DashboardPage />, 
+            },
+            {
+                path: 'payroll',
+                element: <DashboardPage />,
+            },
+            {
+                path: 'clearance',
+                element: <ClearancePage />,
+            },
+            {
+                path: 'experience',
+                element: <DashboardPage />,
+            }
+        ]
+    }
 ]);
 
 export default router;

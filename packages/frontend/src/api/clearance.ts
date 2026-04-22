@@ -42,6 +42,9 @@ export const clearanceApi = {
         }
     },
 
+    // Get pending checks for a unit
+    getPendingChecksForUnit: (unitId: number) => apiClient.get(`/clearance/units/${unitId}/pending`),
+
     // Units CRUD
     listUnits: () => apiClient.get<ClearanceUnit[]>('/clearance/units'),
     createUnit: (data: { name: string; description?: string }) => apiClient.post<ClearanceUnit>('/clearance/units', data),
