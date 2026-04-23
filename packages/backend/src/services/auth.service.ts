@@ -60,7 +60,7 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
             hireDate: user.employee.hireDate.toISOString()
         } : undefined,
         campus: user.campus ? { id: user.campus.id, code: user.campus.code, name: user.campus.name, description: user.campus.description ?? undefined, isActive: user.campus.isActive, timezone: user.campus.timezone ?? undefined } : undefined,
-        clearanceUnit: (user as any).clearanceUnit ? { id: (user as any).clearanceUnit.id, name: (user as any).clearanceUnit.name } : undefined,
+        clearanceUnit: (user as any).clearanceUnit ? { id: (user as any).clearanceUnit.id, name: (user as any).clearanceUnit.name, fullName: (user as any).clearanceUnit.fullName ?? null } : undefined,
         employeeId: user.employeeId
     };
 

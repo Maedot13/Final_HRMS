@@ -405,11 +405,12 @@ export const listClearanceUnits = async (campusId?: number) => {
     });
 };
 
-export const createClearanceUnit = async (data: { name: string; description?: string; campusId: number; priorityOrder?: number; loginId?: string; loginPassword?: string }) => {
+export const createClearanceUnit = async (data: { name: string; fullName?: string; description?: string; campusId: number; priorityOrder?: number; loginId?: string; loginPassword?: string }) => {
     return prisma.$transaction(async (tx) => {
         const unit = await tx.clearanceUnit.create({
             data: {
                 name: data.name,
+                fullName: data.fullName,
                 description: data.description,
                 campusId: data.campusId,
                 isSystemGenerated: false,
@@ -439,7 +440,7 @@ export const createClearanceUnit = async (data: { name: string; description?: st
     });
 };
 
-export const updateClearanceUnit = async (unitId: number, data: { name?: string; description?: string; isActive?: boolean }) => {
+export const updateClearanceUnit = async (unitId: number, data: { name?: string; fullName?: string; description?: string; isActive?: boolean }) => {
     const unit = await prisma.clearanceUnit.findUnique({ where: { id: unitId } });
     if (!unit) throw new Error('Clearance unit not found');
 

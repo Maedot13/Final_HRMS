@@ -77,14 +77,19 @@ export default function ProfilePage() {
     };
 
     if (user?.role === 'CLEARANCE_BODY') {
+        const displayName = user.clearanceUnit?.fullName || user.clearanceUnit?.name || 'Unknown Unit';
+        const unitCode = user.clearanceUnit?.name || '';
         return (
             <div className="space-y-6">
                 <Card padding="lg">
                     <div className="text-center">
                         <div className="mx-auto h-20 w-20 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-4">
-                            <span className="text-2xl font-bold">{user.clearanceUnit?.name?.[0] || 'C'}</span>
+                            <span className="text-2xl font-bold">{unitCode?.[0] || 'C'}</span>
                         </div>
-                        <h2 className="text-2xl font-bold text-gray-900">{user.clearanceUnit?.name || 'Unknown Unit'}</h2>
+                        <h2 className="text-2xl font-bold text-gray-900">{displayName}</h2>
+                        {user.clearanceUnit?.fullName && (
+                            <p className="text-sm text-gray-400 mt-0.5 font-mono">[{unitCode}]</p>
+                        )}
                         <p className="text-sm text-gray-500 mt-1 uppercase tracking-wide">Clearance Body Account</p>
                     </div>
                 </Card>

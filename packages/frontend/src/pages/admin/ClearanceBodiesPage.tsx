@@ -12,7 +12,7 @@ export default function ClearanceBodiesPage() {
     const queryClient = useQueryClient();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUnit, setEditingUnit] = useState<ClearanceUnit | null>(null);
-    const [formData, setFormData] = useState({ name: '', description: '', priorityOrder: 0, loginId: '', loginPassword: '' });
+    const [formData, setFormData] = useState({ name: '', fullName: '', description: '', priorityOrder: 0, loginId: '', loginPassword: '' });
 
     const { data: units = [], isLoading } = useQuery({
         queryKey: ['clearanceUnits'],
@@ -60,7 +60,7 @@ export default function ClearanceBodiesPage() {
     const closeModal = () => {
         setIsModalOpen(false);
         setEditingUnit(null);
-        setFormData({ name: '', description: '', priorityOrder: 0, loginId: '', loginPassword: '' });
+        setFormData({ name: '', fullName: '', description: '', priorityOrder: 0, loginId: '', loginPassword: '' });
     };
 
     const handleSave = (e: React.FormEvent) => {
@@ -74,8 +74,13 @@ export default function ClearanceBodiesPage() {
 
     const columns: Column<ClearanceUnit>[] = [
         {
+            key: 'fullName',
+            header: 'Full Name',
+            render: (r: any) => r.fullName || '—',
+        },
+        {
             key: 'name',
-            header: 'Unit Name',
+            header: 'Unit Code',
             render: (r) => r.name,
         },
         {
@@ -112,7 +117,7 @@ export default function ClearanceBodiesPage() {
                         size="sm"
                         onClick={() => {
                             setEditingUnit(r);
-                            setFormData({ name: r.name, description: r.description || '', priorityOrder: (r as any).priorityOrder || 0, loginId: '', loginPassword: '' });
+                            setFormData({ name: r.name, fullName: (r as any).fullName || '', description: r.description || '', priorityOrder: (r as any).priorityOrder || 0, loginId: '', loginPassword: '' });
                             setIsModalOpen(true);
                         }}
                     >
@@ -160,10 +165,10 @@ export default function ClearanceBodiesPage() {
             >
                 <form onSubmit={handleSave} className="space-y-4">
                     <div className="space-y-1">
-                        <label className="text-sm font-medium text-gray-700">Unit Name</label>
+                        <label className="text-sm font-medium text-gray-700">Unit Code / System Name</label>
                         <Input 
                             required 
-                            placeholder="e.g. IT Department"
+                            placeholder="e.g. IT"
                             value={formData.name}
                             onChange={(e: any) => setFormData(p => ({ ...p, name: e.target.value }))}
                             disabled={editingUnit?.isSystemGenerated}
@@ -171,6 +176,15 @@ export default function ClearanceBodiesPage() {
                         {editingUnit?.isSystemGenerated && (
                             <p className="text-xs text-gray-500">System units cannot be renamed.</p>
                         )}
+                    </div>
+
+                    <div className="space-y-1">
+                        <label className="text-sm font-medium text-gray-700">Full Name <span className="text-xs text-gray-400">(displayed on profile)</span></label>
+                        <Input 
+                            placeholder="e.g. Information Technology Department"
+                            value={formData.fullName}
+                            onChange={(e: any) => setFormData(p => ({ ...p, fullName: e.target.value }))}
+                        />
                     </div>
                     
                     <div className="space-y-1">

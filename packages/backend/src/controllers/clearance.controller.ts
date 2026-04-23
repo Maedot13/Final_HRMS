@@ -336,7 +336,7 @@ export const listClearanceUnits = async (req: Request, res: Response) => {
 
 export const createClearanceUnit = async (req: Request, res: Response) => {
     try {
-        const { name, description, priorityOrder, loginId, loginPassword } = req.body;
+        const { name, fullName, description, priorityOrder, loginId, loginPassword } = req.body;
         const campusCtx = getCampusScope(req);
         
         if (campusCtx.scope !== 'CAMPUS' || !campusCtx.campusId) {
@@ -351,6 +351,7 @@ export const createClearanceUnit = async (req: Request, res: Response) => {
 
         const unit = await clearanceService.createClearanceUnit({
             name,
+            fullName,
             description,
             campusId: campusCtx.campusId,
             priorityOrder: priorityOrder ? parseInt(priorityOrder) : 0,
@@ -368,9 +369,9 @@ export const createClearanceUnit = async (req: Request, res: Response) => {
 export const updateClearanceUnit = async (req: Request, res: Response) => {
     try {
         const id = parseInt(req.params.unitId);
-        const { name, description, isActive } = req.body;
+        const { name, fullName, description, isActive } = req.body;
         
-        const unit = await clearanceService.updateClearanceUnit(id, { name, description, isActive });
+        const unit = await clearanceService.updateClearanceUnit(id, { name, fullName, description, isActive });
         sendSuccess(res, unit);
     } catch (error: any) {
         const status = error.message.includes('not found') || error.message.includes('Cannot rename') ? 400 : 500;

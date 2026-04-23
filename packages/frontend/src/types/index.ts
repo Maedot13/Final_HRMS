@@ -13,7 +13,7 @@ export interface User {
     campusId?: string;
     employeeId?: string;
     campus?: { id: number; name: string };
-    clearanceUnit?: { id: number; name: string };
+    clearanceUnit?: { id: number; name: string; fullName?: string | null };
     employee?: Employee;
 }
 
