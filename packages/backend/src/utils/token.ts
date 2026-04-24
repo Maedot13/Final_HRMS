@@ -13,6 +13,7 @@ export interface TokenPayload {
     mustChangePassword?: boolean;
     isHeadHR?: boolean;
     specialPrivileges?: string[];
+    clearanceUnitId?: number | null;
     exp?: number;
 }
 

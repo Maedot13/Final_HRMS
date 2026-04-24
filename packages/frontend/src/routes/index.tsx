@@ -22,6 +22,7 @@ import AdminOrgPage from '../pages/admin/AdminOrgPage';
 import ClearanceBodiesPage from '../pages/admin/ClearanceBodiesPage';
 import PrivilegesPage from '../pages/admin/PrivilegesPage';
 import ClearanceBodyDashboard from '../pages/ClearanceBodyDashboard';
+import HeadHRClearancePage from '../pages/HeadHRClearancePage';
 
 const router = createBrowserRouter([
     {
@@ -151,7 +152,7 @@ const router = createBrowserRouter([
             },
             {
                 path: 'clearance',
-                element: <ClearancePage />,
+                element: <HeadHRClearancePage />,
             },
             {
                 path: 'experience',

@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 export const initiateClearanceSchema = z.object({
+    targetEmployeeId: z.string().min(1, 'Target Employee ID is required'),
     reason: z.string()
         .min(10, 'Reason must be at least 10 characters')
         .max(500, 'Reason cannot exceed 500 characters'),

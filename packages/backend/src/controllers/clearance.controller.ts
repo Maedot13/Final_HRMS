@@ -23,32 +23,35 @@ export const initiateClearance = async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
 
-        // Validation handled by middleware or manual here...
-        // For consistency in this specific file (which seems to have manual validation logic in the snippet),
-        // we keep the manual logic if it was there, or adapt. The snippet shows manual validation.
-        // Assuming we want to keep it or replace it. Let's keep existing logic structure but add logs.
-
-        // RE-FETCHING logic from previous view... keeping it as is but wrapping in standardized response if needed.
-        // Wait, the previous file view showed `res.status(201).json`. Ideally we standardize.
-        // I will standardize AND add logs.
+        // Only HR Officers can initiate clearance
+        if (user.role !== UserRole.HR_OFFICER) {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Only HR Officers are authorised to initiate clearance', null, req);
+        }
 
         const validation = initiateClearanceSchema.safeParse(req.body);
         if (!validation.success) return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid input', validation.error.format(), req);
 
-        const { getEmployeeByUserId } = await import('../services/employee.service');
-        const employee = await getEmployeeByUserId(user.userId);
-        if (!employee) return sendError(res, 404, ErrorCode.NOT_FOUND, 'Employee profile not found', null, req);
+        const { targetEmployeeId, reason, lastWorkingDay: lwdString } = validation.data;
+        const sanitizedReason = sanitizeInput(reason);
+        const lastWorkingDay = new Date(lwdString);
 
-        const lastWorkingDay = new Date(validation.data.lastWorkingDay);
-        const sanitizedReason = sanitizeInput(validation.data.reason);
+        // Look up the target employee by their string employeeId (e.g. EMP0001)
+        const { prisma } = await import('../lib/prisma');
+        const targetEmployee = await prisma.employee.findFirst({
+            where: { employeeId: targetEmployeeId }
+        });
+        if (!targetEmployee) {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, `No employee found with ID "${targetEmployeeId}"`, null, req);
+        }
 
-        const result = await clearanceService.initiateClearance(employee.id, sanitizedReason, lastWorkingDay);
+        const result = await clearanceService.initiateClearance(targetEmployee.id, sanitizedReason, lastWorkingDay);
 
         await logAction({
             userId: user.userId,
             action: AuditAction.CLEARANCE_INITIATE,
             entityType: 'ClearanceRequest',
             entityId: result.id,
+            changes: { targetEmployeeId, initiatedBy: user.employeeId },
             ipAddress: req.ip,
             userAgent: req.get('User-Agent')
         });
@@ -278,9 +281,15 @@ export const getPendingChecksForUnit = async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
 
-        // Authorization: Only ADMIN, DEPARTMENT_HEAD, or HR_OFFICER can view pending checks
-        if (![UserRole.ADMIN, UserRole.DEPARTMENT_HEAD, UserRole.HR_OFFICER].includes(user.role)) {
+        // Authorization: Only ADMIN, DEPARTMENT_HEAD, HR_OFFICER or the unit's assigned CLEARANCE_BODY
+        const isClearanceBody = user.role === 'CLEARANCE_BODY';
+        if (![UserRole.ADMIN, UserRole.DEPARTMENT_HEAD, UserRole.HR_OFFICER, 'CLEARANCE_BODY'].includes(user.role)) {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden: Insufficient permissions', null, req);
+        }
+
+        // Restrict CLEARANCE_BODY to only view their own unit
+        if (isClearanceBody && (user as any).clearanceUnitId !== unitId) {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Unauthorized: You can only view pending checks for your assigned unit', null, req);
         }
 
         const campusCtx = getCampusScope(req);
@@ -369,9 +378,15 @@ export const createClearanceUnit = async (req: Request, res: Response) => {
 export const updateClearanceUnit = async (req: Request, res: Response) => {
     try {
         const id = parseInt(req.params.unitId);
-        const { name, fullName, description, isActive } = req.body;
+        const { name, fullName, description, isActive, priorityOrder } = req.body;
         
-        const unit = await clearanceService.updateClearanceUnit(id, { name, fullName, description, isActive });
+        const unit = await clearanceService.updateClearanceUnit(id, { 
+            name, 
+            fullName, 
+            description, 
+            isActive, 
+            priorityOrder: priorityOrder !== undefined ? parseInt(priorityOrder) : undefined 
+        });
         sendSuccess(res, unit);
     } catch (error: any) {
         const status = error.message.includes('not found') || error.message.includes('Cannot rename') ? 400 : 500;

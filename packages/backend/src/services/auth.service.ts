@@ -42,7 +42,8 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
         employeePkId: user.employee?.id ?? null,
         mustChangePassword: user.mustChangePassword,
         isHeadHR: user.isHeadHR,
-        specialPrivileges: user.specialPrivileges
+        specialPrivileges: user.specialPrivileges,
+        clearanceUnitId: user.clearanceUnitId
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -266,7 +267,7 @@ export const refreshToken = async (token: string): Promise<AuthResponse> => {
     // 2. Check DB for token status
     const dbToken = await prisma.refreshToken.findUnique({
         where: { token },
-        include: { user: { include: { employee: true, campus: true } } }
+        include: { user: { include: { employee: true, campus: true, clearanceUnit: true } } }
     });
 
     // Token reuse detection or simply not found
@@ -306,7 +307,8 @@ export const refreshToken = async (token: string): Promise<AuthResponse> => {
         employeePkId: user.employee?.id ?? null,
         mustChangePassword: user.mustChangePassword,
         isHeadHR: user.isHeadHR,
-        specialPrivileges: user.specialPrivileges
+        specialPrivileges: user.specialPrivileges,
+        clearanceUnitId: user.clearanceUnitId
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -323,7 +325,8 @@ export const refreshToken = async (token: string): Promise<AuthResponse> => {
             ...user.employee,
             hireDate: user.employee.hireDate.toISOString()
         } : undefined,
-        campus: user.campus ? { id: user.campus.id, code: user.campus.code, name: user.campus.name, description: user.campus.description ?? undefined, isActive: user.campus.isActive, timezone: user.campus.timezone ?? undefined } : undefined
+        campus: user.campus ? { id: user.campus.id, code: user.campus.code, name: user.campus.name, description: user.campus.description ?? undefined, isActive: user.campus.isActive, timezone: user.campus.timezone ?? undefined } : undefined,
+        clearanceUnit: (user as any).clearanceUnit ? { id: (user as any).clearanceUnit.id, name: (user as any).clearanceUnit.name, fullName: (user as any).clearanceUnit.fullName ?? null } : undefined
     };
 
     return {

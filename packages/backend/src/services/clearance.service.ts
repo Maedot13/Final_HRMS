@@ -26,9 +26,9 @@ export const initiateClearance = async (employeeId: number, reason: string, last
     });
     const campusId = employee?.campusId ?? null;
 
-    // Fetch active units for this campus
+    // Fetch ALL active units across all campuses so every campus body must approve
     const units = await prisma.clearanceUnit.findMany({
-        where: { isActive: true, ...(campusId != null ? { campusId } : {}) }
+        where: { isActive: true }
     });
 
     if (units.length === 0) {
@@ -141,9 +141,15 @@ export const getClearance = async (id: number) => {
     return prisma.clearanceRequest.findUnique({
         where: { id },
         include: {
-            employee: { select: { employeeId: true, name: true } },
+            employee: { select: { employeeId: true, name: true, deptLegacy: true } },
+            campus: { select: { name: true } },
             checks: {
-                include: { unit: true }
+                include: {
+                    unit: {
+                        include: { campus: { select: { name: true } } }
+                    }
+                },
+                orderBy: { unit: { priorityOrder: 'asc' } }
             }
         }
     });
@@ -183,10 +189,13 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
         if (reqData?.campus?.isClearanceSequential) {
             const currentUnit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
             if (currentUnit) {
+                // Only block if units with STRICTLY LOWER priority have non-approved non-rejected checks
+                // Units with same priority (parallel) are never a blocker
+                // Units already REJECTED don't block same-priority peers but do block higher-priority ones
                 const earlierPending = await tx.clearanceCheck.count({
                     where: {
                         clearanceId,
-                        status: { not: ClearanceStatus.APPROVED },
+                        status: ClearanceStatus.PENDING,
                         unit: { priorityOrder: { lt: currentUnit.priorityOrder } }
                     }
                 });
@@ -206,7 +215,8 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
         });
 
         if (!check) throw new Error('Clearance check record not found for this unit');
-        if (check.status !== ClearanceStatus.PENDING) {
+        // Allow re-approval of a previously REJECTED check (resolution flow)
+        if (check.status !== ClearanceStatus.PENDING && check.status !== ClearanceStatus.REJECTED) {
             throw new Error(`Decision already made for this unit (${check.status})`);
         }
 
@@ -221,15 +231,15 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
             }
         });
 
-        // Verify if ALL checks are approved now
-        const pendingChecks = await tx.clearanceCheck.count({
+        // Verify if ALL checks are approved (none pending or rejected)
+        const nonApprovedChecks = await tx.clearanceCheck.count({
             where: {
                 clearanceId,
                 status: { not: ClearanceStatus.APPROVED }
             }
         });
 
-        if (pendingChecks === 0) {
+        if (nonApprovedChecks === 0) {
             // All bodies approved! Move to HR Approval
             await tx.clearanceRequest.update({
                 where: { id: clearanceId },
@@ -238,6 +248,12 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
 
             return { status: 'HR_APPROVAL_PENDING', message: 'All clearance bodies approved. Waiting for Campus HR approval.' };
         }
+
+        // Ensure main request status is BODY_APPROVAL_PENDING (not REJECTED) when continuing
+        await tx.clearanceRequest.update({
+            where: { id: clearanceId },
+            data: { status: ClearanceStatus.BODY_APPROVAL_PENDING, rejectedAt: null, rejectionReason: null }
+        });
 
         // Fetch employee userId for notification dispatch
         const clearanceWithEmployee = await tx.clearanceRequest.findUnique({
@@ -335,28 +351,29 @@ export const rejectCheck = async (clearanceId: number, unitId: number, approverI
         });
 
         if (!check) throw new Error('Clearance check record not found for this unit');
-        if (check.status !== ClearanceStatus.PENDING) {
-            throw new Error(`Decision already made for this unit (${check.status})`);
+        if (check.status === ClearanceStatus.APPROVED) {
+            throw new Error('This check has already been approved and cannot be rejected');
         }
 
-        // Update Check to REJECTED
+        // Update the individual check to REJECTED (request stays alive — BODY_APPROVAL_PENDING)
         await tx.clearanceCheck.update({
             where: { id: check.id },
             data: {
                 status: ClearanceStatus.REJECTED,
                 approverId,
-                approvedAt: new Date(), // It's a "decision at" timestamp effectively
+                approvedAt: new Date(),
                 comment
             }
         });
 
-        // REJECT the entire clearance request
+        // Keep the clearance request as BODY_APPROVAL_PENDING — not globally rejected.
+        // Other units with equal or lower priority can still approve concurrently.
+        // Record which unit caused the latest issue for HR visibility.
         await tx.clearanceRequest.update({
             where: { id: clearanceId },
             data: {
-                status: ClearanceStatus.REJECTED,
-                rejectedAt: new Date(),
-                rejectionReason: `Rejected by unit ${unitId}${comment ? ': ' + comment : ''}`
+                status: ClearanceStatus.BODY_APPROVAL_PENDING,
+                rejectionReason: `Issue raised by unit ${unitId}${comment ? ': ' + comment : ''}`
             }
         });
 
@@ -386,7 +403,7 @@ export const getPendingChecksForUnit = async (unitId: number, campusId?: number)
     return prisma.clearanceCheck.findMany({
         where: {
             unitId,
-            status: ClearanceStatus.PENDING,
+            status: { in: [ClearanceStatus.PENDING, ClearanceStatus.REJECTED] },
             ...(campusId != null ? { clearance: { campusId } } : {})
         },
         include: {
@@ -440,7 +457,7 @@ export const createClearanceUnit = async (data: { name: string; fullName?: strin
     });
 };
 
-export const updateClearanceUnit = async (unitId: number, data: { name?: string; fullName?: string; description?: string; isActive?: boolean }) => {
+export const updateClearanceUnit = async (unitId: number, data: { name?: string; fullName?: string; description?: string; isActive?: boolean; priorityOrder?: number }) => {
     const unit = await prisma.clearanceUnit.findUnique({ where: { id: unitId } });
     if (!unit) throw new Error('Clearance unit not found');
 

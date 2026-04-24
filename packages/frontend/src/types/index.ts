@@ -19,6 +19,7 @@ export interface User {
 
 export interface Employee {
     id: number;
+    name?: string;
     firstName: string;
     lastName: string;
     employeeId: string;

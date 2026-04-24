@@ -1,6 +1,7 @@
 import apiClient from './client';
 
 export interface ClearanceRequestPayload {
+    targetEmployeeId: string;
     reason: string;
     lastWorkingDay: string; // ISO Date
 }
@@ -12,6 +13,7 @@ export interface ClearanceUnit {
     isActive: boolean;
     campusId: number | null;
     isSystemGenerated: boolean;
+    priorityOrder: number;
 }
 
 
@@ -48,6 +50,11 @@ export const clearanceApi = {
     // Units CRUD
     listUnits: () => apiClient.get<ClearanceUnit[]>('/clearance/units'),
     createUnit: (data: { name: string; description?: string }) => apiClient.post<ClearanceUnit>('/clearance/units', data),
-    updateUnit: (unitId: number, data: { name?: string; description?: string; isActive?: boolean }) => apiClient.patch<ClearanceUnit>(`/clearance/units/${unitId}`, data),
+    updateUnit: (unitId: number, data: { name?: string; fullName?: string; description?: string; isActive?: boolean; priorityOrder?: number }) => apiClient.patch<ClearanceUnit>(`/clearance/units/${unitId}`, data),
     deleteUnit: (unitId: number) => apiClient.delete(`/clearance/units/${unitId}`),
+
+    // Head HR — final approval queue (status HR_APPROVED = all campus HRs signed off)
+    listPendingFinalApproval: () => apiClient.get('/clearance/requests', { params: { status: 'HR_APPROVED' } }),
+    finalApprove: (requestId: number, data: { action: 'APPROVE' | 'REJECT'; reason?: string }) =>
+        apiClient.patch(`/clearance/requests/${requestId}/final-approve`, data),
 };

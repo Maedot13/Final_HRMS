@@ -8,8 +8,11 @@ import { clearanceApi } from '../api/clearance';
 import { format } from 'date-fns';
 import { ClearanceRequestModal } from '../features/clearance/ClearanceRequestModal';
 import { ClearanceDetailModal } from '../features/clearance/ClearanceDetailModal';
+import { useAuthStore } from '../store/useAuthStore';
 
 export default function ClearancePage() {
+    const user = useAuthStore((s) => s.user);
+    const isHRofficer = user?.role === 'HR_OFFICER';
     const [statusFilter, setStatusFilter] = useState<string>('PENDING');
     const [isInitiateModalOpen, setIsInitiateModalOpen] = useState(false);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -79,9 +82,11 @@ export default function ClearancePage() {
                     title="Clearance Management"
                     subtitle="Track and manage employee offboarding and clearances"
                     action={
-                        <Button variant="primary" onClick={() => setIsInitiateModalOpen(true)}>
-                            Initiate Clearance
-                        </Button>
+                        isHRofficer ? (
+                            <Button variant="primary" onClick={() => setIsInitiateModalOpen(true)}>
+                                Initiate Clearance
+                            </Button>
+                        ) : undefined
                     }
                 />
             </Card>

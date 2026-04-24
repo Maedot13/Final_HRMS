@@ -11,7 +11,7 @@ import { useAuthStore } from '../store/useAuthStore';
 export default function ClearanceBodyDashboard() {
     const queryClient = useQueryClient();
     const user = useAuthStore((s: any) => s.user);
-    const unitId = user?.clearanceUnitId;
+    const unitId = user?.clearanceUnit?.id;
 
     const [modal, setModal] = useState<{ open: boolean; requestId?: number; type?: 'APPROVE' | 'REJECT' }>({ open: false });
     const [comment, setComment] = useState('');
@@ -88,12 +88,14 @@ export default function ClearanceBodyDashboard() {
             header: 'Actions',
             render: (r: any) => (
                 <div className="flex gap-2">
-                    <Button variant="primary" size="sm" onClick={() => handleAction(r.clearanceId, 'APPROVE')}>
-                        Approve
+                    <Button variant="primary" size="sm" onClick={() => handleAction(r.clearance.id, 'APPROVE')}>
+                        {r.status === 'REJECTED' ? 'Re-approve (Resolve)' : 'Approve'}
                     </Button>
-                    <Button variant="danger" size="sm" onClick={() => handleAction(r.clearanceId, 'REJECT')}>
-                        Reject
-                    </Button>
+                    {r.status !== 'REJECTED' && (
+                        <Button variant="danger" size="sm" onClick={() => handleAction(r.clearance.id, 'REJECT')}>
+                            Reject
+                        </Button>
+                    )}
                 </div>
             )
         }
