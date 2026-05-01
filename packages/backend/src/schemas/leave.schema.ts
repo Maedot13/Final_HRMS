@@ -1,29 +1,39 @@
 import { z } from 'zod';
-import { LeaveType } from '@hrms/types';
 
-export const createLeaveRequestSchema = z.object({
-    leaveType: z.nativeEnum(LeaveType),
-    startDate: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
-    endDate: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
-    reason: z.string().min(5, 'Reason must be at least 5 characters'),
-    attachmentUrl: z.string().url().optional()
-}).refine((data) => {
-    const start = new Date(data.startDate);
-    const end = new Date(data.endDate);
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
+export const LeaveTypeEnum = z.enum([
+    'ANNUAL',
+    'SICK',
+    'MATERNITY',
+    'PATERNITY',
+    'UNPAID',
+    'PERSONAL',
+    'STUDY',
+    'RESEARCH',
+    'SABBATICAL',
+]);
 
-    // End date must be >= start date
-    if (end < start) return false;
+export const createLeaveRequestSchema = z
+    .object({
+        leaveType: LeaveTypeEnum,
+        startDate: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
+        endDate: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
+        reason: z.string().min(5, 'Reason must be at least 5 characters'),
+        attachmentUrl: z.string().url().optional(),
+    })
+    .refine(
+        (data) => {
+            const start = new Date(data.startDate);
+            const end = new Date(data.endDate);
+            return end >= start;
+        },
+        { message: 'End date must be on or after start date' }
+    );
 
-    // Start date must not be in the past
-    if (start < now) return false;
-
-    return true;
-}, {
-    message: 'Invalid date range: end date must be after start date, and start date must not be in the past'
+export const deptHeadReviewSchema = z.object({
+    decision: z.enum(['APPROVED', 'REJECTED']),
+    comment: z.string().optional(),
 });
 
 export const approveRejectSchema = z.object({
-    comment: z.string().optional()
+    comment: z.string().optional(),
 });

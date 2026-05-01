@@ -4,12 +4,11 @@ import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { leaveApi } from '../../api/leave';
-import { useAuthStore } from '../../store/useAuthStore';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import {
-    FiUser, FiCalendar, FiMessageSquare,
-    FiCheckCircle, FiXCircle, FiShield, FiFile,
+    FiUser, FiCalendar, FiMessageSquare, FiCheckCircle,
+    FiXCircle, FiArrowRight, FiAlertTriangle,
 } from 'react-icons/fi';
 
 interface Leave {
@@ -22,7 +21,6 @@ interface Leave {
     status: string;
     currentStage: string;
     attachmentUrl?: string | null;
-    deptHeadComment?: string | null;
     employee?: { name?: string; position?: string; deptLegacy?: string };
 }
 
@@ -32,51 +30,49 @@ interface Props {
     leave: Leave | null;
 }
 
-const STAGE_ACTOR: Record<string, string> = {
-    HR_OFFICER: 'HR Officer (FINAL)',
-    DEAN: 'College Dean (FINAL)',
-    VICE_PRESIDENT: 'Academic Vice President (FINAL)',
+const NEXT_STAGE_LABEL: Record<string, string> = {
+    ANNUAL: 'HR Officer',
+    SICK: 'HR Officer',
+    MATERNITY: 'HR Officer',
+    PATERNITY: 'HR Officer',
+    PERSONAL: 'HR Officer',
+    STUDY: 'HR Officer',
+    UNPAID: 'HR Officer',
+    RESEARCH: 'College Dean',
+    SABBATICAL: 'Academic Vice President',
 };
 
-const STAGE_COLOR: Record<string, string> = {
-    HR_OFFICER: 'bg-blue-50 border-blue-200 text-blue-800',
-    DEAN: 'bg-teal-50 border-teal-200 text-teal-800',
-    VICE_PRESIDENT: 'bg-purple-50 border-purple-200 text-purple-800',
-};
-
-const STATUS_VARIANTS: Record<string, any> = {
-    PENDING: 'warning',
-    APPROVED: 'approved',
-    REJECTED: 'rejected',
-    CANCELLED: 'neutral',
-};
-
-export function LeaveApprovalModal({ isOpen, onClose, leave }: Props) {
+export function DeptHeadReviewModal({ isOpen, onClose, leave }: Props) {
     const queryClient = useQueryClient();
-    const user = useAuthStore((s) => s.user);
     const [comment, setComment] = useState('');
     const [commentError, setCommentError] = useState<string | null>(null);
-    const [action, setAction] = useState<'approve' | 'reject' | null>(null);
 
-    const privileges: string[] = (user as any)?.specialPrivileges ?? [];
-
-    const reset = () => { setComment(''); setCommentError(null); setAction(null); };
+    const reset = () => { setComment(''); setCommentError(null); };
     const handleClose = () => { reset(); onClose(); };
 
-    const approveMutation = useMutation({
-        mutationFn: () => leaveApi.approve(leave!.id, { comment: comment || undefined }),
+    const forwardMutation = useMutation({
+        mutationFn: () =>
+            leaveApi.deptHeadReview(leave!.id, {
+                decision: 'APPROVED',
+                comment: comment || undefined,
+            }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['leaveRequests'] });
-            toast.success('Leave request approved. The employee has been notified.');
+            const next = NEXT_STAGE_LABEL[leave!.leaveType] ?? 'next approver';
+            toast.success(`Leave request forwarded to ${next} for final decision.`);
             handleClose();
         },
         onError: (err: any) => {
-            toast.error(err.response?.data?.message || 'Failed to approve request');
+            toast.error(err.response?.data?.message || 'Failed to forward request');
         },
     });
 
     const rejectMutation = useMutation({
-        mutationFn: () => leaveApi.reject(leave!.id, { comment }),
+        mutationFn: () =>
+            leaveApi.deptHeadReview(leave!.id, {
+                decision: 'REJECTED',
+                comment,
+            }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['leaveRequests'] });
             toast.success('Leave request rejected. The employee has been notified.');
@@ -87,52 +83,40 @@ export function LeaveApprovalModal({ isOpen, onClose, leave }: Props) {
         },
     });
 
-    const handleApprove = () => {
+    const handleForward = () => {
         setCommentError(null);
-        setAction('approve');
-        approveMutation.mutate();
+        forwardMutation.mutate();
     };
 
     const handleReject = () => {
         if (!comment.trim()) {
-            setCommentError('A rejection reason is required so the employee understands.');
+            setCommentError('A reason for rejection is required so the employee understands.');
             return;
         }
         setCommentError(null);
-        setAction('reject');
         rejectMutation.mutate();
     };
 
     if (!leave) return null;
 
-    const isPending = approveMutation.isPending || rejectMutation.isPending;
-    const stage = leave.currentStage;
-
-    // Determine what role this actor is acting as
-    const actorLabel = (() => {
-        if (privileges.includes('DEAN') && stage === 'DEAN') return STAGE_ACTOR.DEAN;
-        if ((privileges.includes('VICE_PRESIDENT') || privileges.includes('UNIVERSITY_PRESIDENT'))
-            && stage === 'VICE_PRESIDENT') return STAGE_ACTOR.VICE_PRESIDENT;
-        return STAGE_ACTOR.HR_OFFICER;
-    })();
-
-    const stageBannerClass = STAGE_COLOR[stage] ?? 'bg-gray-50 border-gray-200 text-gray-700';
+    const isPending = forwardMutation.isPending || rejectMutation.isPending;
+    const nextStage = NEXT_STAGE_LABEL[leave.leaveType] ?? 'Next Approver';
 
     return (
         <Modal
             isOpen={isOpen}
             onClose={handleClose}
-            title="Final Leave Decision"
+            title="Review Leave Request"
             size="lg"
             closeOnOverlayClick={!isPending}
         >
             <div className="space-y-4">
 
-                {/* Actor / Stage banner */}
-                <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-semibold ${stageBannerClass}`}>
-                    <FiShield className="w-3.5 h-3.5 shrink-0" />
-                    You are acting as: <strong>{actorLabel}</strong>
-                    <span className="ml-auto text-[10px] font-medium opacity-70">Stage 2 of 2 — Final Decision</span>
+                {/* Stage badge */}
+                <div className="flex items-center gap-2 text-xs font-semibold text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                    <FiAlertTriangle className="w-3.5 h-3.5" />
+                    Stage 1 of 2 — Your review is required. If approved, the request is forwarded to <strong>{nextStage}</strong> for final decision.
+                    <FiArrowRight className="w-3.5 h-3.5 ml-auto" />
                 </div>
 
                 {/* Employee info */}
@@ -146,7 +130,7 @@ export function LeaveApprovalModal({ isOpen, onClose, leave }: Props) {
                             {[leave.employee?.position, leave.employee?.deptLegacy].filter(Boolean).join(' · ')}
                         </p>
                     </div>
-                    <Badge variant={STATUS_VARIANTS[leave.status] ?? 'neutral'}>{leave.status}</Badge>
+                    <Badge variant="warning">{leave.status}</Badge>
                 </div>
 
                 {/* Leave detail grid */}
@@ -159,23 +143,20 @@ export function LeaveApprovalModal({ isOpen, onClose, leave }: Props) {
                     </div>
                     <div className="p-3 bg-white border border-gray-100 rounded-lg">
                         <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Duration</p>
-                        <p className="text-sm font-semibold text-gray-800">
-                            {leave.days} day{leave.days !== 1 ? 's' : ''}
-                        </p>
+                        <p className="text-sm font-semibold text-gray-800">{leave.days} day{leave.days !== 1 ? 's' : ''}</p>
                     </div>
                     <div className="col-span-2 p-3 bg-white border border-gray-100 rounded-lg flex items-start gap-2">
                         <FiCalendar className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                         <div>
                             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Period</p>
                             <p className="text-sm font-medium text-gray-800">
-                                {format(new Date(leave.startDate), 'MMM d, yyyy')} —{' '}
-                                {format(new Date(leave.endDate), 'MMM d, yyyy')}
+                                {format(new Date(leave.startDate), 'MMM d, yyyy')} — {format(new Date(leave.endDate), 'MMM d, yyyy')}
                             </p>
                         </div>
                     </div>
                 </div>
 
-                {/* Employee's reason */}
+                {/* Reason */}
                 <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-100 rounded-lg">
                     <FiMessageSquare className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
                     <div>
@@ -184,20 +165,7 @@ export function LeaveApprovalModal({ isOpen, onClose, leave }: Props) {
                     </div>
                 </div>
 
-                {/* Dept head's comment (if any) */}
-                {leave.deptHeadComment && (
-                    <div className="flex items-start gap-2 p-3 bg-green-50 border border-green-100 rounded-lg">
-                        <FiCheckCircle className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
-                        <div>
-                            <p className="text-[10px] font-semibold text-green-700 uppercase tracking-wide mb-1">
-                                Department Head Comment
-                            </p>
-                            <p className="text-sm text-gray-800 leading-relaxed">{leave.deptHeadComment}</p>
-                        </div>
-                    </div>
-                )}
-
-                {/* Attachment */}
+                {/* Document */}
                 {leave.attachmentUrl && (
                     <a
                         href={leave.attachmentUrl}
@@ -205,27 +173,25 @@ export function LeaveApprovalModal({ isOpen, onClose, leave }: Props) {
                         rel="noreferrer"
                         className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-700 hover:bg-blue-100 transition-colors"
                     >
-                        <FiFile className="w-4 h-4" />
+                        <FiCalendar className="w-4 h-4" />
                         View Attached Document ↗
                     </a>
                 )}
 
                 {/* Comment box */}
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                     <label className="text-sm font-medium text-gray-700">
-                        Decision Comment{' '}
+                        Review Comment{' '}
                         <span className="text-xs text-gray-400 font-normal">
-                            (required for rejection; optional for approval)
+                            (required when rejecting; optional when forwarding)
                         </span>
                     </label>
                     <textarea
                         rows={3}
                         value={comment}
                         onChange={(e) => { setComment(e.target.value); if (commentError) setCommentError(null); }}
-                        placeholder="Add your comments for the employee…"
-                        className={`w-full rounded-lg border ${
-                            commentError ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white'
-                        } px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-none transition-colors`}
+                        placeholder="Add remarks for the employee or the next approver…"
+                        className={`w-full rounded-lg border ${commentError ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white'} px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-none transition-colors`}
                         disabled={isPending}
                     />
                     {commentError && (
@@ -241,18 +207,19 @@ export function LeaveApprovalModal({ isOpen, onClose, leave }: Props) {
                     <Button
                         variant="danger"
                         onClick={handleReject}
-                        isLoading={rejectMutation.isPending && action === 'reject'}
+                        isLoading={rejectMutation.isPending}
                         disabled={isPending}
                     >
                         <FiXCircle className="w-4 h-4 mr-1.5" /> Reject
                     </Button>
                     <Button
                         variant="primary"
-                        onClick={handleApprove}
-                        isLoading={approveMutation.isPending && action === 'approve'}
+                        onClick={handleForward}
+                        isLoading={forwardMutation.isPending}
                         disabled={isPending}
                     >
-                        <FiCheckCircle className="w-4 h-4 mr-1.5" /> Approve
+                        <FiCheckCircle className="w-4 h-4 mr-1.5" />
+                        Forward to {nextStage}
                     </Button>
                 </div>
             </div>

@@ -271,7 +271,10 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
             });
 
             // PROACTIVE: If only HR is left, notify HR specifically for "Final Sign-off"
-            if (pendingChecks === 1) {
+            const remainingPending = await tx.clearanceCheck.count({
+                where: { clearanceId, status: ClearanceStatus.PENDING }
+            });
+            if (remainingPending === 1) {
                 const finalCheck = await tx.clearanceCheck.findFirst({
                     where: { clearanceId, status: ClearanceStatus.PENDING },
                     include: { unit: true }

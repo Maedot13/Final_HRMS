@@ -69,6 +69,8 @@ model Employee {
   name               String
   deptLegacy         String              @map("department")
   position           String
+  gender             Gender              @default(MALE)
+  staffType          StaffType           @default(REGULAR)
   hireDate           DateTime
   serviceYears       Int                 @default(0)
   contactInfo        Json
@@ -101,27 +103,33 @@ model Employee {
 }
 
 model LeaveRequest {
-  id              Int         @id @default(autoincrement())
-  employeeId      Int
-  leaveType       LeaveType
-  startDate       DateTime
-  endDate         DateTime
-  days            Int
-  reason          String
-  attachmentUrl   String?
-  status          LeaveStatus @default(PENDING)
-  approverId      Int?
-  approverComment String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  lastDecisionAt  DateTime?
-  resolvedAt      DateTime?
-  campusId        Int?
-  campus          Campus?     @relation(fields: [campusId], references: [id], onDelete: Restrict)
-  employee        Employee    @relation(fields: [employeeId], references: [id])
+  id                   Int         @id @default(autoincrement())
+  employeeId           Int
+  leaveType            LeaveType
+  startDate            DateTime
+  endDate              DateTime
+  days                 Int
+  reason               String
+  attachmentUrl        String?
+  status               LeaveStatus @default(PENDING)
+  currentStage         LeaveStage  @default(DEPT_HEAD)
+  approverId           Int?        // Final approver (HR/Dean/VP) user ID
+  approverComment      String?
+  deptHeadId           Int?        // Department head who reviewed
+  deptHeadComment      String?
+  deptHeadDecisionAt   DateTime?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  lastDecisionAt       DateTime?
+  resolvedAt           DateTime?
+  campusId             Int?
+  campus               Campus?          @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  employee             Employee         @relation(fields: [employeeId], references: [id])
+  approvals            LeaveApproval[]
 
   @@index([campusId])
   @@index([employeeId, status])
+  @@index([status, currentStage])
   @@index([status, createdAt])
 }
 
@@ -133,6 +141,7 @@ model LeaveBalance {
   sickBalance      Int      @default(0)
   maternityBalance Int      @default(0)
   paternityBalance Int      @default(0)
+  personalBalance  Int      @default(0)
   campusId         Int?
   campus           Campus?  @relation(fields: [campusId], references: [id], onDelete: Restrict)
   employee         Employee @relation(fields: [employeeId], references: [id])
@@ -238,6 +247,20 @@ model ClearanceApproval {
   @@unique([clearanceId, campusId])
   @@index([clearanceId])
   @@index([campusId])
+}
+
+model LeaveApproval {
+  id         Int         @id @default(autoincrement())
+  leaveId    Int
+  leave      LeaveRequest @relation(fields: [leaveId], references: [id], onDelete: Cascade)
+  stage      LeaveStage
+  actorId    Int
+  decision   String      // APPROVED | REJECTED | FORWARDED
+  comment    String?
+  timestamp  DateTime    @default(now())
+
+  @@index([leaveId])
+  @@index([actorId])
 }
 
 model PayrollTransfer {
@@ -418,6 +441,17 @@ enum LeaveType {
   MATERNITY
   PATERNITY
   UNPAID
+  PERSONAL
+  STUDY
+  RESEARCH
+  SABBATICAL
+}
+
+enum LeaveStage {
+  DEPT_HEAD
+  HR_OFFICER
+  DEAN
+  VICE_PRESIDENT
 }
 
 enum LeaveStatus {
@@ -466,4 +500,14 @@ enum EmploymentStatus {
 enum EmploymentType {
   PERMANENT
   CONTRACT
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum StaffType {
+  ACADEMIC
+  REGULAR
 }

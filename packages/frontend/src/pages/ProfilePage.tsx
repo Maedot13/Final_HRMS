@@ -3,30 +3,68 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/useAuthStore';
 import { employeesApi } from '../api/employees';
 import type { EmployeeDetail, ApiError, ContactInfo } from '../types';
-import { Card, CardHeader } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { ProfileHeader } from '../components/shared/ProfileHeader';
 import { ContactInfoForm } from '../features/employee/ContactInfoForm';
-import { Badge } from '../components/ui/Badge';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
-
 import { leaveApi } from '../api/leave';
+import {
+    FiUser, FiBriefcase, FiMail, FiPhone, FiMapPin, FiCalendar,
+    FiAward, FiShield, FiEdit2, FiCheckCircle, FiXCircle,
+    FiHome, FiUsers, FiClock, FiActivity
+} from 'react-icons/fi';
 
-type TabId = 'basic' | 'contract' | 'job' | 'leave';
+type TabId = 'overview' | 'contact' | 'job' | 'contract' | 'leave';
 
-const tabs: { id: TabId; label: string }[] = [
-    { id: 'basic', label: 'Basic Info' },
-    { id: 'contract', label: 'Contract' },
-    { id: 'job', label: 'Job Info' },
-    { id: 'leave', label: 'Leave Balance' },
+const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
+    { id: 'overview', label: 'Overview', icon: <FiUser size={15} /> },
+    { id: 'contact', label: 'Contact', icon: <FiPhone size={15} /> },
+    { id: 'job', label: 'Job Info', icon: <FiBriefcase size={15} /> },
+    { id: 'contract', label: 'Contract', icon: <FiAward size={15} /> },
+    { id: 'leave', label: 'Leave Balance', icon: <FiCalendar size={15} /> },
 ];
 
+const roleLabels: Record<string, string> = {
+    SUPER_ADMIN: 'Super Admin',
+    ADMIN: 'Admin',
+    HR_OFFICER: 'HR Officer',
+    DEPARTMENT_HEAD: 'Department Head',
+    FINANCE_OFFICER: 'Finance Officer',
+    RECRUITMENT_COMMITTEE: 'Recruitment Committee',
+    CLEARANCE_BODY: 'Clearance Body',
+    EMPLOYEE: 'Employee',
+};
+
+function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
+    return (
+        <div className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
+            <div className="mt-0.5 text-gray-400 flex-shrink-0">{icon}</div>
+            <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</p>
+                <p className="mt-0.5 text-sm font-medium text-gray-800 break-words">{value || '—'}</p>
+            </div>
+        </div>
+    );
+}
+
+function StatCard({ label, value, color, icon }: { label: string; value: number; color: string; icon: string }) {
+    return (
+        <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+                <span className="text-2xl">{icon}</span>
+                <span className={`text-3xl font-bold ${color}`}>{value}</span>
+            </div>
+            <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{label}</p>
+                <p className="text-xs text-gray-400 mt-0.5">days remaining</p>
+            </div>
+        </div>
+    );
+}
 
 export default function ProfilePage() {
     const queryClient = useQueryClient();
     const user = useAuthStore((state) => state.user);
-    const [activeTab, setActiveTab] = useState<TabId>('basic');
+    const [activeTab, setActiveTab] = useState<TabId>('overview');
     const [contactEditMode, setContactEditMode] = useState(false);
     const [updateError, setUpdateError] = useState<ApiError | null>(null);
 
@@ -52,7 +90,6 @@ export default function ProfilePage() {
         enabled: !!employeeId,
     });
 
-
     const updateMutation = useMutation({
         mutationFn: (data: { contactInfo?: ContactInfo }) =>
             employeesApi.update(employeeId!, data),
@@ -69,298 +106,352 @@ export default function ProfilePage() {
         },
     });
 
-    const contactInfo =
-        (employee?.contactInfo as ContactInfo) ?? (employee?.contactInfo as Record<string, unknown>);
+    const contactInfo = (employee?.contactInfo as ContactInfo) ?? {};
+    const emergencyContact = typeof contactInfo?.emergencyContact === 'object' && contactInfo.emergencyContact !== null
+        ? (contactInfo.emergencyContact as Record<string, string>)
+        : null;
 
     const handleContactSubmit = async (data: ContactInfo) => {
         await updateMutation.mutateAsync({ contactInfo: data });
     };
 
+    const canViewContactInfo = user?.role === 'HR_OFFICER' || user?.isHeadHR;
+
+    const availableTabs = tabs.filter(tab => {
+        if (tab.id === 'contact' && !canViewContactInfo) return false;
+        return true;
+    });
+
+    // ── Clearance Body Profile ────────────────────────────────────────────────
     if (user?.role === 'CLEARANCE_BODY') {
         const displayName = user.clearanceUnit?.fullName || user.clearanceUnit?.name || 'Unknown Unit';
-        const unitCode = user.clearanceUnit?.name || '';
         return (
-            <div className="space-y-6">
-                <Card padding="lg">
-                    <div className="text-center">
-                        <div className="mx-auto h-20 w-20 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-4">
-                            <span className="text-2xl font-bold">{unitCode?.[0] || 'C'}</span>
-                        </div>
-                        <h2 className="text-2xl font-bold text-gray-900">{displayName}</h2>
-                        {user.clearanceUnit?.fullName && (
-                            <p className="text-sm text-gray-400 mt-0.5 font-mono">[{unitCode}]</p>
-                        )}
-                        <p className="text-sm text-gray-500 mt-1 uppercase tracking-wide">Clearance Body Account</p>
+            <div className="max-w-2xl mx-auto space-y-6">
+                <div className="rounded-2xl bg-gradient-to-br from-primary to-primary/70 p-8 text-white text-center shadow-lg">
+                    <div className="mx-auto h-20 w-20 bg-white/20 rounded-full flex items-center justify-center mb-4 text-3xl font-bold">
+                        {displayName[0] || 'C'}
                     </div>
-                </Card>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <Card padding="md">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Login ID / Identity</h3>
-                        <p className="text-lg font-medium text-gray-900">{user.employeeId || 'System Managed'}</p>
-                    </Card>
-                    <Card padding="md">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Assigned Campus</h3>
-                        <p className="text-lg font-medium text-gray-900">{user.campus?.name || 'Global System'}</p>
-                    </Card>
-                    <Card padding="md">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Account Status</h3>
-                        <div className="mt-1">
-                            {user.isActive ? (
-                                <Badge variant="approved">Active</Badge>
-                            ) : (
-                                <Badge variant="rejected">Deactivated</Badge>
-                            )}
+                    <h1 className="text-2xl font-bold">{displayName}</h1>
+                    <p className="mt-1 text-white/70 text-sm">Clearance Body Account</p>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                    {[
+                        { label: 'Login ID', value: user.employeeId || '—' },
+                        { label: 'Campus', value: user.campus?.name || 'Global' },
+                        { label: 'Status', value: user.isActive ? 'Active' : 'Inactive' },
+                    ].map((item) => (
+                        <div key={item.label} className="rounded-xl bg-white border border-gray-100 shadow-sm p-4 text-center">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">{item.label}</p>
+                            <p className="mt-1 text-base font-semibold text-gray-800">{item.value}</p>
                         </div>
-                    </Card>
+                    ))}
                 </div>
             </div>
         );
     }
 
+    // ── No Employee Linked ────────────────────────────────────────────────────
     if (!employeeId) {
         return (
-            <div className="rounded-card border border-warning bg-amber-50 p-6 text-center">
-                <p className="text-sm text-amber-800">No employee profile linked to your account.</p>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
+                <FiUser className="mx-auto mb-3 text-amber-400" size={32} />
+                <p className="font-medium text-amber-800">No employee profile linked to your account.</p>
+                <p className="text-sm text-amber-600 mt-1">Please contact HR to link your employee record.</p>
             </div>
         );
     }
 
+    // ── Loading ───────────────────────────────────────────────────────────────
     if (isLoading || !employee) {
         return (
-            <div className="space-y-4">
-                <div className="h-24 w-full animate-pulse rounded-card bg-gray-100" />
-                <div className="h-64 w-full animate-pulse rounded-card bg-gray-100" />
+            <div className="space-y-4 animate-pulse">
+                <div className="h-40 w-full rounded-2xl bg-gray-100" />
+                <div className="h-12 w-full rounded-xl bg-gray-100" />
+                <div className="h-64 w-full rounded-2xl bg-gray-100" />
             </div>
         );
     }
 
+    const hireDate = employee.hireDate ? new Date(employee.hireDate) : null;
+    const yearsOfService = hireDate
+        ? Math.floor((Date.now() - hireDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25))
+        : null;
+    const initials = (employee.name || 'U N')
+        .split(' ')
+        .map((n) => n[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase();
+
+    const staffTypeColor = (employee as any).staffType === 'ACADEMIC'
+        ? 'bg-violet-100 text-violet-700'
+        : 'bg-sky-100 text-sky-700';
+
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <ProfileHeader
-                    employee={employee as EmployeeDetail}
-                    user={user ? { role: user.role, isActive: user.isActive, email: user.email } : null}
-                    showRole={true}
-                />
+        <div className="space-y-5">
+            {/* ── Hero Header ─────────────────────────────────────────────── */}
+            <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+                {/* gradient banner */}
+                <div className="h-24 bg-gradient-to-r from-primary/80 via-primary to-emerald-600" />
+                <div className="bg-white px-6 pb-6">
+                    {/* avatar row */}
+                    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-10">
+                        <div className="flex items-end gap-4">
+                            <div className="h-20 w-20 rounded-full bg-primary text-white flex items-center justify-center text-2xl font-bold ring-4 ring-white shadow-lg">
+                                {initials}
+                            </div>
+                            <div className="mb-1">
+                                <h1 className="text-xl font-bold text-gray-900 leading-tight">{employee.name}</h1>
+                                <p className="text-sm text-gray-500">{employee.position || 'No Position'} · {employee.deptLegacy || employee.department || 'N/A'}</p>
+                            </div>
+                        </div>
+                        {/* badges */}
+                        <div className="flex flex-wrap gap-2 mb-1">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${(employee as any).staffType ? staffTypeColor : 'bg-gray-100 text-gray-600'}`}>
+                                <FiUsers size={11} />
+                                {(employee as any).staffType || 'Staff'}
+                            </span>
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${employee.user?.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {employee.user?.isActive !== false ? <FiCheckCircle size={11} /> : <FiXCircle size={11} />}
+                                {employee.user?.isActive !== false ? 'Active' : 'Inactive'}
+                            </span>
+                            {user?.role && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                                    <FiShield size={11} />
+                                    {roleLabels[user.role] ?? user.role}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* quick stat chips */}
+                    <div className="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">
+                        {user?.email && (
+                            <a href={`mailto:${user.email}`} className="flex items-center gap-1.5 hover:text-primary transition-colors">
+                                <FiMail size={13} className="text-gray-400" /> {user.email}
+                            </a>
+                        )}
+                        <span className="flex items-center gap-1.5">
+                            <FiActivity size={13} className="text-gray-400" /> ID: {employee.employeeId}
+                        </span>
+                        {yearsOfService !== null && (
+                            <span className="flex items-center gap-1.5">
+                                <FiClock size={13} className="text-gray-400" /> {yearsOfService} years of service
+                            </span>
+                        )}
+                        {employee.officeLocation && (
+                            <span className="flex items-center gap-1.5">
+                                <FiHome size={13} className="text-gray-400" /> {employee.officeLocation}
+                            </span>
+                        )}
+                        {(employee as any).gender && (
+                            <span className="flex items-center gap-1.5">
+                                <FiUser size={13} className="text-gray-400" /> {(employee as any).gender === 'MALE' ? 'Male' : 'Female'}
+                            </span>
+                        )}
+                    </div>
+                </div>
             </div>
 
-            <div className="border-b border-[#E5E7EB]">
-                <nav className="flex gap-6" aria-label="Tabs">
-                    {tabs.map((tab) => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`border-b-2 px-1 py-3 text-sm font-medium transition-colors ${activeTab === tab.id
-                                ? 'border-primary text-primary'
-                                : 'border-transparent text-text-secondary hover:border-gray-300 hover:text-text-primary'
-                                }`}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </nav>
+            {/* ── Tabs ──────────────────────────────────────────────────────── */}
+            <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+                {availableTabs.map((tab) => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex items-center gap-1.5 whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all flex-1 justify-center ${
+                            activeTab === tab.id
+                                ? 'bg-white text-primary shadow-sm'
+                                : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                    >
+                        {tab.icon}
+                        {tab.label}
+                    </button>
+                ))}
             </div>
 
-            {activeTab === 'basic' && (
-                <div className="space-y-4">
-                    <Card>
-                        <CardHeader
-                            title="Contact information"
-                            subtitle="Phone, address, and emergency contact"
-                            action={
-                                !contactEditMode && (
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() => setContactEditMode(true)}
-                                    >
-                                        Edit
-                                    </Button>
-                                )
-                            }
-                        />
+            {/* ── Tab Content ───────────────────────────────────────────────── */}
+
+            {/* Overview */}
+            {activeTab === 'overview' && (
+                <div className="grid gap-5 sm:grid-cols-2">
+                    <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
+                        <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                            <FiUser size={15} className="text-primary" /> Personal Info
+                        </h3>
+                        <InfoRow icon={<FiUser size={14} />} label="Full Name" value={employee.name} />
+                        <InfoRow icon={<FiActivity size={14} />} label="Employee ID" value={employee.employeeId} />
+                        <InfoRow icon={<FiUser size={14} />} label="Gender" value={(employee as any).gender === 'MALE' ? 'Male' : (employee as any).gender === 'FEMALE' ? 'Female' : undefined} />
+                        <InfoRow icon={<FiUsers size={14} />} label="Staff Type" value={(employee as any).staffType} />
+                        <InfoRow icon={<FiMapPin size={14} />} label="Campus" value={user?.campus?.name} />
+                    </div>
+
+                    <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
+                        <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                            <FiBriefcase size={15} className="text-primary" /> Employment
+                        </h3>
+                        <InfoRow icon={<FiBriefcase size={14} />} label="Position" value={employee.position} />
+                        <InfoRow icon={<FiUsers size={14} />} label="Department" value={employee.deptLegacy || employee.department} />
+                        <InfoRow icon={<FiCalendar size={14} />} label="Hire Date" value={hireDate ? format(hireDate, 'MMMM d, yyyy') : undefined} />
+                        <InfoRow icon={<FiClock size={14} />} label="Years of Service" value={yearsOfService !== null ? `${yearsOfService} years` : undefined} />
+                        <InfoRow icon={<FiHome size={14} />} label="Office Location" value={employee.officeLocation} />
+                    </div>
+
+                    {canViewContactInfo && (
+                        <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
+                            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                <FiPhone size={15} className="text-primary" /> Contact
+                            </h3>
+                            <InfoRow icon={<FiMail size={14} />} label="Email" value={user?.email} />
+                            <InfoRow icon={<FiPhone size={14} />} label="Phone" value={contactInfo?.phone} />
+                            <InfoRow icon={<FiMapPin size={14} />} label="Address" value={contactInfo?.address} />
+                            {emergencyContact && (
+                                <InfoRow
+                                    icon={<FiShield size={14} />}
+                                    label="Emergency Contact"
+                                    value={[emergencyContact.name, emergencyContact.relationship, emergencyContact.phone].filter(Boolean).join(' · ')}
+                                />
+                            )}
+                        </div>
+                    )}
+
+                    <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
+                        <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                            <FiAward size={15} className="text-primary" /> Contract & Pay
+                        </h3>
+                        <InfoRow icon={<FiActivity size={14} />} label="Employment Status" value={employee.employmentStatus} />
+                        <InfoRow icon={<FiAward size={14} />} label="Employment Type" value={employee.employmentType} />
+                        <InfoRow icon={<FiCalendar size={14} />} label="Contract Start" value={employee.contractStartDate ? format(new Date(employee.contractStartDate), 'MMM d, yyyy') : undefined} />
+                        <InfoRow icon={<FiCalendar size={14} />} label="Contract End" value={employee.contractEndDate ? format(new Date(employee.contractEndDate), 'MMM d, yyyy') : undefined} />
+                        <InfoRow icon={<FiAward size={14} />} label="Pay Grade" value={employee.payGrade} />
+                    </div>
+                </div>
+            )}
+
+            {/* Contact */}
+            {activeTab === 'contact' && (
+                <div className="rounded-2xl bg-white border border-gray-100 shadow-sm">
+                    <div className="flex items-center justify-between p-5 border-b border-gray-50">
+                        <div>
+                            <h3 className="text-sm font-semibold text-gray-800">Contact Information</h3>
+                            <p className="text-xs text-gray-400 mt-0.5">Phone, address, and emergency contact</p>
+                        </div>
+                        {!contactEditMode && (
+                            <button
+                                onClick={() => setContactEditMode(true)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
+                            >
+                                <FiEdit2 size={13} /> Edit
+                            </button>
+                        )}
+                    </div>
+                    <div className="p-5">
                         {contactEditMode ? (
                             <ContactInfoForm
                                 initialContactInfo={contactInfo}
                                 onSubmit={handleContactSubmit}
-                                onCancel={() => {
-                                    setContactEditMode(false);
-                                    setUpdateError(null);
-                                }}
+                                onCancel={() => { setContactEditMode(false); setUpdateError(null); }}
                                 apiError={updateError}
                                 isSubmitting={updateMutation.isPending}
                             />
                         ) : (
-                            <div className="space-y-2 text-sm p-6 pt-0">
-                                <p>
-                                    <span className="text-text-secondary">Phone:</span>{' '}
-                                    {(contactInfo as ContactInfo)?.phone ?? '—'}
-                                </p>
-                                <p>
-                                    <span className="text-text-secondary">Address:</span>{' '}
-                                    {(contactInfo as ContactInfo)?.address ?? '—'}
-                                </p>
-                                {(contactInfo as ContactInfo)?.emergencyContact && (
-                                    <p>
-                                        <span className="text-text-secondary">Emergency:</span>{' '}
-                                        {typeof (contactInfo as ContactInfo).emergencyContact ===
-                                            'object' &&
-                                            (contactInfo as ContactInfo).emergencyContact !== null
-                                            ? (() => {
-                                                const ec = (contactInfo as ContactInfo)
-                                                    .emergencyContact as Record<string, string>;
-                                                return [ec?.name, ec?.relationship, ec?.phone]
-                                                    .filter(Boolean)
-                                                    .join(' · ') || '—';
-                                            })()
-                                            : String((contactInfo as ContactInfo).emergencyContact)}
-                                    </p>
+                            <div className="space-y-0">
+                                <InfoRow icon={<FiMail size={14} />} label="Email" value={user?.email} />
+                                <InfoRow icon={<FiPhone size={14} />} label="Phone" value={contactInfo?.phone} />
+                                <InfoRow icon={<FiMapPin size={14} />} label="Address" value={contactInfo?.address} />
+                                {emergencyContact ? (
+                                    <>
+                                        <InfoRow icon={<FiUser size={14} />} label="Emergency Contact Name" value={emergencyContact.name} />
+                                        <InfoRow icon={<FiUsers size={14} />} label="Relationship" value={emergencyContact.relationship} />
+                                        <InfoRow icon={<FiPhone size={14} />} label="Emergency Phone" value={emergencyContact.phone} />
+                                    </>
+                                ) : (
+                                    <InfoRow icon={<FiShield size={14} />} label="Emergency Contact" value="Not set" />
                                 )}
                             </div>
                         )}
-                    </Card>
+                    </div>
                 </div>
             )}
 
-            {activeTab === 'contract' && (
-                <Card>
-                    <CardHeader title="Contract details" />
-                    <dl className="grid gap-4 sm:grid-cols-2 p-6 pt-0">
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Employment status
-                            </dt>
-                            <dd className="mt-0.5">
-                                <Badge variant="neutral">
-                                    {employee.employmentStatus ?? '—'}
-                                </Badge>
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Employment type
-                            </dt>
-                            <dd className="mt-0.5">{employee.employmentType ?? '—'}</dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Contract start
-                            </dt>
-                            <dd className="mt-0.5">
-                                {employee.contractStartDate
-                                    ? format(
-                                        new Date(employee.contractStartDate),
-                                        'MMM d, yyyy'
-                                    )
-                                    : '—'}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Contract end
-                            </dt>
-                            <dd className="mt-0.5">
-                                {employee.contractEndDate
-                                    ? format(
-                                        new Date(employee.contractEndDate),
-                                        'MMM d, yyyy'
-                                    )
-                                    : '—'}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Gross salary
-                            </dt>
-                            <dd className="mt-0.5">
-                                {employee.grossSalary != null
-                                    ? new Intl.NumberFormat('en-US', {
-                                        style: 'currency',
-                                        currency: 'ETB',
-                                    }).format(employee.grossSalary)
-                                    : '—'}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Salary type
-                            </dt>
-                            <dd className="mt-0.5">{employee.salaryType ?? '—'}</dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Pay grade
-                            </dt>
-                            <dd className="mt-0.5">{employee.payGrade ?? '—'}</dd>
-                        </div>
-                    </dl>
-                </Card>
+            {/* Job Info */}
+            {activeTab === 'job' && (
+                <div className="rounded-2xl bg-white border border-gray-100 shadow-sm">
+                    <div className="p-5 border-b border-gray-50">
+                        <h3 className="text-sm font-semibold text-gray-800">Job Information</h3>
+                    </div>
+                    <div className="p-5 grid sm:grid-cols-2 gap-0">
+                        <InfoRow icon={<FiBriefcase size={14} />} label="Position" value={employee.position} />
+                        <InfoRow icon={<FiUsers size={14} />} label="Department" value={employee.deptLegacy || employee.department} />
+                        <InfoRow icon={<FiUsers size={14} />} label="Staff Type" value={(employee as any).staffType} />
+                        <InfoRow icon={<FiUser size={14} />} label="Gender" value={(employee as any).gender === 'MALE' ? 'Male' : (employee as any).gender === 'FEMALE' ? 'Female' : undefined} />
+                        <InfoRow icon={<FiCalendar size={14} />} label="Hire Date" value={hireDate ? format(hireDate, 'MMMM d, yyyy') : undefined} />
+                        <InfoRow icon={<FiClock size={14} />} label="Service Years" value={yearsOfService !== null ? `${yearsOfService} years` : undefined} />
+                        <InfoRow icon={<FiHome size={14} />} label="Office Location" value={employee.officeLocation} />
+                        <InfoRow icon={<FiShield size={14} />} label="Role" value={user?.role ? (roleLabels[user.role] ?? user.role) : undefined} />
+                    </div>
+                </div>
             )}
 
-            {activeTab === 'job' && (
-                <Card>
-                    <CardHeader title="Job information" />
-                    <dl className="grid gap-4 sm:grid-cols-2 p-6 pt-0">
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">Position</dt>
-                            <dd className="mt-0.5">{employee.position ?? '—'}</dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">Department</dt>
-                            <dd className="mt-0.5">
-                                {employee.deptLegacy ?? employee.department ?? '—'}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">Hire date</dt>
-                            <dd className="mt-0.5">
-                                {employee.hireDate
-                                    ? format(new Date(employee.hireDate), 'MMM d, yyyy')
-                                    : '—'}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-xs font-medium text-text-secondary">
-                                Office location
-                            </dt>
-                            <dd className="mt-0.5">{employee.officeLocation ?? '—'}</dd>
-                        </div>
-                    </dl>
-                </Card>
+            {/* Contract */}
+            {activeTab === 'contract' && (
+                <div className="rounded-2xl bg-white border border-gray-100 shadow-sm">
+                    <div className="p-5 border-b border-gray-50">
+                        <h3 className="text-sm font-semibold text-gray-800">Contract Details</h3>
+                    </div>
+                    <div className="p-5 grid sm:grid-cols-2 gap-0">
+                        <InfoRow icon={<FiActivity size={14} />} label="Employment Status" value={employee.employmentStatus} />
+                        <InfoRow icon={<FiAward size={14} />} label="Employment Type" value={employee.employmentType} />
+                        <InfoRow icon={<FiCalendar size={14} />} label="Contract Start" value={employee.contractStartDate ? format(new Date(employee.contractStartDate), 'MMMM d, yyyy') : undefined} />
+                        <InfoRow icon={<FiCalendar size={14} />} label="Contract End" value={employee.contractEndDate ? format(new Date(employee.contractEndDate), 'MMMM d, yyyy') : undefined} />
+                        <InfoRow icon={<FiAward size={14} />} label="Pay Grade" value={employee.payGrade} />
+                        <InfoRow icon={<FiAward size={14} />} label="Salary Type" value={employee.salaryType} />
+                    </div>
+                </div>
             )}
+
+            {/* Leave Balance */}
             {activeTab === 'leave' && (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <Card padding="md">
-                        <div className="text-center">
-                            <p className="text-xs font-medium text-text-secondary uppercase tracking-wider">Annual Leave</p>
-                            <p className="mt-2 text-3xl font-bold text-primary">{balances?.annualBalance ?? 0}</p>
-                            <p className="mt-1 text-xs text-text-secondary italic underline decoration-dotted">days remaining</p>
+                <div className="space-y-4">
+                    <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+                        <StatCard label="Annual Leave" value={balances?.annualBalance ?? 0} color="text-primary" icon="🌴" />
+                        <StatCard label="Sick Leave" value={balances?.sickBalance ?? 0} color="text-orange-500" icon="🏥" />
+                        <StatCard label="Personal Leave" value={balances?.personalBalance ?? 0} color="text-purple-500" icon="👤" />
+                        {(employee as any).gender === 'FEMALE'
+                            ? <StatCard label="Maternity Leave" value={balances?.maternityBalance ?? 0} color="text-pink-500" icon="🤱" />
+                            : <StatCard label="Paternity Leave" value={balances?.paternityBalance ?? 0} color="text-blue-500" icon="👨‍👶" />
+                        }
+                    </div>
+                    <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
+                        <h3 className="text-sm font-semibold text-gray-700 mb-3">Balance Summary</h3>
+                        <div className="space-y-3">
+                            {[
+                                { label: 'Annual Leave', val: balances?.annualBalance ?? 0, max: 30, color: 'bg-primary' },
+                                { label: 'Sick Leave', val: balances?.sickBalance ?? 0, max: 240, color: 'bg-orange-400' },
+                                { label: 'Personal Leave', val: balances?.personalBalance ?? 0, max: 3, color: 'bg-purple-400' },
+                                ...(((employee as any).gender === 'FEMALE')
+                                    ? [{ label: 'Maternity Leave', val: balances?.maternityBalance ?? 0, max: 120, color: 'bg-pink-400' }]
+                                    : [{ label: 'Paternity Leave', val: balances?.paternityBalance ?? 0, max: 10, color: 'bg-blue-400' }]
+                                ),
+                            ].map(({ label, val, max, color }) => (
+                                <div key={label}>
+                                    <div className="flex justify-between text-xs font-medium text-gray-500 mb-1">
+                                        <span>{label}</span>
+                                        <span>{val} / {max} days</span>
+                                    </div>
+                                    <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full ${color} transition-all duration-700`}
+                                            style={{ width: `${Math.min(100, (val / max) * 100)}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    </Card>
-                    <Card padding="md">
-                        <div className="text-center">
-                            <p className="text-xs font-medium text-text-secondary uppercase tracking-wider">Sick Leave</p>
-                            <p className="mt-2 text-3xl font-bold text-orange-600">{balances?.sickBalance ?? 0}</p>
-                            <p className="mt-1 text-xs text-text-secondary italic underline decoration-dotted">days remaining</p>
-                        </div>
-                    </Card>
-                    <Card padding="md">
-                        <div className="text-center">
-                            <p className="text-xs font-medium text-text-secondary uppercase tracking-wider">Maternity</p>
-                            <p className="mt-2 text-3xl font-bold text-pink-600">{balances?.maternityBalance ?? 0}</p>
-                            <p className="mt-1 text-xs text-text-secondary italic underline decoration-dotted">days remaining</p>
-                        </div>
-                    </Card>
-                    <Card padding="md">
-                        <div className="text-center">
-                            <p className="text-xs font-medium text-text-secondary uppercase tracking-wider">Paternity</p>
-                            <p className="mt-2 text-3xl font-bold text-blue-600">{balances?.paternityBalance ?? 0}</p>
-                            <p className="mt-1 text-xs text-text-secondary italic underline decoration-dotted">days remaining</p>
-                        </div>
-                    </Card>
+                    </div>
                 </div>
             )}
         </div>
     );
 }
-

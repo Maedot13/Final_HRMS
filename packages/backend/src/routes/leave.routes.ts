@@ -1,278 +1,120 @@
-
 import { Router } from 'express';
 import * as leaveController from '../controllers/leave.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { attachEmployee } from '../middleware/employee.middleware';
 import { UserRole } from '@hrms/types';
 import { validateBody } from '../middleware/validate.middleware';
-import { createLeaveRequestSchema, approveRejectSchema } from '../schemas/leave.schema';
+import { createLeaveRequestSchema, deptHeadReviewSchema, approveRejectSchema } from '../schemas/leave.schema';
+import { upload } from '../middleware/upload.middleware';
 
 const router = Router();
-
 router.use(authenticate);
 
 /**
  * @swagger
  * tags:
  *   name: Leave
- *   description: Leave request management
+ *   description: Leave request management (two-stage workflow)
  */
 
-/**
- * @swagger
- * /api/v1/leave:
- *   post:
- *     summary: Create a new leave request
- *     tags: [Leave]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - leaveType
- *               - startDate
- *               - endDate
- *               - reason
- *             properties:
- *               leaveType:
- *                 type: string
- *                 enum: [ANNUAL, SICK, MATERNITY, PATERNITY, UNPAID]
- *               startDate:
- *                 type: string
- *                 format: date
- *               endDate:
- *                 type: string
- *                 format: date
- *               reason:
- *                 type: string
- *               attachmentUrl:
- *                 type: string
- *     responses:
- *       201:
- *         description: Leave request created successfully
- *       400:
- *         description: Validation error or insufficient balance
- *   get:
- *     summary: Get current employee's leave requests
- *     tags: [Leave]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of leave requests
- */
-import { upload } from '../middleware/upload.middleware';
+// ── Employee self-service ─────────────────────────────────────────────────────
 
 /**
- * @swagger
- * /api/v1/leave:
- *   post:
- *     summary: Create a new leave request
- *     tags: [Leave]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             required:
- *               - leaveType
- *               - startDate
- *               - endDate
- *               - reason
- *             properties:
- *               leaveType:
- *                 type: string
- *                 enum: [ANNUAL, SICK, MATERNITY, PATERNITY, UNPAID]
- *               startDate:
- *                 type: string
- *                 format: date
- *                 description: YYYY-MM-DD or ISO datetime. Must not be in the past.
- *               endDate:
- *                 type: string
- *                 format: date
- *                 description: YYYY-MM-DD or ISO datetime. Must be after startDate.
- *               reason:
- *                 type: string
- *                 minLength: 5
- *               attachment:
- *                 type: string
- *                 format: binary
- *     responses:
- *       201:
- *         description: Leave request created successfully
- *       400:
- *         description: Validation error or insufficient balance
+ * POST /api/v1/leave/apply — Employee submits leave request (supports file upload)
  */
-router.post('/', attachEmployee, upload.single('attachment'), validateBody(createLeaveRequestSchema), leaveController.createLeaveRequest);
-router.get('/', attachEmployee, leaveController.getMyRequests);
-
-/**
- * @swagger
- * /api/v1/leave/my:
- *   get:
- *     summary: Get current employee's leave requests (Alias)
- *     tags: [Leave]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of leave requests
- */
-router.get('/my', attachEmployee, leaveController.getMyRequests);
-
-/**
- * @swagger
- * /api/v1/leave/pending:
- *   get:
- *     summary: Get all pending leave requests (Admin/HR/Dept Head)
- *     tags: [Leave]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of pending leave requests
- *       403:
- *         description: Forbidden
- */
-router.get('/pending',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD]),
-    leaveController.getPendingRequests
+router.post(
+    '/apply',
+    authorize([UserRole.EMPLOYEE]),
+    attachEmployee,
+    upload.single('attachment'),
+    validateBody(createLeaveRequestSchema),
+    leaveController.createLeaveRequest
 );
 
 /**
- * @swagger
- * /api/v1/leave/balances/{employeeId}:
- *   get:
- *     summary: Get leave balances for an employee
- *     tags: [Leave]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: employeeId
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Leave balances
+ * GET /api/v1/leave/my-requests — Employee's own leave history
  */
-router.get('/balances/:employeeId', leaveController.getLeaveBalances);
+router.get(
+    '/my-requests',
+    authorize([UserRole.EMPLOYEE, UserRole.HR_OFFICER, UserRole.ADMIN, UserRole.DEPARTMENT_HEAD]),
+    attachEmployee,
+    leaveController.getMyRequests
+);
+
+// Alias kept for backward compatibility
+router.get('/my', attachEmployee, leaveController.getMyRequests);
+router.post('/', attachEmployee, upload.single('attachment'), validateBody(createLeaveRequestSchema), leaveController.createLeaveRequest);
+router.get('/', attachEmployee, leaveController.getMyRequests);
+
+// ── Leave balances ────────────────────────────────────────────────────────────
 
 /**
- * @swagger
- * /api/v1/leave/balance:
- *   get:
- *     summary: Get leave balance for current employee
- *     tags: [Leave]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Leave balances
+ * GET /api/v1/leave/balance — Own balance (self-service)
  */
 router.get('/balance', attachEmployee, leaveController.getMyLeaveBalance);
 
 /**
- * @swagger
- * /api/v1/leave/{id}:
- *   get:
- *     summary: Get leave request details
- *     tags: [Leave]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Leave request details
+ * GET /api/v1/leave/balances/:employeeId — Balance for specific employee (HR/Admin/Manager)
  */
-router.get('/:id', leaveController.getLeaveRequest);
+router.get('/balances/:employeeId', leaveController.getLeaveBalances);
+
+// ── Approver views ────────────────────────────────────────────────────────────
 
 /**
- * @swagger
- * /api/v1/leave/{id}/approve:
- *   patch:
- *     summary: Approve a leave request (Dept Head)
- *     tags: [Leave]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               comment:
- *                 type: string
- *     responses:
- *       200:
- *         description: Leave request approved
- *       403:
- *         description: Forbidden
- *       404:
- *         description: Leave request not found
+ * GET /api/v1/leave/pending — Pending requests scoped to caller's role
+ * DEPARTMENT_HEAD → their department (DEPT_HEAD stage)
+ * HR_OFFICER/ADMIN → their campus (HR_OFFICER stage); ?view=all for all requests
+ * DEAN privilege → RESEARCH leaves at DEAN stage on campus
+ * VICE_PRESIDENT privilege → SABBATICAL leaves at VP stage university-wide
  */
-router.patch('/:id/approve',
+router.get(
+    '/pending',
+    attachEmployee,
+    leaveController.getPendingRequests
+);
+
+/**
+ * GET /api/v1/leave/all — HR: all campus requests for record-keeping
+ */
+router.get(
+    '/all',
+    authorize([UserRole.HR_OFFICER, UserRole.ADMIN]),
+    leaveController.getAllCampusRequests
+);
+
+// ── Individual request ────────────────────────────────────────────────────────
+
+router.get('/:id', leaveController.getLeaveRequest);
+
+// ── Stage 1: Department Head Review ──────────────────────────────────────────
+
+/**
+ * PATCH /api/v1/leave/:id/dept-head-review — Dept head approves (forwards) or rejects
+ */
+router.patch(
+    '/:id/dept-head-review',
     authorize([UserRole.DEPARTMENT_HEAD]),
     attachEmployee,
+    validateBody(deptHeadReviewSchema),
+    leaveController.deptHeadReview
+);
+
+// ── Stage 2: Final Approval ───────────────────────────────────────────────────
+
+/**
+ * PATCH /api/v1/leave/:id/approve — HR Officer / Dean / VP gives final approval
+ */
+router.patch(
+    '/:id/approve',
     validateBody(approveRejectSchema),
     leaveController.approveRequest
 );
 
 /**
- * @swagger
- * /api/v1/leave/{id}/reject:
- *   patch:
- *     summary: Reject a leave request (Dept Head)
- *     tags: [Leave]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - comment
- *             properties:
- *               comment:
- *                 type: string
- *     responses:
- *       200:
- *         description: Leave request rejected
- *       403:
- *         description: Forbidden
- *       404:
- *         description: Leave request not found
+ * PATCH /api/v1/leave/:id/reject — HR Officer / Dean / VP rejects at final stage
  */
-router.patch('/:id/reject',
-    authorize([UserRole.DEPARTMENT_HEAD]),
-    attachEmployee,
+router.patch(
+    '/:id/reject',
     validateBody(approveRejectSchema),
     leaveController.rejectRequest
 );

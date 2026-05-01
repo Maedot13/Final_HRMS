@@ -99,7 +99,7 @@ const navItems: NavItem[] = [
     {
         label: 'Contacts',
         to: '/contacts',
-        roles: ['ADMIN', 'HR_OFFICER', 'DEPARTMENT_HEAD', 'FINANCE_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE'],
+        roles: ['HR_OFFICER', 'DEPARTMENT_HEAD'],
         icon: <FiPhone className="w-4 h-4" />,
     },
     {

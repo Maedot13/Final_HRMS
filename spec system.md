@@ -492,7 +492,15 @@ model ActivityLog {
 | Special (court/election) | All | As needed | HR_Officer | No |
 | Study | Academic staff, higher degree | First year full pay, subsequent 50% pay | HR_Officer | No |
 | Research | Assistant Professor+, 3+ years service | Up to 6 months | University President | No |
-| Sabbatical | Assistant Professor+, 6+ years service | 1 year full pay | Dean (or Director) | No |
+| Sabbatical | Assistant Professor+, 6+ years service | 1 yea### 6.4 Leave Management
+| Method | Endpoint | Permission |
+|--------|----------|------------|
+| POST | `/api/v1/leave/apply` | EMPLOYEE (self) |
+| GET | `/api/v1/leave/my-requests` | EMPLOYEE |
+| GET | `/api/v1/leave/pending` | HR_OFFICER / Dean / President (role-specific) |
+| POST | `/api/v1/leave/:id/approve` | Depends on leave type (routing) |
+| POST | `/api/v1/leave/:id/reject` | Same as approve |
+| GET | `/api/v1/leave/balance` | EMPLOYEE (self), HR/ADMIN (others campus)r full pay | Dean (or Director) | No |
 | Without Pay | All | Up to 2 years | University President | No |
 
 **Routing Logic:**

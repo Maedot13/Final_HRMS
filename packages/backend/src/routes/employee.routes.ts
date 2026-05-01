@@ -74,7 +74,7 @@ router.post(
     employeeController.createEmployee
 );
 
-router.get('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]), employeeController.getEmployee);
+router.get('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER, UserRole.EMPLOYEE]), employeeController.getEmployee);
 
 // Activate / deactivate an employee account
 router.post(

@@ -12,6 +12,7 @@ interface TokenPayloadArgs {
     mustChangePassword?: boolean;
     isHeadHR?: boolean;
     specialPrivileges?: string[];
+    clearanceUnitId?: number | null;
 }
 
 export const getTokenExpiration = (token: string): Date => {

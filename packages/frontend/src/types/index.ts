@@ -24,6 +24,10 @@ export interface Employee {
     lastName: string;
     employeeId: string;
     departmentId?: number;
+    position?: string;
+    gender?: 'MALE' | 'FEMALE';
+    staffType?: 'ACADEMIC' | 'REGULAR';
+    officeLocation?: string;
     hireDate?: string;
     grossSalary?: number;
 }
@@ -116,6 +120,8 @@ export interface EmployeeDetail {
     department?: string;
     departmentId?: number | null;
     position: string;
+    gender?: 'MALE' | 'FEMALE';
+    staffType?: 'ACADEMIC' | 'REGULAR';
     hireDate: string;
     serviceYears?: number;
     grossSalary?: number;

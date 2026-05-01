@@ -1,170 +1,166 @@
 
 import { prismaMock } from '../../lib/prisma-mock';
 import * as leaveService from '../leave.service';
-import { LeaveType, LeaveStatus } from '@prisma/client';
+import { LeaveType, LeaveStatus, LeaveStage } from '@prisma/client';
 
-describe('LeaveService - Employee to Department Head Workflow', () => {
+describe('LeaveService — Two-Stage Workflow', () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
     describe('createLeaveRequest', () => {
-        it('should create leave request with employee info for department head', async () => {
-            const mockBalance = {
-                id: 1,
-                employeeId: 1,
-                year: 2024,
-                annualBalance: 20,
-                sickBalance: 15,
-                maternityBalance: 0,
-                paternityBalance: 0,
-            };
+        it('should create a leave request at DEPT_HEAD stage', async () => {
+            prismaMock.employee.findUnique.mockResolvedValue({
+                id: 1, campusId: 1, departmentId: 10,
+                department: { headEmployeeId: 2 },
+            } as any);
 
-            const mockEmployee = {
-                id: 1,
-                userId: 1,
-                employeeId: 'EMP001',
-                name: 'John Doe',
-                deptLegacy: 'Engineering',
-                position: 'Software Developer',
-                hireDate: new Date('2020-01-01'),
-            };
+            prismaMock.leaveBalance.findUnique.mockResolvedValue({
+                id: 1, employeeId: 1, year: 2026,
+                annualBalance: 20, sickBalance: 180, personalBalance: 3,
+            } as any);
 
-            prismaMock.leaveBalance.upsert.mockResolvedValue(mockBalance as any);
             prismaMock.leaveRequest.findFirst.mockResolvedValue(null);
-            prismaMock.sabbaticalRequest.findFirst.mockResolvedValue(null);
 
             prismaMock.leaveRequest.create.mockResolvedValue({
                 id: 1,
                 employeeId: 1,
                 leaveType: LeaveType.ANNUAL,
-                startDate: new Date('2024-06-01'),
-                endDate: new Date('2024-06-05'),
+                startDate: new Date('2026-07-01'),
+                endDate: new Date('2026-07-05'),
                 days: 5,
-                reason: 'Family vacation',
+                reason: 'Vacation',
                 status: LeaveStatus.PENDING,
-                employee: mockEmployee,
-                createdAt: new Date(),
-                updatedAt: new Date(),
+                currentStage: LeaveStage.DEPT_HEAD,
+                campusId: 1,
+                employee: { name: 'John Doe', deptLegacy: 'Engineering', departmentId: 10 },
             } as any);
 
-            // Mock finding department heads for notification
-            prismaMock.employee.findMany.mockResolvedValue([]);
-
-            // We need to pass the arguments that createLeaveRequest expects.
-            // Assuming createLeaveRequest(employeeId: number, data: LeaveRequestInput)
             const result = await leaveService.createLeaveRequest(1, {
                 leaveType: LeaveType.ANNUAL,
-                startDate: '2024-06-01',
-                endDate: '2024-06-05',
-                reason: 'Family vacation',
+                startDate: '2026-07-01',
+                endDate: '2026-07-05',
+                reason: 'Vacation',
             });
 
-            // Verify request includes employee information
-            expect(result.employee.name).toBe('John Doe');
-            expect(result.employee.deptLegacy).toBe('Engineering');
-            expect(result.days).toBe(5);
             expect(result.status).toBe(LeaveStatus.PENDING);
+            expect(result.currentStage).toBe(LeaveStage.DEPT_HEAD);
+            expect(result.days).toBe(5);
         });
 
-        it('should prevent leave request with insufficient balance', async () => {
-            const mockBalance = {
-                id: 1,
-                employeeId: 1,
-                year: 2024,
-                annualBalance: 2, // Only 2 days available
-                sickBalance: 15,
-                maternityBalance: 0,
-                paternityBalance: 0,
-            };
+        it('should throw if insufficient annual leave balance', async () => {
+            prismaMock.employee.findUnique.mockResolvedValue({
+                id: 1, campusId: 1, departmentId: 10,
+                department: { headEmployeeId: 2 },
+            } as any);
 
-            prismaMock.leaveBalance.upsert.mockResolvedValue(mockBalance as any);
-
-            await expect(
-                leaveService.createLeaveRequest(1, {
-                    leaveType: LeaveType.ANNUAL,
-                    startDate: '2024-06-01',
-                    endDate: '2024-06-05', // Requesting 5 days
-                    reason: 'Vacation',
-                })
-            ).rejects.toThrow('Insufficient leave balance');
-        });
-
-        it('should prevent overlapping leave requests', async () => {
-            const mockBalance = {
-                id: 1,
-                employeeId: 1,
-                year: 2024,
-                annualBalance: 20,
-                sickBalance: 15,
-                maternityBalance: 0,
-                paternityBalance: 0,
-            };
-
-            prismaMock.leaveBalance.upsert.mockResolvedValue(mockBalance as any);
-
-            // Mock existing overlapping request
-            prismaMock.leaveRequest.findFirst.mockResolvedValue({
-                id: 1,
-                employeeId: 1,
-                startDate: new Date('2024-06-03'),
-                endDate: new Date('2024-06-07'),
-                status: LeaveStatus.APPROVED,
+            prismaMock.leaveBalance.findUnique.mockResolvedValue({
+                id: 1, employeeId: 1, year: 2026,
+                annualBalance: 2, sickBalance: 180, personalBalance: 3,
             } as any);
 
             await expect(
                 leaveService.createLeaveRequest(1, {
                     leaveType: LeaveType.ANNUAL,
-                    startDate: '2024-06-01',
-                    endDate: '2024-06-05',
+                    startDate: '2026-07-01',
+                    endDate: '2026-07-05', // 5 days requested, only 2 available
                     reason: 'Vacation',
                 })
-            ).rejects.toThrow('Overlapping leave request'); // Expected error message
-            // Note: Actual error might be different, we'll see.
+            ).rejects.toThrow('Insufficient');
+        });
+
+        it('should block overlapping leave requests', async () => {
+            prismaMock.employee.findUnique.mockResolvedValue({
+                id: 1, campusId: 1, departmentId: 10,
+                department: { headEmployeeId: 2 },
+            } as any);
+
+            prismaMock.leaveBalance.findUnique.mockResolvedValue({
+                id: 1, employeeId: 1, year: 2026,
+                annualBalance: 20, sickBalance: 180, personalBalance: 3,
+            } as any);
+
+            prismaMock.leaveRequest.findFirst.mockResolvedValue({
+                id: 99, employeeId: 1, status: LeaveStatus.PENDING,
+            } as any);
+
+            await expect(
+                leaveService.createLeaveRequest(1, {
+                    leaveType: LeaveType.ANNUAL,
+                    startDate: '2026-07-01',
+                    endDate: '2026-07-05',
+                    reason: 'Vacation',
+                })
+            ).rejects.toThrow('overlapping');
         });
     });
 
-    describe('approveRequest - Department Head Action', () => {
-        it('should approve request and deduct balance', async () => {
-            const mockEmployee = {
-                id: 1,
-                userId: 1,
-                employeeId: 'EMP001',
-                name: 'John Doe',
-                deptLegacy: 'Engineering',
-                position: 'Software Developer',
-                hireDate: new Date('2020-01-01'),
-            };
+    describe('deptHeadReview', () => {
+        it('should reject and set status to REJECTED', async () => {
+            prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
 
-            const mockRequest = {
-                id: 1,
-                employeeId: 1,
+            prismaMock.leaveRequest.findUnique.mockResolvedValue({
+                id: 1, status: LeaveStatus.PENDING, currentStage: LeaveStage.DEPT_HEAD,
                 leaveType: LeaveType.ANNUAL,
-                startDate: new Date('2024-06-01'),
-                endDate: new Date('2024-06-05'),
-                days: 5,
-                status: LeaveStatus.PENDING,
-                employee: mockEmployee, // Include employee relation
-            };
-
-            prismaMock.$transaction.mockImplementation(async (callback: any) => {
-                return callback(prismaMock);
-            });
-
-            prismaMock.leaveRequest.findUnique.mockResolvedValue(mockRequest as any);
-            prismaMock.leaveBalance.updateMany.mockResolvedValue({ count: 1 } as any);
-            prismaMock.leaveRequest.update.mockResolvedValue({
-                ...mockRequest,
-                status: LeaveStatus.APPROVED,
-                approverId: 2, // Department head ID
-                approverComment: 'Approved for vacation',
-                employee: { userId: 1, name: 'John Doe' },
+                employee: { name: 'Jane', departmentId: 10 },
             } as any);
 
-            const result = await leaveService.approveRequest(1, 2, 'Engineering', null, 'Approved for vacation');
+            prismaMock.leaveRequest.update.mockResolvedValue({
+                id: 1, status: LeaveStatus.REJECTED,
+            } as any);
+            prismaMock.leaveApproval.create.mockResolvedValue({} as any);
 
-            expect(result.status).toBe(LeaveStatus.APPROVED);
-            // We expect logic to handle approver assignment via update data
+            const result = await leaveService.deptHeadReview(1, 2, 10, {
+                decision: 'REJECTED',
+                comment: 'Not enough notice',
+            });
+
+            expect(result.action).toBe('REJECTED');
+        });
+
+        it('should forward to HR_OFFICER stage on approval for standard leave', async () => {
+            prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+
+            prismaMock.leaveRequest.findUnique.mockResolvedValue({
+                id: 1, status: LeaveStatus.PENDING, currentStage: LeaveStage.DEPT_HEAD,
+                leaveType: LeaveType.ANNUAL,
+                employee: { name: 'Jane', departmentId: 10 },
+            } as any);
+
+            prismaMock.leaveRequest.update.mockResolvedValue({
+                id: 1, status: LeaveStatus.PENDING, currentStage: LeaveStage.HR_OFFICER,
+            } as any);
+            prismaMock.leaveApproval.create.mockResolvedValue({} as any);
+
+            const result = await leaveService.deptHeadReview(1, 2, 10, {
+                decision: 'APPROVED',
+                comment: 'Looks good',
+            });
+
+            expect(result.action).toBe('FORWARDED');
+            expect(result.nextStage).toBe(LeaveStage.HR_OFFICER);
+        });
+
+        it('should forward RESEARCH to DEAN stage', async () => {
+            prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+
+            prismaMock.leaveRequest.findUnique.mockResolvedValue({
+                id: 2, status: LeaveStatus.PENDING, currentStage: LeaveStage.DEPT_HEAD,
+                leaveType: LeaveType.RESEARCH,
+                employee: { name: 'Prof. Smith', departmentId: 10 },
+            } as any);
+
+            prismaMock.leaveRequest.update.mockResolvedValue({
+                id: 2, status: LeaveStatus.PENDING, currentStage: LeaveStage.DEAN,
+            } as any);
+            prismaMock.leaveApproval.create.mockResolvedValue({} as any);
+
+            const result = await leaveService.deptHeadReview(2, 2, 10, {
+                decision: 'APPROVED',
+            });
+
+            expect(result.nextStage).toBe(LeaveStage.DEAN);
         });
     });
 });
+

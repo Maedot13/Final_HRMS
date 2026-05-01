@@ -1,50 +1,87 @@
 import apiClient from './client';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type LeaveTypeName =
+    | 'ANNUAL'
+    | 'SICK'
+    | 'MATERNITY'
+    | 'PATERNITY'
+    | 'UNPAID'
+    | 'PERSONAL'
+    | 'STUDY'
+    | 'RESEARCH'
+    | 'SABBATICAL';
+
+export type LeaveStage = 'DEPT_HEAD' | 'HR_OFFICER' | 'DEAN' | 'VICE_PRESIDENT';
+
 export interface LeaveRequestPayload {
-    leaveType: 'ANNUAL' | 'SICK' | 'MATERNITY' | 'PATERNITY' | 'UNPAID';
-    startDate: string; // ISO date
-    endDate: string; // ISO date
+    leaveType: LeaveTypeName;
+    startDate: string;
+    endDate: string;
     reason: string;
-    attachmentUrl?: string; // Optional
+    attachmentUrl?: string;
 }
 
-export interface LeaveActionPayload {
-    status: 'APPROVED' | 'REJECTED';
+export interface DeptHeadReviewPayload {
+    decision: 'APPROVED' | 'REJECTED';
     comment?: string;
 }
 
-export const leaveApi = {
-    // List your own leave requests
-    list: (params?: { status?: string; employeeId?: number; limit?: number; offset?: number }) =>
-        apiClient.get('/leave', { params }),
+export interface LeaveActionPayload {
+    comment?: string;
+}
 
-    // Get all pending requests for approval
+// ─── API Calls ────────────────────────────────────────────────────────────────
+
+export const leaveApi = {
+    // Employee: submit leave request (JSON body — file upload handled via FormData separately)
+    create: (data: LeaveRequestPayload) =>
+        apiClient.post('/leave/apply', data),
+
+    // Employee: view own leave history
+    list: (params?: { status?: string; limit?: number; offset?: number }) =>
+        apiClient.get('/leave/my-requests', { params }),
+
+    // Alias kept for backward compat
+    getMyRequests: () => apiClient.get('/leave/my-requests'),
+
+    // Any approver role: pending requests (scoped by backend to caller's role/stage)
     getPending: (params?: { limit?: number; offset?: number }) =>
         apiClient.get('/leave/pending', { params }),
 
-    // Get specific leave request details
+    // HR Officer: all campus requests (record-keeping view)
+    getAllCampusRequests: () => apiClient.get('/leave/all'),
+
+    // HR Officer: pending for HR stage only
+    getHRPending: () => apiClient.get('/leave/pending'),
+
+    // Get details of a single request
     getById: (id: number) => apiClient.get(`/leave/${id}`),
 
-    // Create a new leave request
-    create: (data: LeaveRequestPayload) => apiClient.post('/leave', data),
+    // Stage 1 — Department Head: approve (forward) or reject
+    deptHeadReview: (id: number, data: DeptHeadReviewPayload) =>
+        apiClient.patch(`/leave/${id}/dept-head-review`, data),
 
-    // Update a leave request (only if pending)
-    update: (id: number, data: Partial<LeaveRequestPayload>) =>
-        apiClient.patch(`/leave/${id}`, data),
-
-    // Withdraw a leave request 
-    withdraw: (id: number) => apiClient.post(`/leave/${id}/withdraw`),
-
-    // Admin/HR/Head: Approve or Reject
-    approve: (id: number, data: { comment?: string }) =>
+    // Stage 2 — HR Officer / Dean / VP: final approve
+    approve: (id: number, data: LeaveActionPayload = {}) =>
         apiClient.patch(`/leave/${id}/approve`, data),
 
+    // Stage 2 — HR Officer / Dean / VP: final reject
     reject: (id: number, data: { comment: string }) =>
         apiClient.patch(`/leave/${id}/reject`, data),
 
-    // Get leave balances for a specific employee
-    getBalances: (employeeId: number) => apiClient.get(`/leave/balances/${employeeId}`),
-    
-    // Get leave balance for the currently logged-in employee (self-service)
+    // Leave balances
     getMyBalance: () => apiClient.get('/leave/balance'),
+    getBalances: (employeeId: number) =>
+        apiClient.get(`/leave/balances/${employeeId}`),
+
+    // File upload submit (uses FormData)
+    createWithFile: (formData: FormData) =>
+        apiClient.post('/leave/apply', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        }),
+
+    // Withdraw (future)
+    withdraw: (id: number) => apiClient.post(`/leave/${id}/withdraw`),
 };

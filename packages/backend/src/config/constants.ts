@@ -3,10 +3,11 @@
  */
 
 export const LEAVE_BALANCES = {
-    ANNUAL: 20 as number,
-    SICK: 15 as number,
-    MATERNITY: 90 as number,
-    PATERNITY: 5 as number,
+    ANNUAL: 20 as number,      // Starting; +1 per year of service up to 30
+    SICK: 180 as number,       // 6 months full pay
+    MATERNITY: 120 as number,  // 30 prenatal + 90 postnatal
+    PATERNITY: 10 as number,   // 10 working days
+    PERSONAL: 3 as number,     // 3 working days (marriage/bereavement)
 };
 
 export const PAYROLL_CONSTANTS = {

@@ -66,8 +66,11 @@ export const getEmployee = async (req: Request, res: Response) => {
             );
         }
 
-        // Campus isolation: campus users can only view employees in their campus
-        assertSameCampus(req, employee.campusId);
+        // Campus isolation: employees can always view their own record;
+        // campus admins/HR can only view employees in their own campus.
+        if (!isSelf) {
+            assertSameCampus(req, employee.campusId);
+        }
 
         // EXTRA SECURITY: Strip sensitive data for non-admins
         // Only SUPER_ADMIN, ADMIN, and HR_OFFICER can see salaries
