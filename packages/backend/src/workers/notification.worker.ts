@@ -49,8 +49,9 @@ systemWorker.on('failed', (job: Job | undefined, err: Error) => {
 
 // HANDLERS
 
+
 async function handleClearanceCompleted(data: any) {
-    const { clearanceId, employeeUserId, employeeName, approverId } = data;
+    const { clearanceId, employeeId, employeeUserId, employeeName, approverId } = data;
 
     // Trigger Notification: Clearance Completed
     await prisma.notification.create({
@@ -76,7 +77,7 @@ async function handleClearanceCompleted(data: any) {
 
     // AUTOMATICALLY CREATE PAYROLL TRANSFER
     try {
-        await triggerClearancePayrollTransfer(clearanceId, employeeUserId, approverId);
+        await triggerClearancePayrollTransfer(clearanceId, employeeId, approverId);
     } catch (error) {
         // Log the error but don't fail the whole job, as emails/notifications succeeded
         logger.error(`[Worker] Failed payroll transfer for clearance ${clearanceId}`, error);

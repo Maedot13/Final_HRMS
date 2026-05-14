@@ -73,6 +73,18 @@ const navItems: NavItem[] = [
         icon: <FiBriefcase className="w-4 h-4" />,
     },
     {
+        label: 'Payroll',
+        to: '/hr/payroll',
+        roles: ['HR_OFFICER'],
+        icon: <FiFileText className="w-4 h-4" />,
+    },
+    {
+        label: 'Finance Reports',
+        to: '/hr/finance',
+        roles: ['FINANCE_OFFICER', 'ADMIN'],
+        icon: <FiFileText className="w-4 h-4" />,
+    },
+    {
         label: 'Audit Logs',
         to: '/audit-logs',
         roles: ['ADMIN', 'HR_OFFICER'],

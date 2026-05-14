@@ -23,6 +23,8 @@ import ClearanceBodiesPage from '../pages/admin/ClearanceBodiesPage';
 import PrivilegesPage from '../pages/admin/PrivilegesPage';
 import ClearanceBodyDashboard from '../pages/ClearanceBodyDashboard';
 import HeadHRClearancePage from '../pages/HeadHRClearancePage';
+import PayrollPage from '../pages/PayrollPage';
+import FinancePage from '../pages/FinancePage';
 
 const router = createBrowserRouter([
     {
@@ -148,7 +150,11 @@ const router = createBrowserRouter([
             },
             {
                 path: 'payroll',
-                element: <DashboardPage />,
+                element: <PayrollPage />,
+            },
+            {
+                path: 'finance',
+                element: <FinancePage />,
             },
             {
                 path: 'clearance',
