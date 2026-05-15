@@ -226,13 +226,13 @@ export const getDeanPending = async (campusId: number | null) => {
     });
 };
 
-/** President (UNIVERSITY_PRESIDENT privilege): pending RESEARCH/UNPAID leaves university-wide */
+/** Academic Vice President (VICE_PRESIDENT privilege): pending SABBATICAL/RESEARCH/UNPAID leaves university-wide */
 export const getVPPending = async () => {
     return prisma.leaveRequest.findMany({
         where: {
             status: LeaveStatus.PENDING,
             currentStage: LeaveStage.VICE_PRESIDENT,
-            leaveType: { in: [LeaveType.RESEARCH, LeaveType.UNPAID] },
+            leaveType: { in: [LeaveType.SABBATICAL, LeaveType.RESEARCH, LeaveType.UNPAID] },
         },
         include: {
             employee: { select: { name: true, deptLegacy: true, position: true } },
@@ -392,8 +392,8 @@ export const finalDecision = async (
             if (stage === LeaveStage.DEAN && !actorPrivileges.includes('DEAN')) {
                 throw new Error('Only users with Dean privilege can review this leave');
             }
-            if (stage === LeaveStage.VICE_PRESIDENT && !actorPrivileges.includes('UNIVERSITY_PRESIDENT') && !actorPrivileges.includes('VICE_PRESIDENT')) {
-                throw new Error('Only the University President can approve Research or Without Pay leave');
+            if (stage === LeaveStage.VICE_PRESIDENT && !actorPrivileges.includes('VICE_PRESIDENT')) {
+                throw new Error('Only the Academic Vice President can review this leave');
             }
 
             // ── Campus scope check (HR Officer and Dean are campus-scoped)
@@ -443,7 +443,7 @@ export const finalDecision = async (
                 nextStage = LeaveStage.HR_OFFICER;
             }
 
-            // ── FORWARD TO PRESIDENT (if DEAN approves RESEARCH/UNPAID)
+            // ── FORWARD TO NEXT STAGE (if applicable)
             if (nextStage) {
                 const updated = await tx.leaveRequest.update({
                     where: { id: requestId },

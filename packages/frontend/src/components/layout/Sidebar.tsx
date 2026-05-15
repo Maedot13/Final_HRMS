@@ -26,6 +26,7 @@ interface NavItem {
     label: string;
     to: string;
     roles?: Role[];
+    privileges?: string[];
     icon: React.ReactNode;
 }
 
@@ -51,8 +52,15 @@ const navItems: NavItem[] = [
     {
         label: 'Leave',
         to: '/leave',
-        roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR_OFFICER'],
+        roles: ['EMPLOYEE', 'HR_OFFICER'],
         icon: <FiCalendar className="w-4 h-4" />,
+    },
+    {
+        label: 'Leave Approvals',
+        to: '/approvals/leave',
+        roles: ['DEPARTMENT_HEAD'],
+        privileges: ['DEAN', 'VICE_PRESIDENT'],
+        icon: <FiCheckSquare className="w-4 h-4" />,
     },
     {
         label: 'Clearance',
@@ -79,8 +87,14 @@ const navItems: NavItem[] = [
         icon: <FiFileText className="w-4 h-4" />,
     },
     {
-        label: 'Finance Reports',
-        to: '/hr/finance',
+        label: 'Payroll Reports',
+        to: '/finance/payroll',
+        roles: ['FINANCE_OFFICER', 'ADMIN'],
+        icon: <FiFileText className="w-4 h-4" />,
+    },
+    {
+        label: 'Leave Salary Data',
+        to: '/finance/leave-data',
         roles: ['FINANCE_OFFICER', 'ADMIN'],
         icon: <FiFileText className="w-4 h-4" />,
     },
@@ -125,9 +139,13 @@ export function Sidebar() {
     const user = useAuthStore((state) => state.user);
 
     const filteredItems = navItems.filter((item) => {
-        if (!item.roles) return true;
         if (!user) return false;
-        return item.roles.includes(user.role as Role);
+        if (!item.roles && !item.privileges) return true;
+        
+        const hasRole = item.roles?.includes(user.role as Role);
+        const hasPriv = item.privileges?.some(p => ((user as any).specialPrivileges || []).includes(p));
+        
+        return hasRole || hasPriv;
     });
 
     return (

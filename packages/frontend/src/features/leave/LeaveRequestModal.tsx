@@ -86,7 +86,7 @@ const LEAVE_CONFIG: Record<LeaveTypeName, LeaveConfig> = {
         docHint: 'Research programme or approved study plan document',
         eligibility: 'Full-time academic staff (Assistant Professor+)',
         maxDays: 180,
-        routesTo: 'Department Head → College Dean',
+        routesTo: 'Department Head → Dean → Academic VP → HR Officer',
         color: 'bg-teal-50 border-teal-200 text-teal-800',
     },
     SABBATICAL: {
@@ -95,14 +95,14 @@ const LEAVE_CONFIG: Record<LeaveTypeName, LeaveConfig> = {
         docHint: 'Study / research plan document',
         eligibility: 'Full-time academic staff (Asst. Prof+), 6+ continuous years service',
         maxDays: 365,
-        routesTo: 'Department Head → Academic Vice President',
+        routesTo: 'Department Head → Dean → Academic VP → HR Officer',
         color: 'bg-amber-50 border-amber-200 text-amber-800',
     },
     UNPAID: {
         label: 'Unpaid Leave',
         requiresDoc: false,
         eligibility: 'All staff',
-        routesTo: 'Department Head → HR Officer',
+        routesTo: 'Department Head → Dean → Academic VP → HR Officer',
         color: 'bg-gray-50 border-gray-200 text-gray-700',
     },
 };

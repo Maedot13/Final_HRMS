@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/useAuthStore';
 import { employeesApi } from '../api/employees';
-import type { EmployeeDetail, ApiError, ContactInfo } from '../types';
+import type { ApiError, ContactInfo } from '../types';
 import { ContactInfoForm } from '../features/employee/ContactInfoForm';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';

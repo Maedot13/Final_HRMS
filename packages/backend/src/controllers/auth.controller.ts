@@ -28,7 +28,12 @@ export const login = async (req: Request, res: Response) => {
 
         sendSuccess(res, result);
     } catch (error: any) {
-        sendError(res, 401, ErrorCode.AUTHENTICATION_FAILED, error.message, null, req);
+        let errorMessage = error.message;
+        if (!errorMessage || errorMessage.trim() === '') {
+            errorMessage = 'Database connection failed or authentication error.';
+            console.error('Login Error details:', error);
+        }
+        sendError(res, 401, ErrorCode.AUTHENTICATION_FAILED, errorMessage, null, req);
     }
 };
 
