@@ -8,8 +8,13 @@ export const createJobPostingSchema = z.object({
     requirements: z.string().min(10),
     department: z.string().min(2),
     position: z.string().min(2),
-    deadline: z.string().refine((val) => !isNaN(Date.parse(val)), {
-        message: "Invalid date format for deadline"
+    deadline: z.string().refine((val) => {
+        const date = new Date(val);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return !isNaN(date.getTime()) && date >= today;
+    }, {
+        message: "Deadline must be today or in the future"
     })
 });
 

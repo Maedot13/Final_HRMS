@@ -125,7 +125,8 @@ export function Sidebar() {
     const user = useAuthStore((state) => state.user);
 
     const filteredItems = navItems.filter((item) => {
-        if (!item.roles || !user) return true;
+        if (!item.roles) return true;
+        if (!user) return false;
         return item.roles.includes(user.role as Role);
     });
 

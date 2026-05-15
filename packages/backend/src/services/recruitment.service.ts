@@ -22,7 +22,12 @@ export const createJobPosting = async (data: {
 
     return prisma.jobPosting.create({
         data: {
-            ...data,
+            title: data.title,
+            description: data.description,
+            requirements: data.requirements,
+            deptLegacy: data.deptLegacy,
+            position: data.position,
+            createdBy: data.createdBy,
             campusId,
             deadline: new Date(data.deadline),
             status: JobStatus.OPEN
@@ -33,7 +38,12 @@ export const createJobPosting = async (data: {
 export const getJobPostings = async (filters: { status?: JobStatus; department?: string }, campusId?: number) => {
     return prisma.jobPosting.findMany({
         where: {
-            ...(campusId ? { campusId } : {}),
+            ...(campusId ? {
+                OR: [
+                    { campusId },
+                    { campusId: null }
+                ]
+            } : {}),
             ...(filters.status && { status: filters.status }),
             ...(filters.department && { deptLegacy: filters.department })
         },
@@ -43,7 +53,15 @@ export const getJobPostings = async (filters: { status?: JobStatus; department?:
 
 export const getJobPostingById = async (id: number, campusId?: number) => {
     return prisma.jobPosting.findFirst({
-        where: { id, ...(campusId ? { campusId } : {}) },
+        where: {
+            id,
+            ...(campusId ? {
+                OR: [
+                    { campusId },
+                    { campusId: null }
+                ]
+            } : {})
+        },
         include: {
             _count: {
                 select: { applications: true }
@@ -54,7 +72,15 @@ export const getJobPostingById = async (id: number, campusId?: number) => {
 
 export const updateJobStatus = async (id: number, status: JobStatus, campusId?: number) => {
     const updated = await prisma.jobPosting.updateMany({
-        where: { id, ...(campusId ? { campusId } : {}) },
+        where: {
+            id,
+            ...(campusId ? {
+                OR: [
+                    { campusId },
+                    { campusId: null }
+                ]
+            } : {})
+        },
         data: { status }
     });
     if (updated.count === 0) {
