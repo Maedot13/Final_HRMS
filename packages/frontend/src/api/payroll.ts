@@ -1,48 +1,53 @@
-
 import apiClient from './client';
 
-export interface PayrollDataParams {
-    month?: number;
-    year?: number;
-}
-
-export interface PayrollReport {
+export interface PayrollReportRecord {
     id: number;
     month: number;
     year: number;
-    reportUrl: string;
+    filename: string;
+    sentById: number;
+    campusId: number | null;
+    createdAt: string;
+}
+
+export interface PayrollTransfer {
+    id: number;
+    employeeId: number;
+    reason: string;
+    salaryInfo?: string;
+    effectiveDate: string;
     status: string;
     createdAt: string;
-    createdBy: {
-        employee: {
-            name: string;
-        }
-    }
+    employee: {
+        name: string;
+        employeeId: string;
+        campus: { name: string };
+    };
+    leave?: { id: number; leaveType: string };
 }
 
 export const payrollApi = {
-    // Get payroll data for preview
-    getDataTransfer: (params: PayrollDataParams) => 
-        apiClient.get('/payroll/data-transfer', { params }),
+    /** HR_OFFICER: Preview/download Excel directly */
+    generateExcel: (params: { month?: number; year?: number }) =>
+        apiClient.post('/payroll/generate', params, { responseType: 'blob' }),
 
-    // Generate and download Excel directly
-    generateExcel: (params: PayrollDataParams) => 
-        apiClient.get('/payroll/generate', { 
-            params,
-            responseType: 'blob' 
-        }),
+    /** HR_OFFICER: Save to server and notify Finance */
+    sendToFinance: (params: { month?: number; year?: number }) =>
+        apiClient.post('/payroll/send-to-finance', params),
 
-    // Send payroll to finance
-    sendToFinance: (data: { month: number; year: number }) => 
-        apiClient.post('/payroll/send-to-finance', data),
+    /** Finance/HR: List all sent reports */
+    listReports: () =>
+        apiClient.get<PayrollReportRecord[]>('/payroll/reports'),
 
-    // List sent reports
-    listReports: () => 
-        apiClient.get<PayrollReport[]>('/payroll/reports'),
+    /** Finance/HR: Download a specific saved report */
+    downloadReport: (id: number) =>
+        apiClient.get(`/payroll/reports/${id}/download`, { responseType: 'blob' }),
 
-    // Download a specific report
-    downloadReport: (reportId: number) => 
-        apiClient.get(`/payroll/reports/${reportId}/download`, {
-            responseType: 'blob'
-        })
+    /** HR_OFFICER: Download DOCX penalty report */
+    generatePenaltyDocx: (params: { month?: number; year?: number }) =>
+        apiClient.post('/payroll/penalty', params, { responseType: 'blob' }),
+
+    /** Finance/HR: List all status changes/transfers */
+    listTransfers: () =>
+        apiClient.get<PayrollTransfer[]>('/payroll/transfers'),
 };
