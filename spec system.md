@@ -17,7 +17,7 @@ This document specifies the complete **Human Resource Management System (HRMS)**
 - Role‑based access control (RBAC) with additive special privileges
 - Immutable system‑wide activity logging
 - Employee self‑service (ESS) portal
-- Automated leave routing and approval (Dean for Sabbatical, President for Without Pay/Research, HR for others)
+- Automated leave routing and approval (Academic VP and HR for Sabbatical/Without Pay/Research, HR for others)
 - Multi‑step clearance workflow (clearance bodies → campus HR → Head HR)
 - Payroll reporting (Excel)
 - Performance appraisal management
@@ -490,22 +490,26 @@ model ActivityLog {
 | Personal (marriage/bereavement) | All | 3 working days | HR_Officer | Yes |
 | Special (court/election) | All | As needed | HR_Officer | No |
 | Study | Academic staff, higher degree | First year full pay, subsequent 50% pay | HR_Officer | No |
-| Research | Assistant Professor+, 3+ years service | Up to 6 months | University President | No |
-| Sabbatical | Assistant Professor+, 6+ years service | 1 yea### 6.4 Leave Management
+| Research | Assistant Professor+, 3+ years service | Up to 6 months | Academic VP, HR_Officer | No |
+| Sabbatical | Assistant Professor+, 6+ years service | 1 year full pay | Academic VP, HR_Officer | No |
+| Without Pay | All | Up to 2 years | Academic VP, HR_Officer | No |
+
+### 6.4 Leave Management
 | Method | Endpoint | Permission |
 |--------|----------|------------|
 | POST | `/api/v1/leave/apply` | EMPLOYEE (self) |
 | GET | `/api/v1/leave/my-requests` | EMPLOYEE |
-| GET | `/api/v1/leave/pending` | HR_OFFICER / Dean / President (role-specific) |
+| GET | `/api/v1/leave/pending` | HR_OFFICER / Dean / Academic VP (role-specific) |
 | POST | `/api/v1/leave/:id/approve` | Depends on leave type (routing) |
 | POST | `/api/v1/leave/:id/reject` | Same as approve |
-| GET | `/api/v1/leave/balance` | EMPLOYEE (self), HR/ADMIN (others campus)r full pay | Dean | No |
-| Without Pay | All | Up to 2 years | University President | No |
+| GET | `/api/v1/leave/balance` | EMPLOYEE (self), HR/ADMIN (others campus) |
 
 **Routing Logic:**
-- Sabbatical → Department head → Dean of employee’s college → Academic Vice President → HR_Officer → Final Approval. The full information send to finance department dashboard with tag which describes the type of leave and salary information.
-- Without Pay or Research  → Department head → Dean of employee’s college → Academic Vice President → HR_Officer → Final Approval. The full information send to finance department dashboard with tag which describes the type of leave and salary information.
-- All others → HR_Officer of employee’s campus.
+- Sabbatical → Department head → Dean of employee’s college → Academic Vice President → HR_Officer → Final Approval. The full information send to finance department dashboard with tag which describes the type of leave and salary information. (The employee must be notified and know the final approval status).
+- Without Pay or Research  → Department head → Dean of employee’s college → Academic Vice President → HR_Officer → Final Approval. The full information send to finance department dashboard with tag which describes the type of leave and salary information. (The employee must be notified and know the final approval status).
+- All others->Deapartment Head (if the employee works in non-academic department it will go directly to HR_Officer of employee’s campus.) → HR_Officer of employee’s campus. ->final approval(the employee should know the final approval status)
+
+**Notification & Status Tracking:** Across *all* leave types and at *every* stage of the process, the applicant must be able to view the real-time status of their request (e.g., pending at which stage) and receive notifications upon final approval or rejection.
 
 **Balance Update:** On approval, deduct `days` from `LeaveBalance.usedDays` within a database transaction (row lock). Prevent negative balance.
 
@@ -745,6 +749,14 @@ Experience letter available
 - `/clearance/tasks` – list tasks assigned to the logged‑in body user (Library, IT, etc.)
 - `/clearance/task/:id` – approve/reject with remarks
 
+### 7.7 Academic Approver Dashboard (VP, Dean, Dept Head)
+- Inherits all features from **7.2 Employee Self‑Service (ESS)**.
+- `/approvals/leave` – Dedicated module to review and approve/reject pending leave requests routed to their respective stage (Department, Dean, or VP).
+
+### 7.8 Finance Department Dashboard
+- `/finance/payroll` – Receive and accept payroll-related reports from the HR_Officer.
+- `/finance/leave-data` – Dashboard to view full information with tags describing the type of leave and salary information (especially for Sabbatical, Research, and Without Pay leaves).
+
 ---
 
 ## 8. Security & Compliance
@@ -840,7 +852,7 @@ Or use a web server (nginx) to serve static files and proxy API requests.
 ## 11. Acceptance Criteria
 
 - [ ] All modules implemented and permission‑protected.
-- [ ] Leave routing works correctly (Dean for Sabbatical, President for Without Pay/Research).
+- [ ] Leave routing works correctly (Academic VP and HR for Sabbatical/Research/Without Pay).
 - [ ] Clearance workflow completes (bodies → campus HR → Head HR) and deactivates account.
 - [ ] Activity logs record every action and are immutable.
 - [ ] SUPER_ADMIN cannot view active employee data but can view deactivated historical records.

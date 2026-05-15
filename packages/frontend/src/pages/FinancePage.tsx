@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { saveAs } from 'file-saver';
-import { Card, CardHeader } from '../components/ui/Card';
+import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { payrollApi, type PayrollReportRecord } from '../api/payroll';
+import { payrollApi, type PayrollReportRecord, type PayrollTransfer } from '../api/payroll';
 
 const MONTHS = [
     '', 'January', 'February', 'March', 'April', 'May', 'June',
@@ -12,10 +12,14 @@ const MONTHS = [
 ];
 
 
-export default function FinancePage() {
+export default function FinancePage({ defaultTab = 'reports' }: { defaultTab?: 'reports' | 'transfers' }) {
     const [downloading, setDownloading] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'reports' | 'transfers'>('reports');
+    const [activeTab, setActiveTab] = useState<'reports' | 'transfers'>(defaultTab);
+
+    useEffect(() => {
+        setActiveTab(defaultTab);
+    }, [defaultTab]);
 
     const { data: reports = [], isLoading: reportsLoading, refetch: refetchReports } = useQuery<PayrollReportRecord[]>({
         queryKey: ['payrollReports'],
@@ -56,7 +60,7 @@ export default function FinancePage() {
                     <h1 className="text-2xl font-bold text-text-primary">Finance Dashboard</h1>
                     <p className="text-sm text-text-secondary">Monitor payroll reports and employee status changes.</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => { refetchReports(); refetchTransfers(); }}
+                <Button variant="secondary" size="sm" onClick={() => { refetchReports(); refetchTransfers(); }}
                     leftIcon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" /></svg>}
                 >
                     Refresh Data
@@ -75,7 +79,7 @@ export default function FinancePage() {
                     onClick={() => setActiveTab('transfers')}
                     className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'transfers' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary hover:text-text-primary'}`}
                 >
-                    Status Notifications
+                    Leave Salary Data
                     {transfers.length > 0 && <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">{transfers.length}</span>}
                 </button>
             </div>
@@ -116,7 +120,7 @@ export default function FinancePage() {
                                 <Button
                                     className="mt-4 w-full"
                                     id={`btn-download-report-${report.id}`}
-                                    variant="outline"
+                                    variant="secondary"
                                     size="sm"
                                     isLoading={downloading === report.id}
                                     onClick={() => handleDownload(report)}
@@ -138,7 +142,7 @@ export default function FinancePage() {
                             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
                             </div>
-                            <p className="text-sm font-medium text-text-primary">No status notifications yet</p>
+                            <p className="text-sm font-medium text-text-primary">No leave salary data yet</p>
                         </div>
                     </Card>
                 ) : (

@@ -326,8 +326,8 @@ export default function LeaveManagementPage() {
                     <FiActivity className="w-3.5 h-3.5 shrink-0" />
                     {isDeptHead && 'Showing leaves awaiting your review (Stage 1 — Department). Approved requests are forwarded to the next stage.'}
                     {isHrOrAdmin && !isDeptHead && 'Showing leaves forwarded to HR for final approval. Use "All Campus" tab for the full record.'}
-                    {isDean && !isHrOrAdmin && 'Showing Research leaves forwarded to Dean for final approval (campus scope).'}
-                    {isVP && !isHrOrAdmin && 'Showing Sabbatical leaves forwarded to VP Academic for final approval (university-wide).'}
+                    {isDean && !isHrOrAdmin && 'Showing complex leaves (Sabbatical, Research, Unpaid) forwarded to Dean for review (campus scope).'}
+                    {isVP && !isHrOrAdmin && 'Showing complex leaves (Sabbatical, Research, Unpaid) forwarded to VP Academic for review (university-wide).'}
                 </div>
             )}
 
