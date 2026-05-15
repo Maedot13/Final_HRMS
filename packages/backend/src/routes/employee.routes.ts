@@ -63,7 +63,7 @@ import { updateEmployeeSchema } from '../schemas/employee.schema';
 // List employees in the campus
 router.get(
     '/',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD], ['DEAN', 'UNIVERSITY_PRESIDENT']),
     employeeController.listEmployees
 );
 
@@ -74,7 +74,7 @@ router.post(
     employeeController.createEmployee
 );
 
-router.get('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER, UserRole.EMPLOYEE]), employeeController.getEmployee);
+router.get('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER, UserRole.EMPLOYEE], ['DEAN', 'UNIVERSITY_PRESIDENT']), employeeController.getEmployee);
 
 // Activate / deactivate an employee account
 router.post(

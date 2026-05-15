@@ -60,7 +60,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     }
 };
 
-export const authorize = (allowedRoles: UserRole[]) => {
+export const authorize = (allowedRoles: UserRole[], allowedPrivileges: string[] = []) => {
     return (req: Request, res: Response, next: NextFunction) => {
         if (!req.user) {
             return sendError(
@@ -73,7 +73,10 @@ export const authorize = (allowedRoles: UserRole[]) => {
             );
         }
 
-        if (!allowedRoles.includes(req.user.role)) {
+        const hasRole = allowedRoles.includes(req.user.role);
+        const hasPrivilege = allowedPrivileges.length > 0 && req.user.specialPrivileges?.some(p => allowedPrivileges.includes(p));
+
+        if (!hasRole && !hasPrivilege) {
             return sendError(
                 res,
                 403,

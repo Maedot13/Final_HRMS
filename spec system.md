@@ -19,7 +19,7 @@ This document specifies the complete **Human Resource Management System (HRMS)**
 - Employee self‑service (ESS) portal
 - Automated leave routing and approval (Dean for Sabbatical, President for Without Pay/Research, HR for others)
 - Multi‑step clearance workflow (clearance bodies → campus HR → Head HR)
-- Payroll and penalty report generation (Excel/PDF)
+- Payroll reporting (Excel)
 - Performance appraisal management
 - Lecture schedule and timetable management
 - Experience letter generation
@@ -35,7 +35,7 @@ This document specifies the complete **Human Resource Management System (HRMS)**
 | **EMPLOYEE** | Staff member with self‑service access. |
 | **Head HR** | System‑wide HR_OFFICER with final clearance approval (`isHeadHR=true`). |
 | **Clearance Body** | University department (Library, IT, Finance, etc.) that must approve an employee’s separation. |
-| **Special Privilege** | Additive permission (Dean, Director, President, Vice President) granted on top of a base role. |
+| **Special Privilege** | Additive permission (Dean, President) granted on top of a base role. |
 | **ESS** | Employee Self‑Service portal. |
 | **Campus Scoping** | Users see only data from their assigned campus (unless system‑wide). |
 | **Activity Log** | Immutable, tamper‑evident record of every state‑changing action. |
@@ -93,7 +93,7 @@ hrms-backend/
 │   ├── controllers/       # Request handlers
 │   ├── services/          # Business logic
 │   ├── middleware/        # Auth, permission, logging
-│   ├── routes/            # API route definitions
+│   ├── routes/     DIRECTOR       # API route definitions
 │   ├── schemas/           # Zod validation schemas
 │   ├── utils/             # Helpers (JWT, password, etc.)
 │   ├── types/             # TypeScript types
@@ -137,9 +137,7 @@ enum BaseRole {
 
 enum SpecialPrivilege {
   UNIVERSITY_PRESIDENT
-  VICE_PRESIDENT
   DEAN
-  DIRECTOR
 }
 
 enum LeaveType {
@@ -362,7 +360,8 @@ model LeaveRequest {
   rejectionReason String?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
-  approvals       LeaveApproval[]
+  approvals       LeaveApprova| **VICE_PRESIDENT** | `clearance:read`, `employee:read:any` | System‑wide |
+l[]
 }
 
 model LeaveApproval {
@@ -376,7 +375,7 @@ model LeaveApproval {
 }
 ```
 
-### 3.5 Schedule Model
+### optional :3.5 Schedule Model
 
 ```prisma
 model Schedule {
@@ -500,12 +499,12 @@ model ActivityLog {
 | GET | `/api/v1/leave/pending` | HR_OFFICER / Dean / President (role-specific) |
 | POST | `/api/v1/leave/:id/approve` | Depends on leave type (routing) |
 | POST | `/api/v1/leave/:id/reject` | Same as approve |
-| GET | `/api/v1/leave/balance` | EMPLOYEE (self), HR/ADMIN (others campus)r full pay | Dean (or Director) | No |
+| GET | `/api/v1/leave/balance` | EMPLOYEE (self), HR/ADMIN (others campus)r full pay | Dean | No |
 | Without Pay | All | Up to 2 years | University President | No |
 
 **Routing Logic:**
-- Sabbatical → Dean of employee’s college.
-- Without Pay or Research → University President.
+- Sabbatical → Department head → Dean of employee’s college → Academic Vice President → HR_Officer → Final Approval. The full information send to finance department dashboard with tag which describes the type of leave and salary information.
+- Without Pay or Research  → Department head → Dean of employee’s college → Academic Vice President → HR_Officer → Final Approval. The full information send to finance department dashboard with tag which describes the type of leave and salary information.
 - All others → HR_Officer of employee’s campus.
 
 **Balance Update:** On approval, deduct `days` from `LeaveBalance.usedDays` within a database transaction (row lock). Prevent negative balance.
@@ -550,7 +549,7 @@ Experience letter available
 - Employee receives notification when evaluation saved.
 - Employee can view own evaluations (read‑only).
 
-### 4.5 Schedule Conflict Detection
+### optional : 4.5 Schedule Conflict Detection
 - When creating or updating a schedule, check: same instructor, same day, overlapping time range → reject with conflict details.
 
 ### 4.6 Activity Logging
@@ -591,7 +590,6 @@ Experience letter available
 | `research_leave:approve` | ❌ | ❌ | ❌ | ❌* |
 | `payroll:generate` | ❌ | ❌ | ✅ | ❌ |
 | `payroll:export` | ❌ | ❌ | ✅ | ❌ |
-| `penalty:report:export` | ❌ | ❌ | ✅ | ❌ |
 | `clearance:initiate` | ❌ | ❌ | ✅ | ❌ |
 | `clearance:read` (campus) | ❌ | ✅ | ✅ | ❌ |
 | `clearance_task:approve` | ❌ | ❌ | ❌ | ❌** |
@@ -613,11 +611,9 @@ Experience letter available
 | Privilege | Added Permissions | Scope |
 |-----------|-------------------|-------|
 | **DEAN** | `sabbatical:approve`, `employee:read:college`, `schedule:read`, `leave:read:college`, `clearance:read` | College |
-| **DIRECTOR** | Same as Dean | Department/Unit |
-| **UNIVERSITY_PRESIDENT** | `leave:without_pay:approve`, `research_leave:approve`, `clearance:read`, `employee:read:any` | System‑wide |
-| **VICE_PRESIDENT** | `clearance:read`, `employee:read:any` | System‑wide |
-
+| **UNIVERSITY_PRESIDENT** | `leave:without_pay:approve`, `research_leave:approve`, `clearance:read`, `employee:read:any` | System‑wide 
 > A user retains all base role permissions when granted a special privilege.
+
 
 ---
 
@@ -667,12 +663,12 @@ Experience letter available
 | POST | `/api/v1/leave/:id/reject` | Same as approve |
 | GET | `/api/v1/leave/balance` | EMPLOYEE (self), HR/ADMIN (others campus) |
 
-### 6.5 Schedule
+### optional :6.5 Schedule
 | Method | Endpoint | Permission |
 |--------|----------|------------|
 | GET | `/api/v1/schedules` | All (campus-scoped) |
 | POST | `/api/v1/schedules` | HR_OFFICER |
-| PUT | `/api/v1/schedules/:id` | HR_OFFICER |
+| PUT | `/api/v1/schedules/:id` | HR_OFFICER |S
 | DELETE | `/api/v1/schedules/:id` | HR_OFFICER |
 | POST | `/api/v1/schedules/:id/substitute` | HR_OFFICER |
 
@@ -688,7 +684,6 @@ Experience letter available
 | Method | Endpoint | Permission |
 |--------|----------|------------|
 | POST | `/api/v1/payroll/generate` | HR_OFFICER (Excel) |
-| POST | `/api/v1/payroll/penalty` | HR_OFFICER (PDF) |
 
 ### 6.8 Clearance
 | Method | Endpoint | Permission |
@@ -849,7 +844,7 @@ Or use a web server (nginx) to serve static files and proxy API requests.
 - [ ] Clearance workflow completes (bodies → campus HR → Head HR) and deactivates account.
 - [ ] Activity logs record every action and are immutable.
 - [ ] SUPER_ADMIN cannot view active employee data but can view deactivated historical records.
-- [ ] HR_OFFICER can generate payroll (Excel) and penalty (PDF) reports.
+- [ ] HR_OFFICER can generate payroll (Excel) report.
 - [ ] No Docker used anywhere.
 - [ ] All tests pass.
 - [ ] Frontend role‑based dashboards function correctly.
@@ -871,9 +866,7 @@ const rolePermissions = {
 
 const privilegePermissions = {
   DEAN: ['sabbatical:approve', 'employee:read:college', 'schedule:read', 'leave:read:college', 'clearance:read'],
-  DIRECTOR: ['sabbatical:approve', 'employee:read:dept', 'schedule:read', 'leave:read:dept', 'clearance:read'],
-  UNIVERSITY_PRESIDENT: ['leave:without_pay:approve', 'research_leave:approve', 'clearance:read', 'employee:read:any'],
-  VICE_PRESIDENT: ['clearance:read', 'employee:read:any']
+  UNIVERSITY_PRESIDENT: ['leave:without_pay:approve', 'research_leave:approve', 'clearance:read', 'employee:read:any']
 };
 ```
 

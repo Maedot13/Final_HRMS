@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma';
 import { AuditAction } from '@prisma/client';
 import { logAction } from '../services/auditLog.service';
 import { upload } from '../middleware/upload.middleware';
+import { assertSameCampus } from '../lib/campusScope';
 
 // ─── Employee: Apply for Leave ────────────────────────────────────────────────
 
@@ -189,7 +190,7 @@ export const approveRequest = async (req: Request, res: Response) => {
             action: AuditAction.LEAVE_REQUEST_APPROVE,
             entityType: 'LeaveRequest',
             entityId: id,
-            changes: { status: 'APPROVED', comment },
+            changes: { status: result.status, stage: result.currentStage, comment },
             ipAddress: req.ip,
             userAgent: req.get('User-Agent'),
         });
@@ -282,6 +283,11 @@ export const getLeaveRequest = async (req: Request, res: Response) => {
 
         if (!canView) {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
+
+        const isSystemWide = privileges.includes('UNIVERSITY_PRESIDENT') || privileges.includes('VICE_PRESIDENT');
+        if (request.employeeId !== user.employeePkId && !isSystemWide) {
+            assertSameCampus(req, request.campusId);
         }
 
         return sendSuccess(res, request);

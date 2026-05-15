@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -58,7 +59,8 @@ model User {
   refreshTokens      RefreshToken[]
   campus             Campus?        @relation(fields: [campusId], references: [id], onDelete: Restrict)
   clearanceApprovals ClearanceApproval[]
-  payrollReports     PayrollReport[]
+  payrollReports        PayrollReport[] @relation("CreatedByRelation")
+  payrollReportsSent    PayrollReport[] @relation("SentByRelation")
 
   @@index([campusId])
   @@index([clearanceUnitId])
@@ -128,6 +130,7 @@ model LeaveRequest {
   campus               Campus?          @relation(fields: [campusId], references: [id], onDelete: Restrict)
   employee             Employee         @relation(fields: [employeeId], references: [id])
   approvals            LeaveApproval[]
+  payrollTransfer      PayrollTransfer?
 
   @@index([campusId])
   @@index([employeeId, status])
@@ -266,16 +269,19 @@ model LeaveApproval {
 }
 
 model PayrollTransfer {
-  id            Int              @id @default(autoincrement())
+  id            Int               @id @default(autoincrement())
   employeeId    Int
-  clearanceId   Int              @unique
+  clearanceId   Int?              @unique
+  leaveId       Int?              @unique
   reason        String
   effectiveDate DateTime
   status        String
   createdBy     Int
-  createdAt     DateTime         @default(now())
-  clearance     ClearanceRequest @relation(fields: [clearanceId], references: [id])
-  employee      Employee         @relation(fields: [employeeId], references: [id])
+  salaryInfo    String?
+  createdAt     DateTime          @default(now())
+  clearance     ClearanceRequest? @relation(fields: [clearanceId], references: [id])
+  leave         LeaveRequest?     @relation(fields: [leaveId], references: [id])
+  employee      Employee          @relation(fields: [employeeId], references: [id])
 }
 
 model JobPosting {
@@ -518,15 +524,19 @@ model PayrollReport {
   id          Int      @id @default(autoincrement())
   month       Int
   year        Int
-  reportUrl   String
+  filename    String?
+  filePath    String?
+  reportUrl   String?
   status      String   @default("SENT")
-  campusId    Int
-  createdById Int
+  campusId    Int?
+  createdById Int?
+  sentById    Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  campus    Campus @relation(fields: [campusId], references: [id])
-  createdBy User   @relation(fields: [createdById], references: [id])
+  campus    Campus? @relation(fields: [campusId], references: [id])
+  createdBy User?   @relation(fields: [createdById], references: [id], name: "CreatedByRelation")
+  sentBy    User?   @relation(fields: [sentById], references: [id], name: "SentByRelation")
 
   @@index([campusId])
   @@index([month, year])

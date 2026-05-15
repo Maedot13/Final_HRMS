@@ -137,7 +137,7 @@ router.get('/', attachEmployee, sabbaticalController.getRequests);
  *         description: Request not found
  */
 router.patch('/:id/approve',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD], ['DEAN']),
     attachEmployee,
     sabbaticalController.approveRequest
 );
@@ -176,7 +176,7 @@ router.patch('/:id/approve',
  *         description: Request not found
  */
 router.patch('/:id/reject',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD], ['DEAN']),
     attachEmployee,
     sabbaticalController.rejectRequest
 );

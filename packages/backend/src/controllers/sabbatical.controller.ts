@@ -65,7 +65,9 @@ export const getRequests = async (req: Request, res: Response) => {
         }
 
         // If employee, see own. If HR/Admin/Head, see all (or filtered, simplified to all for now)
-        const isPrivileged = [UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD].includes(user.role);
+        const privileges = user.specialPrivileges ?? [];
+        const isDean = privileges.includes('DEAN');
+        const isPrivileged = [UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD].includes(user.role) || isDean;
 
         const campusCtx = getCampusScope(req);
         const campusIdFilter = getCampusIdFilter(campusCtx);
@@ -93,8 +95,11 @@ export const approveRequest = async (req: Request, res: Response) => {
             return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
         }
 
-        // Only Dept Head or HR or Admin can approve  
-        if (![UserRole.DEPARTMENT_HEAD, UserRole.HR_OFFICER, UserRole.ADMIN].includes(user.role)) {
+        const privileges = user.specialPrivileges ?? [];
+        const isDean = privileges.includes('DEAN');
+
+        // Only Dept Head or HR or Admin or Dean can approve  
+        if (![UserRole.DEPARTMENT_HEAD, UserRole.HR_OFFICER, UserRole.ADMIN].includes(user.role) && !isDean) {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
         }
 
@@ -140,7 +145,10 @@ export const rejectRequest = async (req: Request, res: Response) => {
             return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Rejection requires a comment (min 5 characters)', null, req);
         }
 
-        if (![UserRole.DEPARTMENT_HEAD, UserRole.HR_OFFICER, UserRole.ADMIN].includes(user.role)) {
+        const privileges = user.specialPrivileges ?? [];
+        const isDean = privileges.includes('DEAN');
+
+        if (![UserRole.DEPARTMENT_HEAD, UserRole.HR_OFFICER, UserRole.ADMIN].includes(user.role) && !isDean) {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
         }
 

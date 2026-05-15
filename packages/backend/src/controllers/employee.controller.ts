@@ -54,8 +54,10 @@ export const getEmployee = async (req: Request, res: Response) => {
         // 2. Employee can view themselves
         const isSelf = employee.userId === user.userId;
         const isAdminOrHR = user.role === UserRole.ADMIN || user.role === UserRole.HR_OFFICER;
+        const isPresident = (user.specialPrivileges ?? []).includes('UNIVERSITY_PRESIDENT');
+        const isDean = (user.specialPrivileges ?? []).includes('DEAN');
 
-        if (!isSelf && !isAdminOrHR) {
+        if (!isSelf && !isAdminOrHR && !isPresident && !isDean) {
             return sendError(
                 res,
                 403,
@@ -67,8 +69,9 @@ export const getEmployee = async (req: Request, res: Response) => {
         }
 
         // Campus isolation: employees can always view their own record;
-        // campus admins/HR can only view employees in their own campus.
-        if (!isSelf) {
+        // campus admins/HR/Dean can only view employees in their own campus.
+        // President can view any campus.
+        if (!isSelf && !isPresident) {
             assertSameCampus(req, employee.campusId);
         }
 
@@ -218,7 +221,8 @@ export const updateEmployee = async (req: Request, res: Response) => {
 export const listEmployees = async (req: Request, res: Response) => {
     try {
         const user = req.user!;
-        const campusId = user.campusId;
+        const isPresident = (user.specialPrivileges ?? []).includes('UNIVERSITY_PRESIDENT');
+        const campusId = isPresident && req.query.campusId ? parseInt(req.query.campusId as string) : user.campusId;
         const { search, status, cursor, limit } = req.query as Record<string, string>;
 
         const employees = await prisma.employee.findMany({

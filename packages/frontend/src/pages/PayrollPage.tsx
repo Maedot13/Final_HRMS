@@ -1,262 +1,262 @@
-
-import React, { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { payrollApi, type PayrollDataParams } from '../api/payroll';
-import { Card, Button, Select, Badge } from '../components/ui';
-import { DataTable } from '../components/shared/DataTable';
-import { Download, Send, FileSpreadsheet, History, Loader2 } from 'lucide-react';
-import { saveAs } from 'file-saver';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { saveAs } from 'file-saver';
+import { Card, CardHeader } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Select } from '../components/ui/Select';
+import { payrollApi, type PayrollReportRecord } from '../api/payroll';
 
-const PayrollPage: React.FC = () => {
-    const queryClient = useQueryClient();
-    const today = new Date();
-    const [params, setParams] = useState<PayrollDataParams>({
-        month: today.getMonth() + 1,
-        year: today.getFullYear()
-    });
+const MONTHS = [
+    { value: '1', label: 'January' }, { value: '2', label: 'February' },
+    { value: '3', label: 'March' }, { value: '4', label: 'April' },
+    { value: '5', label: 'May' }, { value: '6', label: 'June' },
+    { value: '7', label: 'July' }, { value: '8', label: 'August' },
+    { value: '9', label: 'September' }, { value: '10', label: 'October' },
+    { value: '11', label: 'November' }, { value: '12', label: 'December' },
+];
 
-    // 1. Fetch preview data
-    const { data: previewData, isLoading: isPreviewLoading, refetch: refetchPreview } = useQuery({
-        queryKey: ['payroll-preview', params],
-        queryFn: () => payrollApi.getDataTransfer(params).then(res => res.data),
-        enabled: !!params.month && !!params.year
-    });
+const MONTH_LABELS = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
 
-    // 2. Fetch report history
-    const { data: historyData, isLoading: isHistoryLoading } = useQuery({
-        queryKey: ['payroll-reports'],
-        queryFn: () => payrollApi.listReports().then(res => res.data)
-    });
+function getYearOptions() {
+    const current = new Date().getFullYear();
+    return Array.from({ length: 5 }, (_, i) => ({ value: String(current - i), label: String(current - i) }));
+}
 
-    const summary = useMemo(() => {
-        if (!previewData?.data) return { totalEmployees: 0, totalGrossSalary: 0 };
-        return {
-            totalEmployees: previewData.data.length,
-            totalGrossSalary: previewData.data.reduce((sum: number, row: any) => sum + (Number(row.grossSalary) || 0), 0)
-        };
-    }, [previewData?.data]);
 
-    const periodStatus = useMemo(() => {
-        if (!params.month || !params.year) return 'OPEN';
-        
-        const selectedDate = new Date(params.year, params.month - 1, 1);
-        const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+async function readBlobError(blob: Blob): Promise<string> {
+    try {
+        const text = await blob.text();
+        const json = JSON.parse(text);
+        return json?.message || json?.error || 'Unknown server error';
+    } catch {
+        return 'An unexpected error occurred';
+    }
+}
 
-        if (selectedDate > currentMonthStart) return 'FUTURE';
-        
-        // Check if report exists
-        const reportExists = historyData?.some((r: any) => r.month === params.month && r.year === params.year);
-        if (reportExists) return 'FINALIZED';
+export default function PayrollPage() {
+    const now = new Date();
+    const [month, setMonth] = useState(String(now.getMonth() + 1));
+    const [year, setYear] = useState(String(now.getFullYear()));
+    const [loadingExcel, setLoadingExcel] = useState(false);
+    const [loadingSend, setLoadingSend] = useState(false);
+    const [loadingDocx, setLoadingDocx] = useState(false);
+    const [downloadingId, setDownloadingId] = useState<number | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
 
-        return 'OPEN';
-    }, [params.month, params.year, historyData, today]);
+    const params = { month: month ? Number(month) : undefined, year: year ? Number(year) : undefined };
 
-    // 3. Mutation: Send to Finance
-    const sendMutation = useMutation({
-        mutationFn: (data: { month: number; year: number }) => payrollApi.sendToFinance(data),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['payroll-reports'] });
-            alert('Payroll report sent to Finance successfully!');
+    // Fetch sent reports list
+    const { data: reports = [], isLoading: reportsLoading, refetch: refetchReports } = useQuery<PayrollReportRecord[]>({
+        queryKey: ['payrollReports'],
+        queryFn: async () => {
+            const res = await payrollApi.listReports();
+            return Array.isArray(res.data) ? res.data : [];
         },
-        onError: (error: any) => {
-            alert(`Failed to send report: ${error.response?.data?.message || error.message}`);
-        }
     });
 
-    const handleSendToFinance = () => {
-        if (!params.month || !params.year) return;
-        if (periodStatus === 'FUTURE') return;
-
-        if (periodStatus === 'FINALIZED') {
-            const confirmAmend = window.confirm("A report already exists for this period. Sending a new one will create an amended version for Finance. Are you sure?");
-            if (!confirmAmend) return;
-        }
-
-        sendMutation.mutate({ month: params.month, year: params.year });
-    };
-
-    // 4. Download Handlers
-    const handleDownloadExcel = async () => {
+    const handleGenerateExcel = async () => {
+        setError(null); setSuccess(null); setLoadingExcel(true);
         try {
-            const response = await payrollApi.generateExcel(params);
-            const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            saveAs(blob, `Payroll_Preview_${params.year}_${params.month}.xlsx`);
-        } catch (error) {
-            console.error('Download failed', error);
-        }
+            const res = await payrollApi.generateExcel(params);
+            const m = params.month ?? now.getMonth() + 1;
+            const y = params.year ?? now.getFullYear();
+            saveAs(res.data, `Payroll_${y}_${String(m).padStart(2, '0')}.xlsx`);
+            setSuccess(`✅ Download started — check your Downloads folder for Payroll_${y}_${String(m).padStart(2, '0')}.xlsx`);
+        } catch (err: any) {
+            const blob = err?.response?.data;
+            if (blob instanceof Blob) {
+                setError(await readBlobError(blob));
+            } else {
+                setError(err?.response?.data?.message || 'Failed to generate payroll report');
+            }
+        } finally { setLoadingExcel(false); }
     };
 
-    const handleDownloadHistory = async (reportId: number, month: number, year: number) => {
+    const handleSendToFinance = async () => {
+        setError(null); setSuccess(null); setLoadingSend(true);
         try {
-            const response = await payrollApi.downloadReport(reportId);
-            const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            saveAs(blob, `Payroll_Report_${year}_${month}.xlsx`);
-        } catch (error) {
-            console.error('History download failed', error);
-        }
+            const res = await payrollApi.sendToFinance(params);
+            setSuccess(res.data?.message || 'Payroll sent to Finance successfully.');
+            refetchReports();
+        } catch (err: any) {
+            setError(err?.response?.data?.message || 'Failed to send payroll to Finance');
+        } finally { setLoadingSend(false); }
     };
 
-    const columns = [
-        { key: 'employeeId', header: 'ID', render: (row: any) => row.employeeId },
-        { key: 'fullName', header: 'Full Name', render: (row: any) => row.fullName },
-        { key: 'department', header: 'Department', render: (row: any) => row.department },
-        { 
-            key: 'grossSalary',
-            header: 'Gross Salary', 
-            render: (row: any) => `ETB ${row.grossSalary.toLocaleString()}`
-        },
-        { key: 'payableDays', header: 'Payable Days', render: (row: any) => row.payableDays },
-        { 
-            key: 'status',
-            header: 'Status', 
-            render: (row: any) => (
-                <Badge variant={row.status === 'ACTIVE' ? 'approved' : 'warning'}>
-                    {row.status}
-                </Badge>
-            )
-        }
-    ];
+    const handleGenerateDocx = async () => {
+        setError(null); setSuccess(null); setLoadingDocx(true);
+        try {
+            const res = await payrollApi.generatePenaltyDocx(params);
+            const m = params.month ?? now.getMonth() + 1;
+            const y = params.year ?? now.getFullYear();
+            saveAs(res.data, `Penalty_Report_${y}_${String(m).padStart(2, '0')}.docx`);
+        } catch (err: any) {
+            const blob = err?.response?.data;
+            if (blob instanceof Blob) {
+                setError(await readBlobError(blob));
+            } else {
+                setError(err?.response?.data?.message || 'Failed to generate penalty report');
+            }
+        } finally { setLoadingDocx(false); }
+    };
 
-    const historyColumns = [
-        { 
-            key: 'month',
-            header: 'Period', 
-            render: (row: any) => `${row.month}/${row.year}`
-        },
-        { 
-            key: 'createdBy',
-            header: 'Sent By', 
-            render: (row: any) => row.createdBy?.employee?.name || 'System'
-        },
-        { 
-            key: 'createdAt',
-            header: 'Sent At', 
-            render: (row: any) => format(new Date(row.createdAt), 'MMM dd, yyyy HH:mm')
-        },
-        {
-            key: 'actions',
-            header: 'Actions',
-            render: (row: any) => (
-                <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    onClick={() => handleDownloadHistory(row.id, row.month, row.year)}
-                >
-                    <Download className="w-4 h-4 mr-1" /> Download
-                </Button>
-            )
-        }
-    ];
+    const handleDownloadReport = async (report: PayrollReportRecord) => {
+        setError(null); setDownloadingId(report.id);
+        try {
+            const res = await payrollApi.downloadReport(report.id);
+            saveAs(res.data, report.filename);
+        } catch {
+            setError('Failed to download report. File may be missing.');
+        } finally { setDownloadingId(null); }
+    };
 
-    const months = Array.from({ length: 12 }, (_, i) => ({ label: format(new Date(0, i), 'MMMM'), value: String(i + 1) }));
-    const years = Array.from({ length: 5 }, (_, i) => ({ label: (today.getFullYear() - 2 + i).toString(), value: String(today.getFullYear() - 2 + i) }));
+    const monthLabel = MONTHS.find((m) => m.value === month)?.label ?? '';
 
     return (
-        <div className="p-6 space-y-6 max-w-7xl mx-auto">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Payroll Management</h1>
-                    <p className="text-gray-500">Generate, preview and transfer payroll reports to Finance.</p>
-                </div>
-                <div className="flex gap-2">
-                    <Button variant="secondary" onClick={handleDownloadExcel} disabled={!previewData || isPreviewLoading}>
-                        <FileSpreadsheet className="w-4 h-4 mr-2" />
-                        Preview & Download
-                    </Button>
-                    <Button 
-                        onClick={handleSendToFinance} 
-                        disabled={!previewData || isPreviewLoading || sendMutation.isPending || periodStatus === 'FUTURE'}
-                    >
-                        {sendMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
-                        {periodStatus === 'FINALIZED' ? 'Amend Report' : 'Send to Finance'}
-                    </Button>
-                </div>
-            </div>
+        <div className="space-y-6">
+            <Card>
+                <CardHeader
+                    title="Payroll & Penalty Reports"
+                    subtitle="Generate payroll for Finance (Excel) or penalty deduction reports (DOCX)."
+                />
+            </Card>
 
-            <Card className="p-4 bg-gray-50/50">
-                <div className="flex gap-4 items-end">
-                    <div className="w-48">
-                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Month</label>
-                        <Select 
-                            options={months} 
-                            value={params.month} 
-                            onChange={(val: any) => setParams(p => ({ ...p, month: Number(val.target.value) }))} 
-                        />
+            {/* Period selector */}
+            <Card>
+                <div className="space-y-4">
+                    <h4 className="text-sm font-semibold text-text-primary">Select Period</h4>
+                    <div className="flex flex-wrap gap-4">
+                        <div className="w-48">
+                            <Select id="payroll-month" label="Month" options={MONTHS} value={month}
+                                onChange={(e) => setMonth(e.target.value)} placeholder="Month" />
+                        </div>
+                        <div className="w-36">
+                            <Select id="payroll-year" label="Year" options={getYearOptions()} value={year}
+                                onChange={(e) => setYear(e.target.value)} placeholder="Year" />
+                        </div>
                     </div>
-                    <div className="w-32">
-                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Year</label>
-                        <Select 
-                            options={years} 
-                            value={params.year} 
-                            onChange={(val: any) => setParams(p => ({ ...p, year: Number(val.target.value) }))} 
-                        />
-                    </div>
-                    <Button variant="secondary" onClick={() => refetchPreview()}>
-                        Refresh Preview
-                    </Button>
                 </div>
             </Card>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-4">
-                    <div className="flex items-center gap-2 text-lg font-semibold text-gray-800">
-                        <FileSpreadsheet className="w-5 h-5 text-blue-600" />
-                        {periodStatus === 'FUTURE' ? 'Payroll Projection (Draft)' : 'Payroll Preview'}
+            {error && <div className="rounded-lg border border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div>}
+            {success && <div className="rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>}
+
+            {/* Action cards */}
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {/* Payroll Excel */}
+                <Card>
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-green-700">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 className="text-base font-semibold text-text-primary">Payroll Report</h4>
+                                <p className="text-xs text-text-secondary">Excel (.xlsx) — {monthLabel} {year}</p>
+                            </div>
+                        </div>
+                        <p className="text-xs text-text-secondary">
+                            Columns: Employee ID · Full Name · Position · Gross Salary · Payable Days
+                        </p>
+                        <div className="flex flex-col gap-2">
+                            <Button id="btn-generate-payroll" variant="secondary" isLoading={loadingExcel}
+                                onClick={handleGenerateExcel} fullWidth
+                                leftIcon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>}
+                            >
+                                Preview & Download
+                            </Button>
+                            <Button id="btn-send-to-finance" variant="primary" isLoading={loadingSend}
+                                onClick={handleSendToFinance} fullWidth
+                                leftIcon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg>}
+                            >
+                                Send to Finance
+                            </Button>
+                        </div>
                     </div>
+                </Card>
 
-                    {periodStatus === 'FUTURE' && (
-                        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 rounded-md text-sm">
-                            <strong>Note:</strong> This is a future projection. Reports can only be sent during or after the payroll month.
+                {/* Penalty DOCX */}
+                <Card>
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 className="text-base font-semibold text-text-primary">Penalty Report</h4>
+                                <p className="text-xs text-text-secondary">Word Document (.docx) — {monthLabel} {year}</p>
+                            </div>
                         </div>
-                    )}
-                    
-                    {periodStatus === 'FINALIZED' && (
-                        <div className="bg-blue-50 border border-blue-200 text-blue-800 p-3 rounded-md text-sm">
-                            <strong>Note:</strong> A finalized report has already been sent for this period. Sending again will create an amended version.
-                        </div>
-                    )}
-
-                    {previewData?.data && (
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                            <Card className="p-4 bg-blue-50/50 border-blue-100">
-                                <div className="text-blue-700 text-xs font-bold uppercase tracking-wider mb-1">Total Employees</div>
-                                <div className="text-2xl font-bold text-blue-900">{summary.totalEmployees}</div>
-                            </Card>
-                            <Card className="p-4 bg-emerald-50/50 border-emerald-100">
-                                <div className="text-emerald-700 text-xs font-bold uppercase tracking-wider mb-1">Total Gross Salary</div>
-                                <div className="text-2xl font-bold text-emerald-900">ETB {summary.totalGrossSalary.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                            </Card>
-                        </div>
-                    )}
-
-                    <Card className="overflow-hidden">
-                        <DataTable 
-                            columns={columns} 
-                            data={previewData?.data || []} 
-                            isLoading={isPreviewLoading} 
-                            keyExtractor={(row: any) => row.employeeId}
-                        />
-                    </Card>
-                </div>
-
-                <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-lg font-semibold text-gray-800">
-                        <History className="w-5 h-5 text-indigo-600" />
-                        Recent Reports
+                        <p className="text-xs text-text-secondary">
+                            Employees with salary deductions (partial months) — reason and deduction days.
+                        </p>
+                        <Button id="btn-generate-penalty" variant="info" isLoading={loadingDocx}
+                            onClick={handleGenerateDocx} fullWidth
+                            leftIcon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>}
+                        >
+                            Download Penalty DOCX
+                        </Button>
                     </div>
-                    <Card className="overflow-hidden">
-                        <DataTable 
-                            columns={historyColumns} 
-                            data={historyData || []} 
-                            isLoading={isHistoryLoading}
-                            keyExtractor={(row: any) => row.id} 
-                        />
-                    </Card>
-                </div>
+                </Card>
             </div>
+
+            {/* Sent Reports History */}
+            <Card>
+                <CardHeader
+                    title="Reports Sent to Finance"
+                    subtitle="Payroll reports you have sent to Finance Officers."
+                    action={
+                        <Button variant="ghost" size="sm" onClick={() => refetchReports()}
+                            leftIcon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" /></svg>}
+                        >Refresh</Button>
+                    }
+                />
+            </Card>
+
+            {reportsLoading ? (
+                <div className="text-center py-6 text-sm text-text-secondary">Loading reports…</div>
+            ) : reports.length === 0 ? (
+                <div className="text-center py-6 text-sm text-text-secondary">No reports sent yet. Use "Send to Finance" above.</div>
+            ) : (
+                <div className="space-y-2">
+                    {reports.map((report) => (
+                        <Card key={report.id} padding="sm">
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-green-100 text-green-700">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                                        </svg>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium text-text-primary">
+                                            {MONTH_LABELS[report.month]} {report.year}
+                                        </p>
+                                        <p className="text-xs text-text-secondary">
+                                            Sent {format(new Date(report.createdAt), 'dd MMM yyyy, HH:mm')}
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button
+                                    id={`btn-redownload-${report.id}`}
+                                    variant="secondary" size="sm"
+                                    isLoading={downloadingId === report.id}
+                                    onClick={() => handleDownloadReport(report)}
+                                >
+                                    Download
+                                </Button>
+                            </div>
+                        </Card>
+                    ))}
+                </div>
+            )}
         </div>
     );
-};
-
-export default PayrollPage;
+}

@@ -120,4 +120,16 @@ router.get('/reports/:id/download',
     payrollController.downloadReport
 );
 
+/**
+ * @swagger
+ * /api/v1/payroll/transfers:
+ *   get:
+ *     summary: List payroll transfers (status changes/leaves)
+ *     tags: [Payroll]
+ */
+router.get('/transfers',
+    authorize([UserRole.FINANCE_OFFICER, UserRole.ADMIN, UserRole.HR_OFFICER]),
+    payrollController.listTransfers
+);
+
 export default router;
