@@ -4,7 +4,7 @@ import { type HTMLAttributes } from 'react';
 export type StatusVariant = 'pending' | 'approved' | 'rejected' | 'info';
 
 /** General Badge variant for semantic styling */
-export type BadgeVariant = StatusVariant | 'neutral' | 'warning' | 'purple';
+export type BadgeVariant = StatusVariant | 'neutral' | 'warning' | 'purple' | 'success' | 'error';
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
     variant?: BadgeVariant;
@@ -19,6 +19,8 @@ const variantStyles: Record<BadgeVariant, string> = {
     neutral: 'bg-gray-100 text-text-secondary border-gray-200',
     warning: 'bg-amber-100 text-amber-800 border-amber-200',
     purple: 'bg-purple-light text-purple border-purple/30',
+    success: 'bg-green-100 text-green-800 border-green-200',
+    error: 'bg-red-100 text-red-800 border-red-200',
 };
 
 

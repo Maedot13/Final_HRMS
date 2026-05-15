@@ -1,54 +1,62 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { recruitmentApi } from '../../api/recruitment';
+import { departmentApi } from '../../api/departments';
 import { toast } from 'react-toastify';
 
 interface JobPostingModalProps {
     isOpen: boolean;
     onClose: () => void;
+    initialData?: any;
 }
 
-export function JobPostingModal({ isOpen, onClose }: JobPostingModalProps) {
+export function JobPostingModal({ isOpen, onClose, initialData }: JobPostingModalProps) {
     const queryClient = useQueryClient();
     const [formData, setFormData] = useState({
-        title: '',
-        position: '',
-        department: '',
-        description: '',
-        requirements: '',
-        deadline: '',
+        title: initialData?.title || '',
+        position: initialData?.position || '',
+        departmentId: initialData?.departmentId?.toString() || '',
+        description: initialData?.description || '',
+        requirements: initialData?.requirements || '',
+        deadline: initialData?.deadline ? new Date(initialData.deadline).toISOString().split('T')[0] : '',
+        vacancies: initialData?.vacancies || 1,
     });
 
     const mutation = useMutation({
-        mutationFn: (data: any) => recruitmentApi.createJob(data),
+        mutationFn: (data: any) => 
+            initialData 
+                ? recruitmentApi.updateJob(initialData.id, data)
+                : recruitmentApi.createJob(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['recruitmentJobs'] });
-            toast.success('Job posting created successfully');
+            toast.success(initialData ? 'Job posting updated successfully' : 'Job posting created successfully');
             onClose();
-            setFormData({
-                title: '',
-                position: '',
-                department: '',
-                description: '',
-                requirements: '',
-                deadline: '',
-            });
         },
         onError: (error: any) => {
-            toast.error(error.response?.data?.message || 'Failed to create job posting');
+            toast.error(error.response?.data?.message || (initialData ? 'Failed to update job posting' : 'Failed to create job posting'));
         },
     });
 
+    const { data: departmentsResponse } = useQuery({
+        queryKey: ['departments'],
+        queryFn: () => departmentApi.list()
+    });
+    const departments = Array.isArray(departmentsResponse?.data) ? departmentsResponse.data : [];
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        mutation.mutate(formData);
+        mutation.mutate({
+            ...formData,
+            departmentId: parseInt(formData.departmentId),
+            vacancies: parseInt(formData.vacancies.toString())
+        });
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Create Job Posting" size="lg">
+        <Modal isOpen={isOpen} onClose={onClose} title={initialData ? "Edit Job Posting" : "Create Job Posting"} size="lg">
             <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mt-4 mx-4">
                 <div className="flex">
                     <div className="flex-shrink-0">
@@ -84,12 +92,20 @@ export function JobPostingModal({ isOpen, onClose }: JobPostingModalProps) {
                         required
                     />
                 </div>
-                <Input
-                    label="Department"
-                    value={formData.department}
-                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                    required
-                />
+                <div className="space-y-1">
+                    <label className="text-sm font-medium text-gray-700">Department</label>
+                    <select
+                        className="w-full rounded-md border border-gray-300 p-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary bg-white"
+                        value={formData.departmentId}
+                        onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
+                        required
+                    >
+                        <option value="">Select a department</option>
+                        {departments.map((dept: any) => (
+                            <option key={dept.id} value={dept.id}>{dept.name}</option>
+                        ))}
+                    </select>
+                </div>
                 <div className="space-y-1">
                     <label className="text-sm font-medium text-gray-700">Description</label>
                     <textarea
@@ -112,20 +128,30 @@ export function JobPostingModal({ isOpen, onClose }: JobPostingModalProps) {
                     />
                     <p className="text-[10px] text-gray-400">Minimum 10 characters required</p>
                 </div>
-                <Input
-                    label="Application Deadline"
-                    type="date"
-                    value={formData.deadline}
-                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                    required
-                    min={new Date().toISOString().split('T')[0]}
-                />
+                <div className="grid grid-cols-2 gap-4">
+                    <Input
+                        label="Application Deadline"
+                        type="date"
+                        value={formData.deadline}
+                        onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                        required
+                        min={new Date().toISOString().split('T')[0]}
+                    />
+                    <Input
+                        label="Number of Vacancies"
+                        type="number"
+                        min="1"
+                        value={formData.vacancies}
+                        onChange={(e) => setFormData({ ...formData, vacancies: parseInt(e.target.value) || 1 })}
+                        required
+                    />
+                </div>
                 <div className="flex justify-end gap-3 mt-6">
                     <Button variant="ghost" onClick={onClose} disabled={mutation.isPending}>
                         Cancel
                     </Button>
                     <Button type="submit" variant="primary" isLoading={mutation.isPending}>
-                        Post Job
+                        {initialData ? "Save Changes" : "Post Job"}
                     </Button>
                 </div>
             </form>

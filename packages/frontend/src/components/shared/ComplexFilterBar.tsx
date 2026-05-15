@@ -43,10 +43,10 @@ export function ComplexFilterBar({
 
     const deptOptions: SelectOption[] = [
         { value: '', label: 'All departments' },
-        ...(departments?.map((d) => ({
+        ...(Array.isArray(departments) ? departments.map((d) => ({
             value: String(d.id),
             label: d.name,
-        })) ?? []),
+        })) : []),
     ];
 
     return (

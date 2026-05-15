@@ -40,7 +40,7 @@ const navItems: NavItem[] = [
     {
         label: 'Departments',
         to: '/departments',
-        roles: ['ADMIN', 'HR_OFFICER'],
+        roles: ['ADMIN'],
         icon: <FiLayers className="w-4 h-4" />,
     },
     {
@@ -75,9 +75,9 @@ const navItems: NavItem[] = [
         icon: <FiCheckSquare className="w-4 h-4" />,
     },
     {
-        label: 'Jobs',
+        label: 'Recruitment',
         to: '/jobs',
-        roles: ['HR_OFFICER', 'RECRUITMENT_COMMITTEE'],
+        roles: ['ADMIN', 'HR_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE', 'DEPARTMENT_HEAD'],
         icon: <FiBriefcase className="w-4 h-4" />,
     },
     {
@@ -101,7 +101,7 @@ const navItems: NavItem[] = [
     {
         label: 'Audit Logs',
         to: '/audit-logs',
-        roles: ['ADMIN', 'HR_OFFICER'],
+        roles: ['ADMIN'],
         icon: <FiFileText className="w-4 h-4" />,
     },
     {
@@ -170,7 +170,7 @@ export function Sidebar() {
                                 }
                             >
                                 {item.icon}
-                                {item.label}
+                                {item.to === '/jobs' && user?.role === 'EMPLOYEE' ? 'Internal Careers' : item.label}
                             </NavLink>
                         </li>
                     ))}

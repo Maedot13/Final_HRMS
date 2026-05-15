@@ -30,8 +30,10 @@ const storage = multer.diskStorage({
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const allowedMimes = [
         'application/pdf',
+        'application/x-pdf',
         'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/octet-stream',
         'image/jpeg',
         'image/png'
     ];
@@ -39,11 +41,14 @@ const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCa
     const allowedExtensions = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
     const ext = path.extname(file.originalname).toLowerCase();
 
-    // Check both MIME type and extension
-    if (allowedMimes.includes(file.mimetype) && allowedExtensions.includes(ext)) {
+    // Log the file details for debugging in case it fails
+    logger.info(`Upload attempt: ${file.originalname} (MIME: ${file.mimetype})`);
+
+    // Check both MIME type and extension, but allow octet-stream as a fallback if the extension is valid
+    if (allowedExtensions.includes(ext) && (allowedMimes.includes(file.mimetype) || file.mimetype.startsWith('application/'))) {
         cb(null, true);
     } else {
-        cb(new Error(`Invalid file type. Allowed: ${allowedExtensions.join(', ')}`));
+        cb(new Error(`Invalid file type. Uploaded: ${file.mimetype}. Allowed: ${allowedExtensions.join(', ')}`));
     }
 };
 
