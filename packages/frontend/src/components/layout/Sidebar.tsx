@@ -73,6 +73,18 @@ const navItems: NavItem[] = [
         icon: <FiBriefcase className="w-4 h-4" />,
     },
     {
+        label: 'Payroll',
+        to: '/hr/payroll',
+        roles: ['HR_OFFICER'],
+        icon: <FiFileText className="w-4 h-4" />,
+    },
+    {
+        label: 'Finance Reports',
+        to: '/hr/finance',
+        roles: ['FINANCE_OFFICER', 'ADMIN'],
+        icon: <FiFileText className="w-4 h-4" />,
+    },
+    {
         label: 'Audit Logs',
         to: '/audit-logs',
         roles: ['ADMIN', 'HR_OFFICER'],
@@ -113,7 +125,8 @@ export function Sidebar() {
     const user = useAuthStore((state) => state.user);
 
     const filteredItems = navItems.filter((item) => {
-        if (!item.roles || !user) return true;
+        if (!item.roles) return true;
+        if (!user) return false;
         return item.roles.includes(user.role as Role);
     });
 

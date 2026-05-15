@@ -43,10 +43,81 @@ import { payrollDataTransferSchema } from '../schemas/payroll.schema';
  *       400:
  *         description: Missing month or year
  */
+
 router.get('/data-transfer',
-    authorize([UserRole.ADMIN, UserRole.FINANCE_OFFICER]),
-    validate(payrollDataTransferSchema),
+    authorize([UserRole.ADMIN, UserRole.FINANCE_OFFICER, UserRole.HR_OFFICER]),
     payrollController.getPayrollData
+);
+
+/**
+ * @swagger
+ * /api/v1/payroll/generate:
+ *   get:
+ *     summary: Generate and download payroll Excel
+ *     tags: [Payroll]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: month
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: year
+ *         schema:
+ *           type: integer
+ */
+router.get('/generate',
+    authorize([UserRole.HR_OFFICER, UserRole.ADMIN]),
+    payrollController.generatePayrollExcel
+);
+
+/**
+ * @swagger
+ * /api/v1/payroll/send-to-finance:
+ *   post:
+ *     summary: Send payroll report to Finance
+ *     tags: [Payroll]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [month, year]
+ *             properties:
+ *               month: { type: integer }
+ *               year: { type: integer }
+ */
+router.post('/send-to-finance',
+    authorize([UserRole.HR_OFFICER]),
+    payrollController.sendToFinance
+);
+
+/**
+ * @swagger
+ * /api/v1/payroll/reports:
+ *   get:
+ *     summary: List sent payroll reports
+ *     tags: [Payroll]
+ */
+router.get('/reports',
+    authorize([UserRole.FINANCE_OFFICER, UserRole.ADMIN, UserRole.HR_OFFICER]),
+    payrollController.listReports
+);
+
+/**
+ * @swagger
+ * /api/v1/payroll/reports/{id}/download:
+ *   get:
+ *     summary: Download a specific payroll report
+ *     tags: [Payroll]
+ */
+router.get('/reports/:id/download',
+    authorize([UserRole.FINANCE_OFFICER, UserRole.ADMIN]),
+    payrollController.downloadReport
 );
 
 export default router;

@@ -44,6 +44,9 @@ router.use(authenticate);
  *             required:
  *               - title
  *               - description
+ *               - requirements
+ *               - department
+ *               - position
  *               - deadline
  *             properties:
  *               title:
@@ -65,7 +68,7 @@ router.use(authenticate);
  *       403:
  *         description: Forbidden
  */
-router.get('/postings', cacheMiddleware(120), recruitmentController.getJobPostings);
+router.get('/postings', cacheMiddleware(30), recruitmentController.getJobPostings);
 
 /**
  * @swagger
