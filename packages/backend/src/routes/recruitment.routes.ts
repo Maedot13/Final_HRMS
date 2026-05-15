@@ -45,7 +45,7 @@ router.use(authenticate);
  *               - title
  *               - description
  *               - requirements
- *               - department
+ *               - departmentId
  *               - position
  *               - deadline
  *             properties:
@@ -55,8 +55,8 @@ router.use(authenticate);
  *                 type: string
  *               requirements:
  *                 type: string
- *               department:
- *                 type: string
+ *               departmentId:
+ *                 type: integer
  *               position:
  *                 type: string
  *               deadline:
@@ -68,7 +68,7 @@ router.use(authenticate);
  *       403:
  *         description: Forbidden
  */
-router.get('/postings', cacheMiddleware(30), recruitmentController.getJobPostings);
+router.get('/postings', recruitmentController.getJobPostings);
 
 /**
  * @swagger
@@ -111,7 +111,7 @@ router.get('/postings/:id', recruitmentController.getJobPostingById);
  *             properties:
  *               jobPostingId:
  *                 type: integer
- *               coverLetter:
+ *               reasonForApplying:
  *                 type: string
  *               cvUrl:
  *                 type: string
@@ -142,7 +142,7 @@ import { upload } from '../middleware/upload.middleware';
  *             properties:
  *               jobPostingId:
  *                 type: integer
- *               coverLetter:
+ *               reasonForApplying:
  *                 type: string
  *               cv:
  *                 type: string
@@ -211,6 +211,11 @@ router.patch('/postings/:id/status',
     recruitmentController.updateJobStatus
 );
 
+router.patch('/postings/:id',
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.RECRUITMENT_COMMITTEE]),
+    recruitmentController.updateJobPosting
+);
+
 /**
  * @swagger
  * /api/v1/recruitment/postings/{id}/applications:
@@ -261,7 +266,7 @@ router.get('/postings/:id/applications',
  *             properties:
  *               status:
  *                 type: string
- *                 enum: [SUBMITTED, UNDER_REVIEW, SHORTLISTED, REJECTED]
+ *                 enum: [SUBMITTED, UNDER_REVIEW, SHORTLISTED, REJECTED, SELECTED]
  *               reviewComment:
  *                 type: string
  *     responses:
@@ -273,6 +278,11 @@ router.get('/postings/:id/applications',
 router.patch('/applications/:id/status',
     authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.RECRUITMENT_COMMITTEE]),
     recruitmentController.updateApplicationStatus
+);
+
+router.post('/applications/:id/evaluate',
+    authorize([UserRole.ADMIN, UserRole.RECRUITMENT_COMMITTEE]),
+    recruitmentController.evaluateApplication
 );
 
 export default router;

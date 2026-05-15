@@ -56,7 +56,9 @@ export function DataTable<T>({
         );
     }
 
-    if (data.length === 0) {
+    const safeData = Array.isArray(data) ? data : [];
+
+    if (safeData.length === 0) {
         return (
             <div className="rounded-card border border-[#E5E7EB] bg-white p-8">
                 <EmptyState title={emptyMessage} />
@@ -81,7 +83,7 @@ export function DataTable<T>({
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E5E7EB] bg-white">
-                    {data.map((row) => (
+                    {safeData.map((row) => (
                         <tr key={keyExtractor(row)} className="hover:bg-gray-50">
                             {columns.map((col) => (
                                 <td key={col.key} className="px-4 py-3 text-sm text-text-primary">
