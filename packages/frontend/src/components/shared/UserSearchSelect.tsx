@@ -35,7 +35,7 @@ export function UserSearchSelect({
         enabled: !!id && !isNaN(id),
     });
 
-    const users = data?.users ?? [];
+    const users = Array.isArray(data?.users) ? data.users : [];
     const filtered = search.trim()
         ? users.filter(
               (u) =>

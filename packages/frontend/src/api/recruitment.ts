@@ -22,9 +22,14 @@ export const recruitmentApi = {
     updateJob: (id: number, data: Partial<JobPostingPayload>) =>
         apiClient.patch(`/recruitment/postings/${id}`, data),
         
+    updateJobStatus: (id: number, status: string) =>
+        apiClient.patch(`/recruitment/postings/${id}/status`, { status }),
+        
     // ---- Job Applications ----
     listApplications: (jobId: number, params?: { status?: string }) =>
         apiClient.get(`/recruitment/postings/${jobId}/applications`, { params }),
+
+    getMyApplications: () => apiClient.get('/recruitment/my-applications'),
 
     apply: (formData: FormData) =>
         apiClient.post('/recruitment/apply', formData, {
@@ -33,4 +38,11 @@ export const recruitmentApi = {
 
     reviewApplication: (appId: number, data: { status: string; reviewComment?: string }) =>
         apiClient.patch(`/recruitment/applications/${appId}/status`, data),
+
+    evaluateApplication: (appId: number, data: { 
+        examScore?: number; 
+        interviewScore?: number; 
+        recommendation: string; 
+        status: string;
+    }) => apiClient.post(`/recruitment/applications/${appId}/evaluate`, data),
 };

@@ -3,9 +3,11 @@ import { Request, Response } from 'express';
 import * as recruitmentService from '../services/recruitment.service';
 import {
     createJobPostingSchema,
+    updateJobPostingSchema,
     updateJobStatusSchema,
     applyForJobSchema,
-    updateApplicationStatusSchema
+    updateApplicationStatusSchema,
+    evaluateApplicationSchema
 } from '../schemas/recruitment.schema';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 import { getCampusScope, getCampusIdFilter } from '../lib/campusScope';
@@ -19,7 +21,7 @@ export const createJobPosting = async (req: Request, res: Response) => {
 
         const job = await recruitmentService.createJobPosting({
             ...validation.data,
-            deptLegacy: validation.data.department,
+            departmentId: validation.data.departmentId,
             createdBy: req.user!.userId
         });
         sendSuccess(res, job, 201);
@@ -36,7 +38,7 @@ export const getJobPostings = async (req: Request, res: Response) => {
 
         const postings = await recruitmentService.getJobPostings({
             status: status as any,
-            department: department as string
+            departmentId: department ? parseInt(department as string) : undefined
         }, campusIdFilter);
         sendSuccess(res, postings);
     } catch (error: any) {
@@ -87,9 +89,36 @@ export const updateJobStatus = async (req: Request, res: Response) => {
     }
 };
 
+export const updateJobPosting = async (req: Request, res: Response) => {
+    try {
+        const id = parseInt(req.params.id);
+        const validation = updateJobPostingSchema.safeParse(req.body);
+        if (!validation.success) {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid input', validation.error.format(), req);
+        }
+
+        const campusCtx = getCampusScope(req);
+        const campusIdFilter = getCampusIdFilter(campusCtx);
+
+        const job = await recruitmentService.updateJobPosting(id, validation.data, campusIdFilter);
+        sendSuccess(res, job);
+    } catch (error: any) {
+        if (error?.message === 'Job posting not found or access denied') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+        }
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
 export const applyForJob = async (req: Request, res: Response) => {
     try {
-        const validation = applyForJobSchema.safeParse(req.body);
+        const data = {
+            ...req.body,
+            jobPostingId: req.body.jobPostingId ? parseInt(req.body.jobPostingId) : undefined,
+            cvUrl: req.file ? `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}` : undefined
+        };
+
+        const validation = applyForJobSchema.safeParse(data);
         if (!validation.success) {
             return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid input', validation.error.format(), req);
         }
@@ -133,6 +162,24 @@ export const updateApplicationStatus = async (req: Request, res: Response) => {
         sendSuccess(res, application);
     } catch (error: any) {
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
+export const evaluateApplication = async (req: Request, res: Response) => {
+    try {
+        const id = parseInt(req.params.id);
+        const validation = evaluateApplicationSchema.safeParse(req.body);
+        if (!validation.success) {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid input', validation.error.format(), req);
+        }
+
+        const application = await recruitmentService.evaluateApplication(id, {
+            ...validation.data,
+            reviewedBy: req.user!.userId
+        });
+        sendSuccess(res, application);
+    } catch (error: any) {
+        sendError(res, 400, ErrorCode.BAD_REQUEST, error.message, null, req);
     }
 };
 

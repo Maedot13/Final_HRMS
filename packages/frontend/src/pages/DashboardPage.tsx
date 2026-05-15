@@ -19,9 +19,9 @@ const fetchAdminStats = async () => {
 
         return {
             totalEmployees: usersRes.data.total || usersRes.data?.length || 0,
-            pendingLeave: Array.isArray(leaveRes.data) ? leaveRes.data.length : (leaveRes.data.total || 0),
-            openJobs: Array.isArray(jobsRes.data) ? jobsRes.data.length : (jobsRes.data.total || 0),
-            pendingClearance: Array.isArray(clearanceRes.data) ? clearanceRes.data.length : (clearanceRes.data.total || 0),
+            pendingLeave: Array.isArray(leaveRes.data) ? leaveRes.data.length : (Array.isArray(leaveRes.data?.data) ? leaveRes.data.data.length : (leaveRes.data?.total || 0)),
+            openJobs: Array.isArray(jobsRes.data) ? jobsRes.data.length : (Array.isArray(jobsRes.data?.data) ? jobsRes.data.data.length : (jobsRes.data?.total || 0)),
+            pendingClearance: Array.isArray(clearanceRes.data) ? clearanceRes.data.length : (Array.isArray(clearanceRes.data?.data) ? clearanceRes.data.data.length : (clearanceRes.data?.total || 0)),
         };
     } catch {
         return { totalEmployees: 0, pendingLeave: 0, openJobs: 0, pendingClearance: 0 };
@@ -36,10 +36,10 @@ const fetchEmployeeStats = async () => {
             apiClient.get('/recruitment/postings?status=OPEN').catch(() => ({ data: [] })),
         ]);
 
-        const myLeaves = Array.isArray(myLeaveRes.data) ? myLeaveRes.data : [];
+        const myLeaves = Array.isArray(myLeaveRes.data) ? myLeaveRes.data : (Array.isArray(myLeaveRes.data?.data) ? myLeaveRes.data.data : []);
         const pendingLeave = myLeaves.filter((l: any) => l.status === 'PENDING').length;
         const approvedLeave = myLeaves.filter((l: any) => l.status === 'APPROVED').length;
-        const openJobs = Array.isArray(jobsRes.data) ? jobsRes.data.length : 0;
+        const openJobs = Array.isArray(jobsRes.data) ? jobsRes.data.length : (Array.isArray(jobsRes.data?.data) ? jobsRes.data.data.length : 0);
 
         return { pendingLeave, approvedLeave, totalRequests: myLeaves.length, openJobs };
     } catch {

@@ -61,7 +61,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
                     {...props}
                 >
                     <option value="">{placeholder}</option>
-                    {options.map((opt) => (
+                    {(Array.isArray(options) ? options : []).map((opt) => (
                         <option
                             key={opt.value}
                             value={opt.value}
