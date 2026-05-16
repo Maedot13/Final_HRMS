@@ -37,92 +37,77 @@ export const getPayrollData = async (params: PayrollDataParams) => {
             ...campusFilter,
             user: { isActive: true }
         },
-        include: { 
-            user: true,
-            leaveRequests: {
-                where: {
-                    status: 'APPROVED',
-                    leaveType: 'UNPAID',
-                    OR: [
-                        { startDate: { lte: endPeriod }, endDate: { gte: startPeriod } }
-                    ]
-                }
-            }
-        }
+        include: { user: true }
     });
 
-    // Step 2: Get Exited Employees
+    // Step 2: Get Exited Employees (Clearance approved in this month)
+    // We can find this via ClearanceRequest approvedAt (if we had it on main) or check ClearnaceCheck/etc.
+    // Easier: Check ClearanceRequest updated at + status = APPROVED
+    // Or check PayrollTransfer effectiveDate
     const exitedEmployees = await prisma.employee.findMany({
         where: {
             ...campusFilter,
             payrollTransfers: {
                 some: {
-                    effectiveDate: { gte: startPeriod, lte: endPeriod },
-                    status: { not: 'CANCELLED' }
+                    effectiveDate: {
+                        gte: startPeriod,
+                        lte: endPeriod
+                    },
+                    status: { not: 'CANCELLED' } // Assuming created ones are valid
                 }
             },
-            user: { isActive: false }
+            user: { isActive: false } // Only those who are now inactive
         },
         include: {
             user: true,
             payrollTransfers: {
-                where: { effectiveDate: { gte: startPeriod, lte: endPeriod } },
-                take: 1
-            },
-            leaveRequests: {
                 where: {
-                    status: 'APPROVED',
-                    leaveType: 'UNPAID',
-                    OR: [
-                        { startDate: { lte: endPeriod }, endDate: { gte: startPeriod } }
-                    ]
-                }
+                    effectiveDate: { gte: startPeriod, lte: endPeriod }
+                },
+                take: 1
             }
         }
     });
 
-    // Combine lists
+    // Combine lists (avoid dupes if any edge case)
     const allEmployees = [...activeEmployees, ...exitedEmployees];
 
     // Map to result format
     const results = allEmployees.map(emp => {
-        let payableDays = PAYROLL_CONSTANTS.STANDARD_MONTH_DAYS;
-        const daysInMonth = endPeriod.getDate();
+        let payableDays = PAYROLL_CONSTANTS.STANDARD_MONTH_DAYS; // Default Standard
+        const daysInMonth = endPeriod.getDate(); // 28, 29, 30, 31
 
-        // New Hire?
+        // Case A: New Hire this month?
+        // If hireDate is in this month
         if (isSameMonth(emp.hireDate, startPeriod) && emp.hireDate.getFullYear() === year) {
+            // Days from hireDate to end of month (inclusive)
             payableDays = differenceInDays(endPeriod, emp.hireDate) + 1;
         }
 
-        // Exited?
+        // Case B: Exited this month?
+        // If they are in exited list (active=false)
         if (!emp.user.isActive) {
+            // Find termination date. 
+            // We can use the payroll transfer effective date as the "Last Pay Day" equivalent
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const transfer = (emp as any).payrollTransfers?.[0];
             if (transfer) {
                 const exitDate = transfer.effectiveDate;
+                // Days from start of month to exit date
                 payableDays = differenceInDays(exitDate, startPeriod) + 1;
             }
         }
 
-        // Deduct UNPAID Leave Days
-        let unpaidDays = 0;
-        emp.leaveRequests.forEach(leave => {
-            const overlapStart = leave.startDate > startPeriod ? leave.startDate : startPeriod;
-            const overlapEnd = leave.endDate < endPeriod ? leave.endDate : endPeriod;
-            const days = differenceInDays(overlapEnd, overlapStart) + 1;
-            if (days > 0) unpaidDays += days;
-        });
-
-        payableDays -= unpaidDays;
-
-        // Cap and Standardize
+        // Cap payable days just in case
         if (payableDays < 0) payableDays = 0;
         if (payableDays > daysInMonth) payableDays = daysInMonth;
 
-        if (payableDays >= PAYROLL_CONSTANTS.MINIMUM_FULL_MONTH_DAYS && payableDays === daysInMonth && unpaidDays === 0) {
-            payableDays = PAYROLL_CONSTANTS.STANDARD_MONTH_DAYS;
+        // Standardize 31st day handling? "HR provides days".
+        // Rule: If worked full month -> 30.
+        // If partial -> Actual calendar days.
+        if (payableDays >= PAYROLL_CONSTANTS.MINIMUM_FULL_MONTH_DAYS && payableDays === daysInMonth) {
+            payableDays = PAYROLL_CONSTANTS.STANDARD_MONTH_DAYS; // Standardize full month to 30
         }
-
-        const isOnLeave = unpaidDays > 0;
 
         return {
             employeeId: emp.employeeId,
@@ -131,8 +116,8 @@ export const getPayrollData = async (params: PayrollDataParams) => {
             grossSalary: emp.grossSalary,
             salaryType: emp.salaryType,
             payableDays: payableDays,
-            status: isOnLeave ? 'ON_LEAVE' : (emp.user.isActive ? 'ACTIVE' : 'EXITED'),
-            notes: isOnLeave ? `Unpaid Leave (${unpaidDays} days)` : (!emp.user.isActive ? 'Partial Payment - Exited this month' : (payableDays < 30 && payableDays !== 30 ? 'Partial Payment - New Hire' : ''))
+            status: emp.user.isActive ? 'ACTIVE' : 'EXITED',
+            notes: !emp.user.isActive ? 'Partial Payment - Exited this month' : (payableDays < 30 && payableDays !== 30 ? 'Partial Payment - New Hire' : '')
         };
     });
 
@@ -160,35 +145,4 @@ export const triggerClearancePayrollTransfer = async (clearanceId: number, emplo
         logger.error(`[Payroll Service] Failed to initiate payroll transfer for clearance ${clearanceId}`, error);
         throw error;
     }
-};
-
-export const triggerLeavePayrollTransfer = async (leaveId: number, employeeId: number, leaveType: string, approverId: number) => {
-    try {
-        await prisma.payrollTransfer.create({
-            data: {
-                employeeId,
-                leaveId,
-                reason: `${leaveType} Leave Approved`,
-                effectiveDate: new Date(),
-                status: 'PENDING',
-                createdBy: approverId
-            }
-        });
-        logger.info(`[Payroll Service] Initiated payroll transfer for leave ${leaveId}`);
-    } catch (error) {
-        logger.error(`[Payroll Service] Failed to initiate payroll transfer for leave ${leaveId}`, error);
-        throw error;
-    }
-};
-
-export const listTransfers = async (campusId?: number) => {
-    return prisma.payrollTransfer.findMany({
-        where: campusId ? { employee: { campusId } } : {},
-        include: {
-            employee: { select: { name: true, employeeId: true, campus: { select: { name: true } } } },
-            clearance: { select: { id: true } },
-            leave: { select: { id: true, leaveType: true } }
-        },
-        orderBy: { createdAt: 'desc' }
-    });
 };

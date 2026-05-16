@@ -8,16 +8,18 @@ const { PrismaNeon } = require('@prisma/adapter-neon') as typeof import('@prisma
 
 // Route Postgres traffic over WebSockets (port 443) instead of raw TCP (port 5432).
 // This is required on networks that block outbound port 5432.
-neonConfig.webSocketConstructor = ws;
+// Route Postgres traffic over WebSockets (port 443) instead of raw TCP (port 5432).
+// This is required on networks that block outbound port 5432.
+// neonConfig.webSocketConstructor = ws;
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
 function createPrismaClient() {
-    const connectionString = process.env.DATABASE_URL!;
-    const pool = new Pool({ connectionString });
-    const adapter = new PrismaNeon(pool);
+    // const connectionString = process.env.DATABASE_URL!;
+    // const pool = new Pool({ connectionString });
+    // const adapter = new PrismaNeon(pool);
     return new PrismaClient({
-        adapter,
+        // adapter,
         log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
     });
 }
