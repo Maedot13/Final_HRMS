@@ -20,43 +20,6 @@ export interface PayrollReport {
     }
 }
 
-export type PayrollReportRecord = PayrollReport & { filename?: string };
-
-export interface PayrollTransfer {
-    id: number;
-    transferId: number;
-    status: string;
-    effectiveDate: string;
-    createdAt: string;
-    reason: string;
-    employee: {
-        employeeId: string;
-        name: string;
-        department: string;
-        position: string;
-        grossSalary: number;
-        salaryType: string;
-        campus?: { name: string };
-    };
-    leave: {
-        id: number;
-        leaveType: string;
-        startDate: string;
-        endDate: string;
-        days: number;
-        reason: string;
-        approverComment?: string;
-        resolvedAt?: string;
-    } | null;
-    salaryInfo?: string;
-    salaryImpact?: {
-        dailyRate: number;
-        affectedDays: number;
-        salaryDeduction: number;
-        note: string;
-    };
-}
-
 export const payrollApi = {
     // Get payroll data for preview
     getDataTransfer: (params: PayrollDataParams) => 
@@ -81,9 +44,5 @@ export const payrollApi = {
     downloadReport: (reportId: number) => 
         apiClient.get(`/payroll/reports/${reportId}/download`, {
             responseType: 'blob'
-        }),
-
-    // List leave-based payroll transfers for Finance
-    listTransfers: () => 
-        apiClient.get<PayrollTransfer[]>('/payroll/leave-transfers')
+        })
 };

@@ -106,7 +106,7 @@ model Employee {
 }
 
 model LeaveRequest {
-  id                 Int              @id @default(autoincrement())
+  id                 Int             @id @default(autoincrement())
   employeeId         Int
   leaveType          LeaveType
   startDate          DateTime
@@ -114,22 +114,21 @@ model LeaveRequest {
   days               Int
   reason             String
   attachmentUrl      String?
-  status             LeaveStatus      @default(PENDING)
-  currentStage       LeaveStage       @default(DEPT_HEAD)
+  status             LeaveStatus     @default(PENDING)
+  currentStage       LeaveStage      @default(DEPT_HEAD)
   approverId         Int? // Final approver (HR/Dean/VP) user ID
   approverComment    String?
   deptHeadId         Int? // Department head who reviewed
   deptHeadComment    String?
   deptHeadDecisionAt DateTime?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
   lastDecisionAt     DateTime?
   resolvedAt         DateTime?
   campusId           Int?
-  campus             Campus?          @relation(fields: [campusId], references: [id], onDelete: Restrict)
-  employee           Employee         @relation(fields: [employeeId], references: [id])
-  approvals          LeaveApproval[]
-  payrollTransfer    PayrollTransfer?
+  campus             Campus?         @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  employee           Employee        @relation(fields: [employeeId], references: [id])
+  approvals       LeaveApproval[]
 
   @@index([campusId])
   @@index([employeeId, status])
@@ -270,15 +269,13 @@ model LeaveApproval {
 model PayrollTransfer {
   id            Int              @id @default(autoincrement())
   employeeId    Int
-  clearanceId   Int?              @unique
-  leaveId       Int?              @unique
+  clearanceId   Int              @unique
   reason        String
   effectiveDate DateTime
   status        String
   createdBy     Int
   createdAt     DateTime         @default(now())
-  clearance     ClearanceRequest? @relation(fields: [clearanceId], references: [id])
-  leave         LeaveRequest?     @relation(fields: [leaveId], references: [id])
+  clearance     ClearanceRequest @relation(fields: [clearanceId], references: [id])
   employee      Employee         @relation(fields: [employeeId], references: [id])
 }
 

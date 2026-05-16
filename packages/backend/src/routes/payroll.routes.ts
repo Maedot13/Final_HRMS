@@ -120,21 +120,5 @@ router.get('/reports/:id/download',
     payrollController.downloadReport
 );
 
-/**
- * @swagger
- * /api/v1/payroll/leave-transfers:
- *   get:
- *     summary: Finance Officer - view all approved leave payroll notifications (RESEARCH, UNPAID, SABBATICAL)
- *     tags: [Payroll]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of leave-based payroll transfers with salary impact details
- */
-router.get('/leave-transfers',
-    authorize([UserRole.FINANCE_OFFICER, UserRole.HR_OFFICER, UserRole.ADMIN]),
-    payrollController.getLeaveTransfers
-);
 
 export default router;

@@ -146,27 +146,3 @@ export const downloadReport = async (req: Request, res: Response) => {
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
-
-/**
- * Finance Officer: view leave-based payroll notifications with full leave + salary info.
- */
-export const getLeaveTransfers = async (req: Request, res: Response) => {
-    try {
-        const user = req.user;
-        if (!user) return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
-
-        const allowedRoles: UserRole[] = [UserRole.FINANCE_OFFICER, UserRole.HR_OFFICER, UserRole.ADMIN];
-        if (!allowedRoles.includes(user.role)) {
-            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
-        }
-
-        const campusCtx = getCampusScope(req);
-        const campusId = getCampusIdFilter(campusCtx) ?? undefined;
-
-        const data = await payrollService.getLeavePayrollTransfers(campusId);
-        sendSuccess(res, data);
-    } catch (error: any) {
-        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
-    }
-};
-
