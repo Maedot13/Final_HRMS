@@ -119,13 +119,13 @@ export const getPayrollData = async (params: PayrollDataParams) => {
             for (const pt of emp.payrollTransfers) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const leave = (pt as any).leave;
-                if (leave && ([LeaveType.UNPAID, LeaveType.SABBATICAL, LeaveType.RESEARCH] as LeaveType[]).includes(leave.leaveType)) {
+                if (leave && leave.leaveType === LeaveType.UNPAID) {
                     const overlapStart = leave.startDate > startPeriod ? leave.startDate : startPeriod;
                     const overlapEnd = leave.endDate < endPeriod ? leave.endDate : endPeriod;
                     if (overlapStart <= overlapEnd) {
                         const leaveDays = differenceInDays(overlapEnd, overlapStart) + 1;
                         payableDays -= leaveDays;
-                        leaveNotes += `Deducted ${leaveDays} days for ${leave.leaveType} leave. `;
+                        leaveNotes += `Deducted ${leaveDays} days for UNPAID leave. `;
                     }
                 }
             }
