@@ -10,7 +10,8 @@ import {
     FiFileText,
     FiUser,
     FiPhone,
-    FiShield
+    FiShield,
+    FiActivity,
 } from 'react-icons/fi';
 
 type Role =
@@ -31,23 +32,25 @@ interface NavItem {
     icon: React.ReactNode;
 }
 
+// ---------------------------------------------------------------------------
+// Access-control matrix — each item lists the roles that can see it.
+// SUPER_ADMIN and ADMIN are NOT included in shared nav items; their pages
+// are rendered in dedicated sidebar sections below.
+// ---------------------------------------------------------------------------
 const navItems: NavItem[] = [
+    // ── Universal (all campus roles except SUPER_ADMIN & ADMIN) ──────────────
     {
         label: 'Dashboard',
         to: '/',
-        roles: ['ADMIN', 'HR_OFFICER', 'DEPARTMENT_HEAD', 'FINANCE_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE'],
+        roles: ['HR_OFFICER', 'DEPARTMENT_HEAD', 'FINANCE_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE', 'CLEARANCE_BODY'],
         icon: <FiGrid className="w-4 h-4" />,
     },
-    {
-        label: 'Departments',
-        to: '/departments',
-        roles: [],
-        icon: <FiLayers className="w-4 h-4" />,
-    },
+
+    // ── HR Officer ────────────────────────────────────────────────────────────
     {
         label: 'Employees',
         to: '/users',
-        roles: ['HR_OFFICER', 'DEPARTMENT_HEAD'],
+        roles: ['HR_OFFICER', 'DEPARTMENT_HEAD'],   // ADMIN excluded — Admin uses /admin/org for structure
         icon: <FiUsers className="w-4 h-4" />,
     },
     {
@@ -75,30 +78,41 @@ const navItems: NavItem[] = [
         roles: ['CLEARANCE_BODY'],
         icon: <FiCheckSquare className="w-4 h-4" />,
     },
+
+    // ── Recruitment (HR + committee + candidates) ─────────────────────────────
+    // ADMIN excluded — ADMIN does not manage recruitment operations
     {
         label: 'Recruitment',
         to: '/jobs',
         roles: ['HR_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE', 'DEPARTMENT_HEAD'],
         icon: <FiBriefcase className="w-4 h-4" />,
     },
+
+    // ── HR Payroll (HR domain — not Finance, not Admin) ───────────────────────
     {
         label: 'Payroll',
         to: '/hr/payroll',
         roles: ['HR_OFFICER'],
         icon: <FiFileText className="w-4 h-4" />,
     },
+
+    // ── Finance (Finance Officer only) ────────────────────────────────────────
     {
         label: 'Finance Reports',
         to: '/hr/finance',
         roles: ['FINANCE_OFFICER'],
         icon: <FiFileText className="w-4 h-4" />,
     },
+
+    // ── Audit Logs (HR_OFFICER only in shared nav — ADMIN & SUPER_ADMIN have dedicated sections) ──
     {
         label: 'Audit Logs',
         to: '/audit-logs',
-        roles: [],
-        icon: <FiFileText className="w-4 h-4" />,
+        roles: ['HR_OFFICER'],
+        icon: <FiActivity className="w-4 h-4" />,
     },
+
+    // ── Admin section (campus ADMIN only — SUPER_ADMIN excluded, has own section) ──
     {
         label: 'Org Setup',
         to: '/admin/org',
@@ -117,12 +131,16 @@ const navItems: NavItem[] = [
         roles: ['ADMIN'],
         icon: <FiShield className="w-4 h-4" />,
     },
+
+    // ── Contacts directory ────────────────────────────────────────────────────
     {
         label: 'Contacts',
         to: '/contacts',
         roles: ['HR_OFFICER', 'DEPARTMENT_HEAD'],
         icon: <FiPhone className="w-4 h-4" />,
     },
+
+    // ── Self-service (all roles) ──────────────────────────────────────────────
     {
         label: 'My Profile',
         to: '/profile',
@@ -130,16 +148,23 @@ const navItems: NavItem[] = [
     },
 ];
 
+const activeClass = 'bg-primary text-white';
+const inactiveClass = 'text-text-secondary hover:bg-gray-100 hover:text-text-primary';
+const linkBase = 'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors';
+
 export function Sidebar() {
     const user = useAuthStore((state) => state.user);
 
     const filteredItems = navItems.filter((item) => {
         if (!user) return false;
+        // Items with no roles/privileges list are shown to everyone (e.g. My Profile)
         if (!item.roles && !item.privileges) return true;
-        
+
         const hasRole = item.roles?.includes(user.role as Role);
-        const hasPriv = item.privileges?.some(p => ((user as any).specialPrivileges || []).includes(p));
-        
+        const hasPriv = item.privileges?.some((p) =>
+            ((user as any).specialPrivileges || []).includes(p)
+        );
+
         return hasRole || hasPriv;
     });
 
@@ -156,63 +181,44 @@ export function Sidebar() {
                                 to={item.to}
                                 end={item.to === '/'}
                                 className={({ isActive }) =>
-                                    [
-                                        'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-                                        isActive
-                                            ? 'bg-primary text-white'
-                                            : 'text-text-secondary hover:bg-gray-100 hover:text-text-primary',
-                                    ].join(' ')
+                                    `${linkBase} ${isActive ? activeClass : inactiveClass}`
                                 }
                             >
                                 {item.icon}
-                                {item.to === '/jobs' && user?.role === 'EMPLOYEE' ? 'Internal Careers' : item.label}
+                                {item.to === '/jobs' && user?.role === 'EMPLOYEE'
+                                    ? 'Internal Careers'
+                                    : item.label}
                             </NavLink>
                         </li>
                     ))}
-                    
+
+                    {/* ── Head HR section (isHeadHR flag) ──────────────────── */}
                     {user?.isHeadHR && (
                         <div className="pt-4 mt-4 border-t border-gray-200">
                             <span className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                 Head HR Control
                             </span>
                             <ul className="mt-2 space-y-1">
-                                <li>
-                                    <NavLink to="/hr/employees" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiUsers className="w-4 h-4"/> Employees</NavLink>
-                                </li>
-                                <li>
-                                    <NavLink to="/hr/leave/approvals" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiCalendar className="w-4 h-4"/> Leave Approvals</NavLink>
-                                </li>
-                                <li>
-                                    <NavLink to="/hr/performance" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiFileText className="w-4 h-4"/> Performance</NavLink>
-                                </li>
-                                <li>
-                                    <NavLink to="/hr/payroll" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiGrid className="w-4 h-4"/> Payroll</NavLink>
-                                </li>
-                                <li>
-                                    <NavLink to="/hr/clearance" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiCheckSquare className="w-4 h-4"/> Clearance</NavLink>
-                                </li>
-                                <li>
-                                    <NavLink to="/hr/experience" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiBriefcase className="w-4 h-4"/> Experience</NavLink>
-                                </li>
+                                <li><NavLink to="/hr/employees" className={({ isActive }) => `${linkBase} ${isActive ? activeClass : inactiveClass}`}><FiUsers className="w-4 h-4" /> Employees</NavLink></li>
+                                <li><NavLink to="/hr/leave/approvals" className={({ isActive }) => `${linkBase} ${isActive ? activeClass : inactiveClass}`}><FiCalendar className="w-4 h-4" /> Leave Approvals</NavLink></li>
+                                <li><NavLink to="/hr/performance" className={({ isActive }) => `${linkBase} ${isActive ? activeClass : inactiveClass}`}><FiFileText className="w-4 h-4" /> Performance</NavLink></li>
+                                <li><NavLink to="/hr/payroll" className={({ isActive }) => `${linkBase} ${isActive ? activeClass : inactiveClass}`}><FiGrid className="w-4 h-4" /> Payroll</NavLink></li>
+                                <li><NavLink to="/hr/clearance" className={({ isActive }) => `${linkBase} ${isActive ? activeClass : inactiveClass}`}><FiCheckSquare className="w-4 h-4" /> Clearance</NavLink></li>
+                                <li><NavLink to="/hr/experience" className={({ isActive }) => `${linkBase} ${isActive ? activeClass : inactiveClass}`}><FiBriefcase className="w-4 h-4" /> Experience</NavLink></li>
                             </ul>
                         </div>
                     )}
-                    
+
+                    {/* ── SUPER_ADMIN section (system-wide, isolated) ──────── */}
                     {user?.role === 'SUPER_ADMIN' && (
                         <div className="pt-4 mt-4 border-t border-gray-200">
                             <span className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                 Super Admin
                             </span>
                             <ul className="mt-2 space-y-1">
-                                <li>
-                                    <NavLink to="/super/users" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiUsers className="w-4 h-4"/> Admin/HR Accounts</NavLink>
-                                </li>
-                                <li>
-                                    <NavLink to="/super/activity-logs" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiFileText className="w-4 h-4"/> Activity Logs</NavLink>
-                                </li>
-                                <li>
-                                    <NavLink to="/super/campuses" className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-text-secondary hover:bg-gray-100 hover:text-text-primary"><FiLayers className="w-4 h-4"/> Campuses</NavLink>
-                                </li>
+                                <li><NavLink to="/super/users" className={({ isActive }) => `${linkBase} ${isActive ? activeClass : inactiveClass}`}><FiUsers className="w-4 h-4" /> Admin / HR Accounts</NavLink></li>
+                                <li><NavLink to="/super/activity-logs" className={({ isActive }) => `${linkBase} ${isActive ? activeClass : inactiveClass}`}><FiActivity className="w-4 h-4" /> Activity Logs</NavLink></li>
+                                <li><NavLink to="/super/campuses" className={({ isActive }) => `${linkBase} ${isActive ? activeClass : inactiveClass}`}><FiLayers className="w-4 h-4" /> Campuses</NavLink></li>
                             </ul>
                         </div>
                     )}
@@ -221,4 +227,3 @@ export function Sidebar() {
         </aside>
     );
 }
-

@@ -15,9 +15,6 @@ router.get('/:id/users',
     campusController.getCampusUsers
 );
 
-// Returns the authenticated user's own campus — accessible to all campus-scoped users
-router.get('/mine', campusController.getMineCampus);
-
 // All other campus management routes require university admin (ADMIN + scope: UNIVERSITY)
 router.use(requireUniversityAdmin);
 

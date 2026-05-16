@@ -27,7 +27,13 @@ export function RequireAuth({ children }: RequireAuthProps) {
             navigate('/force-password-change', { replace: true });
         }
 
-        // Complete lock-out of standard module pages for CLEARANCE_BODY
+        // SUPER_ADMIN: redirect to dedicated super-admin dashboard.
+        // They must NOT reach campus-level pages (/, /users, /hr/*, /departments etc.)
+        if (user?.role === 'SUPER_ADMIN' && location.pathname === '/') {
+            navigate('/super/users', { replace: true });
+        }
+
+        // CLEARANCE_BODY: lock out of shared campus pages
         if (
             user?.role === 'CLEARANCE_BODY' &&
             (location.pathname === '/' || location.pathname === '/contacts' || location.pathname === '/departments')
@@ -41,6 +47,10 @@ export function RequireAuth({ children }: RequireAuthProps) {
     }
 
     if (user?.role === 'CLEARANCE_BODY' && (location.pathname === '/' || location.pathname === '/contacts' || location.pathname === '/departments')) {
+        return null;
+    }
+
+    if (user?.role === 'SUPER_ADMIN' && location.pathname === '/') {
         return null;
     }
 

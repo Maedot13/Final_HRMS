@@ -116,20 +116,4 @@ export const getCampusUsers = async (req: Request, res: Response) => {
   }
 };
 
-/** GET /campuses/mine — returns the calling user's own campus (no UNIVERSITY admin required). */
-export const getMineCampus = async (req: Request, res: Response) => {
-  try {
-    const campusId = req.user?.campusId;
-    if (!campusId) {
-      // UNIVERSITY-scoped admins (SUPER_ADMIN) have no single campus
-      return sendSuccess(res, { campus: null, message: 'University-scoped user — no single campus' });
-    }
-    const campus = await campusService.getCampusById(campusId);
-    if (!campus) {
-      return sendError(res, 404, ErrorCode.NOT_FOUND, 'Campus not found', null, req);
-    }
-    sendSuccess(res, campus);
-  } catch (error: any) {
-    sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
-  }
-};
+

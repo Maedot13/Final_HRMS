@@ -81,8 +81,11 @@ const router = createBrowserRouter([
             },
             {
                 path: 'audit-logs',
+                // Audit logs: HR_OFFICER can review campus-level audit trail.
+                // ADMIN excluded — org admin does not need audit visibility.
+                // SUPER_ADMIN accesses audit via /super/activity-logs.
                 element: (
-                    <RequireRole allowedRoles={[]}>
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
                         <AuditLogsPage />
                     </RequireRole>
                 ),
@@ -133,14 +136,19 @@ const router = createBrowserRouter([
             },
             {
                 path: 'departments',
+                // Departments: ADMIN manages campus department structure.
+                // HR_OFFICER can read departments (for employee assignment).
+                // SUPER_ADMIN uses /super/campuses for structure.
                 element: (
-                    <RequireRole allowedRoles={[]}>
+                    <RequireRole allowedRoles={['ADMIN', 'HR_OFFICER']}>
                         <DepartmentsPage />
                     </RequireRole>
                 ),
             },
             {
                 path: 'users',
+                // Employee directory: HR_OFFICER manages, DEPARTMENT_HEAD can view.
+                // ADMIN excluded — Admin does not manage individual employee records.
                 element: (
                     <RequireRole allowedRoles={['HR_OFFICER', 'DEPARTMENT_HEAD']}>
                         <UsersPage />
@@ -173,23 +181,45 @@ const router = createBrowserRouter([
         children: [
             {
                 path: 'employees',
-                element: <UsersPage />, // Reuse UsersPage as employees listing
+                // HR Officer employee management route — gated at layout level via RequireAuth.
+                // Additional role guard here ensures only HR Officer accesses /hr/* paths.
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
+                        <UsersPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'leave/approvals',
-                element: <LeaveManagementPage />,
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
+                        <LeaveManagementPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'performance',
-                // Placeholder if Page doesn't exist yet, wait, we don't have performance page yet, map to Dashboard
-                element: <DashboardPage />, 
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
+                        <DashboardPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'payroll',
-                element: <PayrollPage />,
+                // Payroll generation: HR_OFFICER only. ADMIN and FINANCE_OFFICER excluded.
+                // Finance Officer views sent reports via /hr/finance (FinancePage).
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
+                        <PayrollPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'finance',
+                // Finance dashboard: FINANCE_OFFICER only.
+                // HR_OFFICER generates payroll but does not access Finance's report view.
+                // ADMIN has no access to Finance domain.
                 element: (
                     <RequireRole allowedRoles={['FINANCE_OFFICER']}>
                         <FinancePage />
@@ -198,11 +228,19 @@ const router = createBrowserRouter([
             },
             {
                 path: 'clearance',
-                element: <HeadHRClearancePage />,
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
+                        <HeadHRClearancePage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'experience',
-                element: <DashboardPage />,
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
+                        <DashboardPage />
+                    </RequireRole>
+                ),
             }
         ]
     },
