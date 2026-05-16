@@ -7,7 +7,7 @@ import { UserRole } from '@hrms/types';
 const router = Router();
 
 router.use(authenticate);
-router.use(authorize([UserRole.ADMIN]));
+router.use(authorize([UserRole.ADMIN, UserRole.SUPER_ADMIN]));
 
 /**
  * @swagger

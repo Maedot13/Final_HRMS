@@ -45,7 +45,7 @@ import { payrollDataTransferSchema } from '../schemas/payroll.schema';
  */
 
 router.get('/data-transfer',
-    authorize([UserRole.ADMIN, UserRole.FINANCE_OFFICER, UserRole.HR_OFFICER]),
+    authorize([UserRole.FINANCE_OFFICER, UserRole.HR_OFFICER]),
     payrollController.getPayrollData
 );
 
@@ -68,7 +68,7 @@ router.get('/data-transfer',
  *           type: integer
  */
 router.get('/generate',
-    authorize([UserRole.HR_OFFICER, UserRole.ADMIN]),
+    authorize([UserRole.HR_OFFICER]),
     payrollController.generatePayrollExcel
 );
 
@@ -104,7 +104,7 @@ router.post('/send-to-finance',
  *     tags: [Payroll]
  */
 router.get('/reports',
-    authorize([UserRole.FINANCE_OFFICER, UserRole.ADMIN, UserRole.HR_OFFICER]),
+    authorize([UserRole.FINANCE_OFFICER, UserRole.HR_OFFICER]),
     payrollController.listReports
 );
 
@@ -116,8 +116,9 @@ router.get('/reports',
  *     tags: [Payroll]
  */
 router.get('/reports/:id/download',
-    authorize([UserRole.FINANCE_OFFICER, UserRole.ADMIN]),
+    authorize([UserRole.FINANCE_OFFICER]),
     payrollController.downloadReport
 );
+
 
 export default router;

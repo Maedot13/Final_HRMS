@@ -729,6 +729,9 @@ Experience letter available
 
 ### 7.3 HR_Officer Dashboard
 - `/hr/employees` – list, create, edit employees
+  - **Progressive Employee Profiling**: Employee creation supports incomplete initial data. An employee can be created with or without a department assignment.
+  - **Profile Management**: Department assignment and other profile details are optional during creation and can be assigned or changed later through the HR management workflow. HR users have full ability to edit and manage the employee's complete profile information after creation.
+  - **Data Synchronization**: Any updates made by HR to employee information are immediately reflected and visible within the employee-facing self-service view (`/profile`).
 - `/hr/leave/approvals` – pending leave requests (campus)
 - `/hr/performance` – create/update evaluations
 - `/hr/payroll` – generate reports

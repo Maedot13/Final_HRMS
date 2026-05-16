@@ -1,23 +1,57 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { Badge } from '../../components/ui/Badge';
 import { DataTable, type Column } from '../../components/shared/DataTable';
 import { privilegesApi, type PrivilegedUser } from '../../api/privileges';
 import { usersApi } from '../../api/users';
 import { toast } from 'react-toastify';
 import { Modal } from '../../components/ui/Modal';
-import { useAuthStore } from '../../store/useAuthStore';
 import type { SpecialPrivilege } from '../../types';
+import { FiSearch, FiUser, FiShield, FiX } from 'react-icons/fi';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const SPECIAL_PRIVILEGES: { value: SpecialPrivilege; label: string; description: string }[] = [
+    { value: 'DEAN',                label: 'Dean',                description: 'Can approve sabbatical leaves and read college-scoped employee data.' },
+    { value: 'DIRECTOR',            label: 'Director',            description: 'Director-level access for designated units.' },
+    { value: 'UNIVERSITY_PRESIDENT',label: 'University President', description: 'Can approve without-pay and research leaves system-wide.' },
+    { value: 'VICE_PRESIDENT',      label: 'Vice President',       description: 'Academic VP role — approves research and sabbatical leave chains.' },
+];
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function privilegeLabel(p: SpecialPrivilege): string {
+    return SPECIAL_PRIVILEGES.find(x => x.value === p)?.label ?? p.replace(/_/g, ' ');
+}
+
+function PrivilegeBadge({ privilege }: { privilege: SpecialPrivilege }) {
+    return (
+        <Badge variant="info" className="capitalize">
+            {privilegeLabel(privilege)}
+        </Badge>
+    );
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function PrivilegesPage() {
     const queryClient = useQueryClient();
+
+    // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedUserId, setSelectedUserId] = useState<number | ''>('');
+
+    // User search state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+    const [showDropdown, setShowDropdown] = useState(false);
+
+    // Privilege selection state
     const [isHeadHR, setIsHeadHR] = useState(false);
-    const [isSuperAdmin, setIsSuperAdmin] = useState(false);
     const [selectedPrivileges, setSelectedPrivileges] = useState<SpecialPrivilege[]>([]);
-    const { user } = useAuthStore();
+
+    // ── Queries ──────────────────────────────────────────────────────────────
 
     const { data: privilegedUsers = [], isLoading } = useQuery({
         queryKey: ['privilegedUsers'],
@@ -27,211 +61,366 @@ export default function PrivilegesPage() {
         },
     });
 
-    const { data: allUsers = [] } = useQuery({
-        queryKey: ['allUsersForPrivilege'],
+    // Search employees-only users by Employee ID or name
+    const { data: searchResults = [], isFetching: isSearching } = useQuery({
+        queryKey: ['userSearch', searchQuery],
         queryFn: async () => {
-            const res = await usersApi.listPaginated({ limit: 1000 }); // Getting a flat list for a quick dropdown
+            if (!searchQuery.trim()) return [];
+            const res = await usersApi.listPaginated({
+                search: searchQuery.trim(),
+                role: 'EMPLOYEE',
+                limit: 20,
+            });
             return res.data?.data || [];
         },
-        enabled: isModalOpen,
+        enabled: isModalOpen && searchQuery.trim().length >= 1,
     });
+
+    const selectedUser = useMemo(
+        () => searchResults.find((u: any) => u.id === selectedUserId) || null,
+        [searchResults, selectedUserId]
+    );
+
+    // ── Mutations ────────────────────────────────────────────────────────────
 
     const assignMutation = useMutation({
         mutationFn: privilegesApi.assign,
         onSuccess: () => {
-            toast.success('Privileges updated');
+            toast.success('Privileges saved successfully.');
             queryClient.invalidateQueries({ queryKey: ['privilegedUsers'] });
             closeModal();
         },
         onError: (err: any) => {
-            toast.error(err.response?.data?.message || 'Failed to update privileges');
-        }
+            toast.error(err.response?.data?.message || 'Failed to save privileges.');
+        },
     });
 
     const revokeMutation = useMutation({
         mutationFn: privilegesApi.revoke,
         onSuccess: () => {
-            toast.success('Privileges revoked');
+            toast.success('All privileges revoked.');
             queryClient.invalidateQueries({ queryKey: ['privilegedUsers'] });
         },
         onError: (err: any) => {
-            toast.error(err.response?.data?.message || 'Failed to revoke privileges');
-        }
+            toast.error(err.response?.data?.message || 'Failed to revoke privileges.');
+        },
     });
+
+    // ── Handlers ─────────────────────────────────────────────────────────────
 
     const closeModal = () => {
         setIsModalOpen(false);
-        setSelectedUserId('');
+        setSearchQuery('');
+        setSelectedUserId(null);
+        setShowDropdown(false);
         setIsHeadHR(false);
-        setIsSuperAdmin(false);
         setSelectedPrivileges([]);
     };
 
-    const handleAssign = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedUserId) return toast.error('Select a user');
-        assignMutation.mutate({ 
-            userId: Number(selectedUserId), 
-            role: isSuperAdmin ? 'SUPER_ADMIN' : undefined,
-            isHeadHR,
-            specialPrivileges: selectedPrivileges
-        });
+    const handleUserSelect = (user: any) => {
+        setSelectedUserId(user.id);
+        setSearchQuery(user.employeeId || '');
+        setShowDropdown(false);
+    };
+
+    const clearUserSelection = () => {
+        setSelectedUserId(null);
+        setSearchQuery('');
+        setShowDropdown(false);
     };
 
     const togglePrivilege = (privilege: SpecialPrivilege) => {
-        setSelectedPrivileges(prev => 
-            prev.includes(privilege) 
+        setSelectedPrivileges(prev =>
+            prev.includes(privilege)
                 ? prev.filter(p => p !== privilege)
                 : [...prev, privilege]
         );
     };
 
+    const handleAssign = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedUserId) return toast.error('Please select an employee first.');
+        if (!isHeadHR && selectedPrivileges.length === 0) {
+            return toast.error('Select at least one privilege to assign.');
+        }
+        assignMutation.mutate({
+            userId: selectedUserId,
+            isHeadHR,
+            specialPrivileges: selectedPrivileges,
+        });
+    };
+
+    // ── Table columns ────────────────────────────────────────────────────────
+
     const columns: Column<PrivilegedUser>[] = [
         {
-            key: 'employee.name',
-            header: 'Name',
-            render: (r) => r.employee?.name || 'Unknown',
+            key: 'employee',
+            header: 'Employee',
+            render: (r) => (
+                <div className="flex flex-col">
+                    <span className="text-sm font-medium text-text-primary">
+                        {r.employee?.name || '—'}
+                    </span>
+                    <span className="text-xs text-text-secondary font-mono">
+                        {r.employee?.employeeId}
+                    </span>
+                </div>
+            ),
         },
         {
             key: 'email',
-            header: 'Email / ID',
+            header: 'Email',
             render: (r) => (
-                <div className="flex flex-col">
-                    <span className="text-sm">{r.email}</span>
-                    <span className="text-xs text-gray-500">{r.employee?.employeeId}</span>
-                </div>
+                <span className="text-sm text-text-secondary">{r.email}</span>
             ),
         },
         {
             key: 'campus',
             header: 'Campus',
-            render: (r) => r.campus?.name || '—',
+            render: (r) => (
+                <span className="text-sm text-text-secondary">{r.campus?.name || '—'}</span>
+            ),
         },
         {
-            key: 'role',
-            header: 'Details',
+            key: 'privileges',
+            header: 'Assigned Privileges',
             render: (r) => (
-                <div className="flex flex-wrap gap-1">
-                    {r.role === 'SUPER_ADMIN' && <span className="px-2 py-1 text-xs rounded-full font-medium bg-purple-100 text-purple-800">System Super Admin</span>}
-                    {r.isHeadHR && <span className="px-2 py-1 text-xs rounded-full font-medium bg-red-100 text-red-800">Head HR</span>}
+                <div className="flex flex-wrap gap-1.5">
+                    {r.isHeadHR && (
+                        <Badge variant="error">Head HR</Badge>
+                    )}
                     {r.specialPrivileges?.map(p => (
-                        <span key={p} className="px-2 py-1 text-xs rounded-full font-medium bg-blue-100 text-blue-800">
-                            {p.replace('_', ' ')}
-                        </span>
+                        <PrivilegeBadge key={p} privilege={p} />
                     ))}
-                    {!r.isHeadHR && r.role !== 'SUPER_ADMIN' && (!r.specialPrivileges || r.specialPrivileges.length === 0) && (
-                        <span className="text-gray-400 italic text-xs">Standard</span>
+                    {!r.isHeadHR && (!r.specialPrivileges || r.specialPrivileges.length === 0) && (
+                        <span className="text-xs text-text-secondary italic">Standard</span>
                     )}
                 </div>
             ),
         },
         {
             key: 'actions',
-            header: 'Actions',
-            render: (r) => {
-                if (r.id === user?.id) return <span className="text-xs text-gray-500 italic">You</span>;
-                return (
-                    <Button 
-                        variant="danger" 
-                        size="sm"
-                        onClick={() => {
-                            if (window.confirm(`Are you sure you want to revoke all special properties from ${r.employee?.name}?`)) {
-                                revokeMutation.mutate(r.id);
-                            }
-                        }}
-                    >
-                        Revoke All
-                    </Button>
-                );
-            },
+            header: '',
+            render: (r) => (
+                <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => {
+                        if (window.confirm(`Revoke all privileges from ${r.employee?.name ?? r.email}?`)) {
+                            revokeMutation.mutate(r.id);
+                        }
+                    }}
+                    disabled={revokeMutation.isPending}
+                >
+                    Revoke
+                </Button>
+            ),
         },
     ];
 
+    // ─── Render ───────────────────────────────────────────────────────────────
+
     return (
-        <div className="space-y-4">
+        <div className="space-y-5">
+            {/* Page header */}
             <Card>
                 <CardHeader
                     title="Privilege Management"
-                    subtitle="Assign elevated privileges (Additive to base roles)"
+                    subtitle="Assign elevated privileges to employees. Privileges are additive — they extend, never replace, the base role."
                     action={
-                        <Button variant="primary" onClick={() => setIsModalOpen(true)}>
+                        <Button
+                            variant="primary"
+                            onClick={() => setIsModalOpen(true)}
+                        >
+                            <FiShield className="w-4 h-4 mr-1.5" />
                             Assign Privileges
                         </Button>
                     }
                 />
             </Card>
 
+            {/* Privileged users table */}
             <DataTable
                 columns={columns}
                 data={privilegedUsers}
                 isLoading={isLoading}
                 keyExtractor={(r) => String(r.id)}
-                emptyMessage="No privileged users found in your scope."
+                emptyMessage="No privileged users found for your campus scope."
             />
 
-            <Modal isOpen={isModalOpen} onClose={closeModal} title="Assign Privileges">
-                <form onSubmit={handleAssign} className="space-y-4">
-                    <div className="space-y-1">
-                        <label className="text-sm font-medium text-gray-700">Select User</label>
-                        <select
-                            className="w-full px-3 py-2 border rounded-md"
-                            value={selectedUserId}
-                            onChange={(e) => setSelectedUserId(Number(e.target.value) || '')}
-                            required
-                        >
-                            <option value="">-- Choose a user --</option>
-                            {allUsers
-                                .map((u: any) => (
-                                    <option key={u.id} value={u.id}>
-                                        {u.employee?.name} ({u.employeeId}) - Base Role: {u.role}
-                                    </option>
-                            ))}
-                        </select>
-                    </div>
+            {/* ── Assign modal ─────────────────────────────────────────────── */}
+            <Modal
+                isOpen={isModalOpen}
+                onClose={closeModal}
+                title="Assign Privileges"
+                size="md"
+            >
+                <form onSubmit={handleAssign} className="space-y-5">
 
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">Special Additive Privileges</label>
-                        <div className="flex flex-col gap-2 border p-3 rounded-md">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" checked={isHeadHR} onChange={() => setIsHeadHR(!isHeadHR)} className="w-4 h-4" />
-                                <span className="text-sm">Head HR (isHeadHR)</span>
-                            </label>
-                            
-                            {(['DEAN', 'DIRECTOR', 'UNIVERSITY_PRESIDENT', 'VICE_PRESIDENT'] as SpecialPrivilege[]).map(privilege => (
-                                <label key={privilege} className="flex items-center gap-2 cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={selectedPrivileges.includes(privilege)} 
-                                        onChange={() => togglePrivilege(privilege)} 
-                                        className="w-4 h-4" 
-                                    />
-                                    <span className="text-sm">{privilege.replace('_', ' ')}</span>
-                                </label>
-                            ))}
+                    {/* ── Step 1: Employee search ─────────────────────────── */}
+                    <div className="space-y-1.5">
+                        <label className="block text-sm font-medium text-text-primary">
+                            Search Employee by ID or Name
+                        </label>
+                        <p className="text-xs text-text-secondary">
+                            Only employees (base role: Employee) can receive special privileges.
+                        </p>
+
+                        <div className="relative">
+                            {/* Input row */}
+                            <div className="flex items-center gap-2 border border-gray-300 rounded-md px-3 py-2 focus-within:ring-2 focus-within:ring-primary focus-within:border-primary bg-white transition">
+                                <FiSearch className="w-4 h-4 text-text-secondary shrink-0" />
+                                <input
+                                    type="text"
+                                    className="flex-1 text-sm bg-transparent outline-none placeholder-gray-400"
+                                    placeholder="Type employee ID (e.g. MAIN-26-0001) or name…"
+                                    value={searchQuery}
+                                    onChange={(e) => {
+                                        setSearchQuery(e.target.value);
+                                        setSelectedUserId(null);
+                                        setShowDropdown(true);
+                                    }}
+                                    onFocus={() => setShowDropdown(true)}
+                                    autoComplete="off"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={clearUserSelection}
+                                        className="text-gray-400 hover:text-gray-600 transition"
+                                    >
+                                        <FiX className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Dropdown results */}
+                            {showDropdown && searchQuery.trim().length >= 1 && (
+                                <div className="absolute z-10 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg max-h-52 overflow-y-auto">
+                                    {isSearching ? (
+                                        <div className="px-4 py-3 text-sm text-text-secondary">Searching…</div>
+                                    ) : searchResults.length === 0 ? (
+                                        <div className="px-4 py-3 text-sm text-text-secondary italic">
+                                            No employees found matching "{searchQuery}".
+                                        </div>
+                                    ) : (
+                                        searchResults.map((u: any) => (
+                                            <button
+                                                key={u.id}
+                                                type="button"
+                                                className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition flex items-center gap-3 border-b border-gray-100 last:border-0"
+                                                onClick={() => handleUserSelect(u)}
+                                            >
+                                                <FiUser className="w-4 h-4 text-text-secondary shrink-0" />
+                                                <div>
+                                                    <p className="text-sm font-medium text-text-primary">
+                                                        {u.employee?.name || u.email}
+                                                    </p>
+                                                    <p className="text-xs font-mono text-text-secondary">
+                                                        {u.employeeId}
+                                                        {u.employee?.department ? ` · ${u.employee.department}` : ''}
+                                                    </p>
+                                                </div>
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                            )}
                         </div>
+
+                        {/* Selected user preview */}
+                        {selectedUserId && selectedUser && (
+                            <div className="mt-2 flex items-center gap-3 rounded-md border border-primary/30 bg-primary-light px-3 py-2.5">
+                                <FiUser className="w-5 h-5 text-primary shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-primary truncate">
+                                        {(selectedUser as any).employee?.name || (selectedUser as any).email}
+                                    </p>
+                                    <p className="text-xs font-mono text-primary/70">
+                                        {(selectedUser as any).employeeId}
+                                        {(selectedUser as any).employee?.department
+                                            ? ` · ${(selectedUser as any).employee.department}`
+                                            : ''}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={clearUserSelection}
+                                    className="text-primary/60 hover:text-primary transition"
+                                >
+                                    <FiX className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
                     </div>
 
-                    {user?.role === 'SUPER_ADMIN' && (
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">System Role Override</label>
-                            <div className="border p-3 rounded-md bg-red-50">
-                                <label className="flex items-center gap-2 cursor-pointer text-red-800">
-                                    <input type="checkbox" checked={isSuperAdmin} onChange={() => setIsSuperAdmin(!isSuperAdmin)} className="w-4 h-4 border-red-300" />
-                                    <span className="text-sm font-medium">Grant SUPER_ADMIN</span>
+                    {/* ── Step 2: Privileges (only shown after user selected) ─ */}
+                    {selectedUserId && (
+                        <div className="space-y-3 pt-1 border-t border-gray-100">
+                            <p className="text-sm font-medium text-text-primary pt-2">
+                                Assign Privileges
+                            </p>
+
+                            {/* Head HR toggle — separated visually */}
+                            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
+                                <label className="flex items-start gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={isHeadHR}
+                                        onChange={() => setIsHeadHR(!isHeadHR)}
+                                        className="mt-0.5 w-4 h-4 accent-amber-600"
+                                    />
+                                    <div>
+                                        <p className="text-sm font-semibold text-amber-800">Head HR</p>
+                                        <p className="text-xs text-amber-700 mt-0.5">
+                                            Grants final clearance approval authority across all campuses.
+                                        </p>
+                                    </div>
                                 </label>
-                                <p className="text-xs text-red-600 mt-1 ml-6">Careful! This grants full root access across all campuses.</p>
+                            </div>
+
+                            {/* Special additive privileges */}
+                            <div className="space-y-2">
+                                {SPECIAL_PRIVILEGES.map(({ value, label, description }) => (
+                                    <label
+                                        key={value}
+                                        className={`flex items-start gap-3 cursor-pointer rounded-md border px-4 py-3 transition ${
+                                            selectedPrivileges.includes(value)
+                                                ? 'border-primary/40 bg-primary-light'
+                                                : 'border-gray-200 hover:border-gray-300 bg-white'
+                                        }`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedPrivileges.includes(value)}
+                                            onChange={() => togglePrivilege(value)}
+                                            className="mt-0.5 w-4 h-4 accent-primary"
+                                        />
+                                        <div>
+                                            <p className="text-sm font-medium text-text-primary">{label}</p>
+                                            <p className="text-xs text-text-secondary mt-0.5">{description}</p>
+                                        </div>
+                                    </label>
+                                ))}
                             </div>
                         </div>
                     )}
 
-                    <div className="pt-4 flex justify-end gap-2">
-                        <Button type="button" variant="ghost" onClick={closeModal}>Cancel</Button>
-                        <Button 
-                            type="submit" 
-                            variant="primary" 
-                            disabled={assignMutation.isPending || !selectedUserId}
+                    {/* ── Actions ─────────────────────────────────────────── */}
+                    <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                        <Button type="button" variant="ghost" onClick={closeModal}>
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            disabled={
+                                assignMutation.isPending ||
+                                !selectedUserId ||
+                                (!isHeadHR && selectedPrivileges.length === 0)
+                            }
                         >
-                            Save Privileges
+                            {assignMutation.isPending ? 'Saving…' : 'Save Privileges'}
                         </Button>
                     </div>
                 </form>

@@ -73,10 +73,11 @@ export const authorize = (allowedRoles: UserRole[], allowedPrivileges: string[] 
             );
         }
 
+        const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
         const hasRole = allowedRoles.includes(req.user.role);
         const hasPrivilege = allowedPrivileges.length > 0 && req.user.specialPrivileges?.some(p => allowedPrivileges.includes(p));
 
-        if (!hasRole && !hasPrivilege) {
+        if (!isSuperAdmin && !hasRole && !hasPrivilege) {
             return sendError(
                 res,
                 403,
@@ -122,7 +123,10 @@ export const requireUniversityAdmin = (req: Request, res: Response, next: NextFu
     if (!req.user) {
         return sendError(res, 401, ErrorCode.AUTHENTICATION_FAILED, 'User not authenticated', null, req);
     }
-    if (req.user.role !== UserRole.ADMIN || req.user.scope !== UserScope.UNIVERSITY) {
+    const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
+    const isUnivAdmin = req.user.role === UserRole.ADMIN && req.user.scope === UserScope.UNIVERSITY;
+
+    if (!isSuperAdmin && !isUnivAdmin) {
         return sendError(res, 403, ErrorCode.FORBIDDEN, 'University admin access required', null, req);
     }
     next();
