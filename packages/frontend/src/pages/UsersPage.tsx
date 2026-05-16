@@ -142,7 +142,7 @@ export default function UsersPage() {
             },
         ];
 
-        if (user?.role === 'ADMIN') {
+        if (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') {
             cols.push({
                 key: 'actions',
                 header: 'Actions',
@@ -169,7 +169,7 @@ export default function UsersPage() {
                     title="Workforce directory"
                     subtitle="View and manage employees across your campus"
                     action={
-                        (user?.role === 'ADMIN' || user?.role === 'HR_OFFICER') ? (
+                        (user?.role === 'ADMIN' || user?.role === 'HR_OFFICER' || user?.role === 'SUPER_ADMIN') ? (
                             <Button variant="primary" onClick={() => setIsCreateModalOpen(true)}>
                                 + Add Employee
                             </Button>

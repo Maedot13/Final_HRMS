@@ -122,7 +122,10 @@ export const requireUniversityAdmin = (req: Request, res: Response, next: NextFu
     if (!req.user) {
         return sendError(res, 401, ErrorCode.AUTHENTICATION_FAILED, 'User not authenticated', null, req);
     }
-    if (req.user.role !== UserRole.ADMIN || req.user.scope !== UserScope.UNIVERSITY) {
+    const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
+    const isUnivAdmin = req.user.role === UserRole.ADMIN && req.user.scope === UserScope.UNIVERSITY;
+
+    if (!isSuperAdmin && !isUnivAdmin) {
         return sendError(res, 403, ErrorCode.FORBIDDEN, 'University admin access required', null, req);
     }
     next();

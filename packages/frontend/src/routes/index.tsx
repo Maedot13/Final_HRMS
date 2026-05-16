@@ -177,6 +177,30 @@ const router = createBrowserRouter([
                 element: <DashboardPage />,
             }
         ]
+    },
+    // Super Admin Role Dashboard Routes
+    {
+        path: '/super',
+        element: (
+            <RequireAuth>
+                <DashboardLayout />
+            </RequireAuth>
+        ),
+        errorElement: <ErrorPage />,
+        children: [
+            {
+                path: 'users',
+                element: <UsersPage />,
+            },
+            {
+                path: 'activity-logs',
+                element: <AuditLogsPage />,
+            },
+            {
+                path: 'campuses',
+                element: <CampusesPage />,
+            }
+        ]
     }
 ]);
 

@@ -6,9 +6,7 @@
  * Or: npm run seed (if configured to run this)
  */
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../src/lib/prisma';
 
 const DEFAULT_CAMPUS = {
   code: 'MAIN',

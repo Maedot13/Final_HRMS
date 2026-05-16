@@ -46,7 +46,7 @@ router.use(authenticate);
  *       200:
  *         description: List of audit logs
  */
-router.get('/', authorize([UserRole.ADMIN, UserRole.HR_OFFICER]), auditController.getAuditLogs);
+router.get('/', authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.SUPER_ADMIN]), auditController.getAuditLogs);
 
 /**
  * @swagger
@@ -79,7 +79,7 @@ router.get('/my-logs', auditController.getMyLogs);
  *       200:
  *         description: Audit logs export
  */
-router.get('/export', authorize([UserRole.ADMIN, UserRole.HR_OFFICER]), auditController.exportAuditLogs);
+router.get('/export', authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.SUPER_ADMIN]), auditController.exportAuditLogs);
 
 /**
  * @swagger
@@ -101,6 +101,6 @@ router.get('/export', authorize([UserRole.ADMIN, UserRole.HR_OFFICER]), auditCon
  *       404:
  *         description: Log not found
  */
-router.get('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER]), auditController.getAuditLogById);
+router.get('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.SUPER_ADMIN]), auditController.getAuditLogById);
 
 export default router;
