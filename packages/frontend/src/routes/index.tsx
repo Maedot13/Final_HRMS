@@ -7,7 +7,7 @@ import UsersPage from '../pages/UsersPage';
 import EmployeeDetailPage from '../pages/EmployeeDetailPage';
 import { AuthLayout } from '../layouts/AuthLayout';
 import { DashboardLayout } from '../layouts/DashboardLayout';
-import { RequireAuth, RequireNoAuth } from './guards';
+import { RequireAuth, RequireNoAuth, RequireRole } from './guards';
 import { LoginForm } from '../features/auth/LoginForm';
 import { ChangePasswordForm } from '../features/auth/ChangePasswordForm';
 import ProfilePage from '../pages/ProfilePage';
@@ -81,19 +81,35 @@ const router = createBrowserRouter([
             },
             {
                 path: 'audit-logs',
-                element: <AuditLogsPage />,
+                element: (
+                    <RequireRole allowedRoles={[]}>
+                        <AuditLogsPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'admin/org',
-                element: <AdminOrgPage />,
+                element: (
+                    <RequireRole allowedRoles={['ADMIN']}>
+                        <AdminOrgPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'admin/clearance-bodies',
-                element: <ClearanceBodiesPage />,
+                element: (
+                    <RequireRole allowedRoles={['ADMIN']}>
+                        <ClearanceBodiesPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'admin/privileges',
-                element: <PrivilegesPage />,
+                element: (
+                    <RequireRole allowedRoles={['ADMIN']}>
+                        <PrivilegesPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'sandbox',
@@ -101,19 +117,35 @@ const router = createBrowserRouter([
             },
             {
                 path: 'campuses',
-                element: <CampusesPage />,
+                element: (
+                    <RequireRole allowedRoles={['SUPER_ADMIN']}>
+                        <CampusesPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'campuses/:id',
-                element: <CampusDetailPage />,
+                element: (
+                    <RequireRole allowedRoles={['SUPER_ADMIN']}>
+                        <CampusDetailPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'departments',
-                element: <DepartmentsPage />,
+                element: (
+                    <RequireRole allowedRoles={[]}>
+                        <DepartmentsPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'users',
-                element: <UsersPage />,
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER', 'DEPARTMENT_HEAD']}>
+                        <UsersPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'employees/:id',
@@ -158,7 +190,11 @@ const router = createBrowserRouter([
             },
             {
                 path: 'finance',
-                element: <FinancePage />,
+                element: (
+                    <RequireRole allowedRoles={['FINANCE_OFFICER']}>
+                        <FinancePage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'clearance',
@@ -182,15 +218,27 @@ const router = createBrowserRouter([
         children: [
             {
                 path: 'users',
-                element: <UsersPage />,
+                element: (
+                    <RequireRole allowedRoles={['SUPER_ADMIN']}>
+                        <UsersPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'activity-logs',
-                element: <AuditLogsPage />,
+                element: (
+                    <RequireRole allowedRoles={['SUPER_ADMIN']}>
+                        <AuditLogsPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'campuses',
-                element: <CampusesPage />,
+                element: (
+                    <RequireRole allowedRoles={['SUPER_ADMIN']}>
+                        <CampusesPage />
+                    </RequireRole>
+                ),
             }
         ]
     }

@@ -35,19 +35,19 @@ const navItems: NavItem[] = [
     {
         label: 'Dashboard',
         to: '/',
-        roles: ['SUPER_ADMIN', 'ADMIN', 'HR_OFFICER', 'DEPARTMENT_HEAD', 'FINANCE_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE'],
+        roles: ['ADMIN', 'HR_OFFICER', 'DEPARTMENT_HEAD', 'FINANCE_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE'],
         icon: <FiGrid className="w-4 h-4" />,
     },
     {
         label: 'Departments',
         to: '/departments',
-        roles: ['SUPER_ADMIN', 'ADMIN'],
+        roles: [],
         icon: <FiLayers className="w-4 h-4" />,
     },
     {
         label: 'Employees',
         to: '/users',
-        roles: ['SUPER_ADMIN', 'ADMIN', 'HR_OFFICER', 'DEPARTMENT_HEAD'],
+        roles: ['HR_OFFICER', 'DEPARTMENT_HEAD'],
         icon: <FiUsers className="w-4 h-4" />,
     },
     {
@@ -78,7 +78,7 @@ const navItems: NavItem[] = [
     {
         label: 'Recruitment',
         to: '/jobs',
-        roles: ['SUPER_ADMIN', 'ADMIN', 'HR_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE', 'DEPARTMENT_HEAD'],
+        roles: ['HR_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE', 'DEPARTMENT_HEAD'],
         icon: <FiBriefcase className="w-4 h-4" />,
     },
     {
@@ -90,31 +90,31 @@ const navItems: NavItem[] = [
     {
         label: 'Finance Reports',
         to: '/hr/finance',
-        roles: ['SUPER_ADMIN', 'FINANCE_OFFICER', 'ADMIN'],
+        roles: ['FINANCE_OFFICER'],
         icon: <FiFileText className="w-4 h-4" />,
     },
     {
         label: 'Audit Logs',
         to: '/audit-logs',
-        roles: ['SUPER_ADMIN', 'ADMIN'],
+        roles: [],
         icon: <FiFileText className="w-4 h-4" />,
     },
     {
         label: 'Org Setup',
         to: '/admin/org',
-        roles: ['SUPER_ADMIN', 'ADMIN'],
+        roles: ['ADMIN'],
         icon: <FiLayers className="w-4 h-4" />,
     },
     {
         label: 'Clearance Bodies',
         to: '/admin/clearance-bodies',
-        roles: ['SUPER_ADMIN', 'ADMIN'],
+        roles: ['ADMIN'],
         icon: <FiCheckSquare className="w-4 h-4" />,
     },
     {
         label: 'Privileges',
         to: '/admin/privileges',
-        roles: ['SUPER_ADMIN', 'ADMIN'],
+        roles: ['ADMIN'],
         icon: <FiShield className="w-4 h-4" />,
     },
     {

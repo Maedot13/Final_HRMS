@@ -11,6 +11,8 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { FormField } from '../../components/shared/FormField';
 
+import { FiEye, FiEyeOff } from 'react-icons/fi';
+
 const loginSchema = z.object({
     employeeId: z.string().min(1, 'Employee ID is required'),
     password: z.string().min(1, 'Password is required'),
@@ -46,6 +48,8 @@ export function LoginForm() {
             password: '',
         },
     });
+
+    const [showPassword, setShowPassword] = useState(false);
 
     const onSubmit = async (values: LoginFormValues) => {
         setFormError(null);
@@ -92,8 +96,18 @@ export function LoginForm() {
                 <FormField label="Password" htmlFor="password" required error={errors.password}>
                     <Input
                         id="password"
-                        type="password"
+                        type={showPassword ? 'text' : 'password'}
                         autoComplete="current-password"
+                        rightAddon={
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="focus:outline-none hover:text-primary transition-colors"
+                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                            >
+                                {showPassword ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
+                            </button>
+                        }
                         {...register('password')}
                     />
                 </FormField>

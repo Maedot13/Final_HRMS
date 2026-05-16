@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
+import type { UserRole } from '../types';
 
 interface RequireAuthProps {
     children: ReactNode;
@@ -64,3 +65,30 @@ export function RequireNoAuth({ children }: RequireNoAuthProps) {
     return <>{children}</>;
 }
 
+// ---------------------------------------------------------------------------
+// RequireRole – route-level role enforcement (second layer after Sidebar)
+// Redirects to / with ?unauthorized=1 if the current user's role is not in
+// the `allowedRoles` list.  Must be rendered inside a RequireAuth subtree.
+// ---------------------------------------------------------------------------
+interface RequireRoleProps {
+    children: ReactNode;
+    allowedRoles: UserRole[];
+}
+
+export function RequireRole({ children, allowedRoles }: RequireRoleProps) {
+    const user = useAuthStore((state) => state.user);
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const isAllowed = user ? allowedRoles.includes(user.role as UserRole) : false;
+
+    useEffect(() => {
+        if (user && !isAllowed) {
+            navigate('/?unauthorized=1', { replace: true, state: { from: location } });
+        }
+    }, [user, isAllowed, navigate, location]);
+
+    if (!user || !isAllowed) return null;
+
+    return <>{children}</>;
+}
