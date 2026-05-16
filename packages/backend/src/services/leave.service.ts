@@ -502,6 +502,19 @@ export const finalDecision = async (
                 },
             });
 
+            if (([LeaveType.UNPAID, LeaveType.SABBATICAL, LeaveType.RESEARCH] as LeaveType[]).includes(request.leaveType)) {
+                await tx.payrollTransfer.create({
+                    data: {
+                        employeeId: request.employeeId,
+                        leaveId: requestId,
+                        reason: `${request.leaveType} Leave Approved`,
+                        effectiveDate: request.startDate,
+                        status: 'PENDING',
+                        createdBy: actorUserId
+                    }
+                });
+            }
+
             await tx.leaveApproval.create({
                 data: {
                     leaveId: requestId,

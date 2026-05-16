@@ -1,6 +1,7 @@
 
 import { endOfMonth, differenceInDays, isSameMonth } from 'date-fns';
 import { prisma } from '../lib/prisma';
+import { LeaveType } from '@prisma/client';
 import { PAYROLL_CONSTANTS } from '../config/constants';
 import { logger } from '../utils/logger';
 
@@ -37,7 +38,19 @@ export const getPayrollData = async (params: PayrollDataParams) => {
             ...campusFilter,
             user: { isActive: true }
         },
-        include: { user: true }
+        include: { 
+            user: true,
+            payrollTransfers: {
+                where: {
+                    leaveId: { not: null },
+                    leave: {
+                        startDate: { lte: endPeriod },
+                        endDate: { gte: startPeriod }
+                    }
+                },
+                include: { leave: true }
+            }
+        }
     });
 
     // Step 2: Get Exited Employees (Clearance approved in this month)
@@ -53,7 +66,8 @@ export const getPayrollData = async (params: PayrollDataParams) => {
                         gte: startPeriod,
                         lte: endPeriod
                     },
-                    status: { not: 'CANCELLED' } // Assuming created ones are valid
+                    status: { not: 'CANCELLED' }, // Assuming created ones are valid
+                    leaveId: null // We only want clearance-related exits here
                 }
             },
             user: { isActive: false } // Only those who are now inactive
@@ -62,7 +76,8 @@ export const getPayrollData = async (params: PayrollDataParams) => {
             user: true,
             payrollTransfers: {
                 where: {
-                    effectiveDate: { gte: startPeriod, lte: endPeriod }
+                    effectiveDate: { gte: startPeriod, lte: endPeriod },
+                    leaveId: null
                 },
                 take: 1
             }
@@ -98,6 +113,24 @@ export const getPayrollData = async (params: PayrollDataParams) => {
             }
         }
 
+        // Case C: Leave Deduction
+        let leaveNotes = '';
+        if (emp.user.isActive && emp.payrollTransfers && emp.payrollTransfers.length > 0) {
+            for (const pt of emp.payrollTransfers) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const leave = (pt as any).leave;
+                if (leave && ([LeaveType.UNPAID, LeaveType.SABBATICAL, LeaveType.RESEARCH] as LeaveType[]).includes(leave.leaveType)) {
+                    const overlapStart = leave.startDate > startPeriod ? leave.startDate : startPeriod;
+                    const overlapEnd = leave.endDate < endPeriod ? leave.endDate : endPeriod;
+                    if (overlapStart <= overlapEnd) {
+                        const leaveDays = differenceInDays(overlapEnd, overlapStart) + 1;
+                        payableDays -= leaveDays;
+                        leaveNotes += `Deducted ${leaveDays} days for ${leave.leaveType} leave. `;
+                    }
+                }
+            }
+        }
+
         // Cap payable days just in case
         if (payableDays < 0) payableDays = 0;
         if (payableDays > daysInMonth) payableDays = daysInMonth;
@@ -109,6 +142,17 @@ export const getPayrollData = async (params: PayrollDataParams) => {
             payableDays = PAYROLL_CONSTANTS.STANDARD_MONTH_DAYS; // Standardize full month to 30
         }
 
+        let finalNotes = '';
+        if (!emp.user.isActive) {
+            finalNotes = 'Partial Payment - Exited this month';
+        } else if (payableDays < 30 && payableDays !== 30 && isSameMonth(emp.hireDate, startPeriod) && emp.hireDate.getFullYear() === year) {
+            finalNotes = 'Partial Payment - New Hire';
+        }
+
+        if (leaveNotes) {
+            finalNotes = finalNotes ? `${finalNotes} | ${leaveNotes.trim()}` : leaveNotes.trim();
+        }
+
         return {
             employeeId: emp.employeeId,
             fullName: emp.name,
@@ -117,7 +161,7 @@ export const getPayrollData = async (params: PayrollDataParams) => {
             salaryType: emp.salaryType,
             payableDays: payableDays,
             status: emp.user.isActive ? 'ACTIVE' : 'EXITED',
-            notes: !emp.user.isActive ? 'Partial Payment - Exited this month' : (payableDays < 30 && payableDays !== 30 ? 'Partial Payment - New Hire' : '')
+            notes: finalNotes || ''
         };
     });
 
@@ -145,4 +189,100 @@ export const triggerClearancePayrollTransfer = async (clearanceId: number, emplo
         logger.error(`[Payroll Service] Failed to initiate payroll transfer for clearance ${clearanceId}`, error);
         throw error;
     }
+};
+
+/**
+ * Finance Officer: get all leave-based payroll notifications (RESEARCH, UNPAID, SABBATICAL).
+ * Returns full information: employee details, leave type, dates, days, salary impact.
+ */
+export const getLeavePayrollTransfers = async (campusId?: number) => {
+    const records = await prisma.payrollTransfer.findMany({
+        where: {
+            leaveId: { not: null },
+            ...(campusId != null ? { employee: { campusId } } : {})
+        },
+        include: {
+            employee: {
+                select: {
+                    employeeId: true,
+                    name: true,
+                    deptLegacy: true,
+                    position: true,
+                    grossSalary: true,
+                    salaryType: true,
+                    campusId: true,
+                    campus: { select: { name: true } }
+                }
+            },
+            leave: {
+                select: {
+                    id: true,
+                    leaveType: true,
+                    startDate: true,
+                    endDate: true,
+                    days: true,
+                    reason: true,
+                    status: true,
+                    approverComment: true,
+                    resolvedAt: true,
+                }
+            }
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+
+    return records.map(r => {
+        const leave = (r as any).leave;
+        const emp = r.employee;
+        const dailyRate = emp.grossSalary / PAYROLL_CONSTANTS.STANDARD_MONTH_DAYS;
+        const affectedDays = leave?.days ?? 0;
+        const salaryImpact = leave?.leaveType === 'UNPAID' ? -(dailyRate * affectedDays) : 0;
+
+        return {
+            id: r.id,
+            transferId: r.id,
+            status: r.status,
+            effectiveDate: r.effectiveDate,
+            createdAt: r.createdAt,
+            reason: r.reason,
+            employee: {
+                employeeId: emp.employeeId,
+                name: emp.name,
+                department: emp.deptLegacy,
+                position: emp.position,
+                grossSalary: emp.grossSalary,
+                salaryType: emp.salaryType,
+                campus: emp.campus,
+            },
+            leave: leave ? {
+                id: leave.id,
+                leaveType: leave.leaveType,
+                startDate: leave.startDate,
+                endDate: leave.endDate,
+                days: leave.days,
+                reason: leave.reason,
+                approverComment: leave.approverComment,
+                resolvedAt: leave.resolvedAt,
+            } : null,
+            salaryInfo: leave?.leaveType === 'UNPAID'
+                    ? `Unpaid leave: ${affectedDays} days deducted at ${dailyRate.toFixed(2)} ETB/day`
+                    : leave?.leaveType === 'SABBATICAL'
+                        ? 'Sabbatical leave: salary paid as per institutional policy'
+                        : leave?.leaveType === 'RESEARCH'
+                            ? 'Research leave: salary paid as per institutional policy'
+                            : 'No salary impact',
+            salaryImpact: {
+                dailyRate: parseFloat(dailyRate.toFixed(2)),
+                affectedDays,
+                salaryDeduction: parseFloat(salaryImpact.toFixed(2)),
+                note: leave?.leaveType === 'UNPAID'
+                    ? `Unpaid leave: ${affectedDays} days deducted at ${dailyRate.toFixed(2)} ETB/day`
+                    : leave?.leaveType === 'SABBATICAL'
+                        ? 'Sabbatical leave: salary paid as per institutional policy'
+                        : leave?.leaveType === 'RESEARCH'
+                            ? 'Research leave: salary paid as per institutional policy'
+                            : 'No salary impact'
+            }
+        };
+    });
 };

@@ -160,7 +160,7 @@ export default function FinancePage({ defaultTab = 'reports' }: { defaultTab?: '
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold text-text-primary">{transfer.employee.name} <span className="ml-1 text-[11px] font-normal text-text-secondary">({transfer.employee.employeeId})</span></p>
-                                            <p className="text-xs text-text-secondary">{transfer.reason} • {format(new Date(transfer.createdAt), 'dd MMM yyyy')}</p>
+                                            <p className="text-xs text-text-secondary">{transfer.reason} • {format(new Date(transfer.createdAt || transfer.effectiveDate || Date.now()), 'dd MMM yyyy')}</p>
                                             {transfer.salaryInfo && <p className="mt-0.5 text-[10px] font-medium text-primary bg-primary/5 rounded px-1.5 py-0.5 inline-block">{transfer.salaryInfo}</p>}
                                         </div>
                                     </div>

@@ -59,8 +59,7 @@ model User {
   refreshTokens      RefreshToken[]
   campus             Campus?             @relation(fields: [campusId], references: [id], onDelete: Restrict)
   clearanceApprovals ClearanceApproval[]
-  payrollReports     PayrollReport[]     @relation("CreatedByRelation")
-  payrollReportsSent PayrollReport[]     @relation("SentByRelation")
+  payrollReports     PayrollReport[]
 
   @@index([campusId])
   @@index([clearanceUnitId])
@@ -271,13 +270,15 @@ model LeaveApproval {
 model PayrollTransfer {
   id            Int              @id @default(autoincrement())
   employeeId    Int
-  clearanceId   Int              @unique
+  clearanceId   Int?              @unique
+  leaveId       Int?              @unique
   reason        String
   effectiveDate DateTime
   status        String
   createdBy     Int
   createdAt     DateTime         @default(now())
-  clearance     ClearanceRequest @relation(fields: [clearanceId], references: [id])
+  clearance     ClearanceRequest? @relation(fields: [clearanceId], references: [id])
+  leave         LeaveRequest?     @relation(fields: [leaveId], references: [id])
   employee      Employee         @relation(fields: [employeeId], references: [id])
 }
 
