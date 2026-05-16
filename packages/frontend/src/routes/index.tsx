@@ -127,14 +127,6 @@ const router = createBrowserRouter([
                 path: 'contacts',
                 element: <ContactDirectoryPage />,
             },
-            {
-                path: 'finance/payroll',
-                element: <FinancePage defaultTab="reports" />,
-            },
-            {
-                path: 'finance/leave-data',
-                element: <FinancePage defaultTab="transfers" />,
-            },
         ],
     },
     // Head HR Role Dashboard Routes

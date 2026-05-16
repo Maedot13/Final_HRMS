@@ -135,10 +135,6 @@ export const downloadReport = async (req: Request, res: Response) => {
             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Access denied to this report', null, req);
         }
 
-        if (!report.reportUrl) {
-            return sendError(res, 404, ErrorCode.NOT_FOUND, 'Report URL missing', null, req);
-        }
-
         const filePath = payrollReportService.getAbsoluteFilePath(report.reportUrl);
 
         if (!fs.existsSync(filePath)) {
@@ -146,18 +142,6 @@ export const downloadReport = async (req: Request, res: Response) => {
         }
 
         res.download(filePath, `Payroll_Report_${report.month}_${report.year}.xlsx`);
-    } catch (error: any) {
-        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
-    }
-};
-
-export const listTransfers = async (req: Request, res: Response) => {
-    try {
-        const campusCtx = getCampusScope(req);
-        const campusId = getCampusIdFilter(campusCtx);
-        
-        const transfers = await payrollService.listTransfers(campusId || undefined);
-        sendSuccess(res, transfers);
     } catch (error: any) {
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }

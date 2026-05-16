@@ -87,14 +87,8 @@ const navItems: NavItem[] = [
         icon: <FiFileText className="w-4 h-4" />,
     },
     {
-        label: 'Payroll Reports',
-        to: '/finance/payroll',
-        roles: ['FINANCE_OFFICER', 'ADMIN'],
-        icon: <FiFileText className="w-4 h-4" />,
-    },
-    {
-        label: 'Leave Salary Data',
-        to: '/finance/leave-data',
+        label: 'Finance Reports',
+        to: '/hr/finance',
         roles: ['FINANCE_OFFICER', 'ADMIN'],
         icon: <FiFileText className="w-4 h-4" />,
     },

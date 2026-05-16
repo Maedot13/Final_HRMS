@@ -512,27 +512,6 @@ export const finalDecision = async (
                 },
             });
 
-            // Notify Finance if it's Sabbatical, Research or Unpaid
-            if (([LeaveType.SABBATICAL, LeaveType.RESEARCH, LeaveType.UNPAID] as LeaveType[]).includes(request.leaveType)) {
-                // Get salary info for the notification
-                const employee = await tx.employee.findUnique({ 
-                    where: { id: request.employeeId },
-                    select: { grossSalary: true, salaryType: true }
-                });
-
-                await (tx as any).payrollTransfer.create({
-                    data: {
-                        employeeId: request.employeeId,
-                        leaveId: requestId,
-                        reason: `${request.leaveType} Leave Approved`,
-                        salaryInfo: employee ? `Gross: ${employee.grossSalary} (${employee.salaryType})` : null,
-                        effectiveDate: now,
-                        status: 'PENDING',
-                        createdBy: actorUserId
-                    }
-                });
-            }
-
             logger.info('Leave request finally approved', { requestId, stage, actorUserId });
             return updated;
         },
