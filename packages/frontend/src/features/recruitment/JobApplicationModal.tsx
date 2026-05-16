@@ -4,6 +4,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { recruitmentApi } from '../../api/recruitment';
 import { toast } from 'react-toastify';
+import { useAuthStore } from '../../store/useAuthStore';
 
 interface JobApplicationModalProps {
     isOpen: boolean;
@@ -14,7 +15,8 @@ interface JobApplicationModalProps {
 
 export function JobApplicationModal({ isOpen, onClose, jobId, jobTitle }: JobApplicationModalProps) {
     const queryClient = useQueryClient();
-    const [coverLetter, setCoverLetter] = useState('');
+    const user = useAuthStore(state => state.user);
+    const [reasonForApplying, setReasonForApplying] = useState('');
     const [cvFile, setCvFile] = useState<File | null>(null);
 
     const mutation = useMutation({
@@ -23,7 +25,7 @@ export function JobApplicationModal({ isOpen, onClose, jobId, jobTitle }: JobApp
             queryClient.invalidateQueries({ queryKey: ['recruitmentJobs'] });
             toast.success('Job application submitted successfully');
             onClose();
-            setCoverLetter('');
+            setReasonForApplying('');
             setCvFile(null);
         },
         onError: (error: any) => {
@@ -38,7 +40,7 @@ export function JobApplicationModal({ isOpen, onClose, jobId, jobTitle }: JobApp
 
         const formData = new FormData();
         formData.append('jobPostingId', jobId.toString());
-        formData.append('coverLetter', coverLetter);
+        formData.append('reasonForApplying', reasonForApplying);
         if (cvFile) {
             formData.append('cv', cvFile);
         }
@@ -49,15 +51,24 @@ export function JobApplicationModal({ isOpen, onClose, jobId, jobTitle }: JobApp
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={`Apply for ${jobTitle}`}>
             <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+                
+                <div className="bg-gray-50 border rounded-md p-3 mb-4 text-sm">
+                    <h4 className="font-semibold text-gray-700 mb-2">Auto-Filled Employee Information</h4>
+                    <div className="grid grid-cols-2 gap-2 text-gray-600">
+                        <div><span className="font-medium">Name:</span> {user?.name || 'N/A'}</div>
+                        <div><span className="font-medium">ID:</span> {user?.employeeId || 'N/A'}</div>
+                    </div>
+                </div>
+
                 <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">Cover Letter</label>
+                    <label className="text-sm font-medium text-gray-700">Reason for Applying</label>
                     <textarea
                         className="w-full rounded-md border border-gray-300 p-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary"
                         rows={4}
-                        value={coverLetter}
-                        onChange={(e) => setCoverLetter(e.target.value)}
+                        value={reasonForApplying}
+                        onChange={(e) => setReasonForApplying(e.target.value)}
                         required
-                        placeholder="Explain why you are a good fit for this position..."
+                        placeholder="Why are you applying for this position?"
                     />
                 </div>
                 <div className="space-y-1">

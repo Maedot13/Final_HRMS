@@ -269,19 +269,16 @@ model LeaveApproval {
 }
 
 model PayrollTransfer {
-  id            Int               @id @default(autoincrement())
+  id            Int              @id @default(autoincrement())
   employeeId    Int
-  clearanceId   Int?              @unique
-  leaveId       Int?              @unique
+  clearanceId   Int              @unique
   reason        String
   effectiveDate DateTime
   status        String
   createdBy     Int
-  salaryInfo    String?
-  createdAt     DateTime          @default(now())
-  clearance     ClearanceRequest? @relation(fields: [clearanceId], references: [id])
-  leave         LeaveRequest?     @relation(fields: [leaveId], references: [id])
-  employee      Employee          @relation(fields: [employeeId], references: [id])
+  createdAt     DateTime         @default(now())
+  clearance     ClearanceRequest @relation(fields: [clearanceId], references: [id])
+  employee      Employee         @relation(fields: [employeeId], references: [id])
 }
 
 model JobPosting {
@@ -289,33 +286,39 @@ model JobPosting {
   title        String
   description  String
   requirements String
-  deptLegacy   String           @map("department")
+  departmentId Int
   position     String
   deadline     DateTime
   status       JobStatus        @default(OPEN)
+  vacancies    Int              @default(1)
   createdBy    Int
   createdAt    DateTime         @default(now())
   campusId     Int?
   applications JobApplication[]
   campus       Campus?          @relation(fields: [campusId], references: [id], onDelete: Restrict)
   creator      User             @relation("JobCreator", fields: [createdBy], references: [id])
+  department   Department       @relation(fields: [departmentId], references: [id])
 
   @@index([campusId])
+  @@index([departmentId])
 }
 
 model JobApplication {
-  id            Int               @id @default(autoincrement())
-  jobPostingId  Int
-  employeeId    Int
-  coverLetter   String
-  cvUrl         String
-  status        ApplicationStatus @default(SUBMITTED)
-  reviewedBy    Int?
-  reviewComment String?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  employee      Employee          @relation(fields: [employeeId], references: [id])
-  jobPosting    JobPosting        @relation(fields: [jobPostingId], references: [id])
+  id                Int               @id @default(autoincrement())
+  jobPostingId      Int
+  employeeId        Int
+  reasonForApplying String
+  cvUrl             String
+  status            ApplicationStatus @default(PENDING)
+  reviewedBy        Int?
+  reviewComment     String?
+  examScore         Float?
+  interviewScore    Float?
+  recommendation    String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  employee          Employee          @relation(fields: [employeeId], references: [id])
+  jobPosting        JobPosting        @relation(fields: [jobPostingId], references: [id])
 
   @@unique([jobPostingId, employeeId])
 }
@@ -374,15 +377,16 @@ model AuditLog {
 }
 
 model Department {
-  id             Int        @id @default(autoincrement())
+  id             Int          @id @default(autoincrement())
   campusId       Int
   name           String
-  headEmployeeId Int?       @unique
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  campus         Campus     @relation(fields: [campusId], references: [id])
-  head           Employee?  @relation("DeptHead", fields: [headEmployeeId], references: [id])
+  headEmployeeId Int?         @unique
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  campus         Campus       @relation(fields: [campusId], references: [id])
+  head           Employee?    @relation("DeptHead", fields: [headEmployeeId], references: [id])
   employees      Employee[]
+  jobPostings    JobPosting[]
 
   @@unique([campusId, name])
   @@index([campusId])
@@ -489,10 +493,13 @@ enum JobStatus {
 }
 
 enum ApplicationStatus {
-  SUBMITTED
-  UNDER_REVIEW
-  SHORTLISTED
+  PENDING
+  ACCEPTED
   REJECTED
+  EVALUATED
+  RECOMMENDED
+  NOT_SELECTED
+  HIRED
 }
 
 enum SalaryType {
@@ -525,19 +532,15 @@ model PayrollReport {
   id          Int      @id @default(autoincrement())
   month       Int
   year        Int
-  filename    String?
-  filePath    String?
-  reportUrl   String?
+  reportUrl   String
   status      String   @default("SENT")
-  campusId    Int?
-  createdById Int?
-  sentById    Int?
+  campusId    Int
+  createdById Int
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  campus    Campus? @relation(fields: [campusId], references: [id])
-  createdBy User?   @relation(fields: [createdById], references: [id], name: "CreatedByRelation")
-  sentBy    User?   @relation(fields: [sentById], references: [id], name: "SentByRelation")
+  campus    Campus @relation(fields: [campusId], references: [id])
+  createdBy User   @relation(fields: [createdById], references: [id])
 
   @@index([campusId])
   @@index([month, year])

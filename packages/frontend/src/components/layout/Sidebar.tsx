@@ -41,7 +41,7 @@ const navItems: NavItem[] = [
     {
         label: 'Departments',
         to: '/departments',
-        roles: ['ADMIN', 'HR_OFFICER'],
+        roles: ['ADMIN'],
         icon: <FiLayers className="w-4 h-4" />,
     },
     {
@@ -76,9 +76,9 @@ const navItems: NavItem[] = [
         icon: <FiCheckSquare className="w-4 h-4" />,
     },
     {
-        label: 'Jobs',
+        label: 'Recruitment',
         to: '/jobs',
-        roles: ['HR_OFFICER', 'RECRUITMENT_COMMITTEE'],
+        roles: ['ADMIN', 'HR_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE', 'DEPARTMENT_HEAD'],
         icon: <FiBriefcase className="w-4 h-4" />,
     },
     {
@@ -88,21 +88,15 @@ const navItems: NavItem[] = [
         icon: <FiFileText className="w-4 h-4" />,
     },
     {
-        label: 'Payroll Reports',
-        to: '/finance/payroll',
-        roles: ['FINANCE_OFFICER'],
-        icon: <FiFileText className="w-4 h-4" />,
-    },
-    {
-        label: 'Leave Salary Data',
-        to: '/finance/leave-data',
-        roles: ['FINANCE_OFFICER'],
+        label: 'Finance Reports',
+        to: '/hr/finance',
+        roles: ['FINANCE_OFFICER', 'ADMIN'],
         icon: <FiFileText className="w-4 h-4" />,
     },
     {
         label: 'Audit Logs',
         to: '/audit-logs',
-        roles: ['ADMIN', 'HR_OFFICER'],
+        roles: ['ADMIN'],
         icon: <FiFileText className="w-4 h-4" />,
     },
     {
@@ -171,7 +165,7 @@ export function Sidebar() {
                                 }
                             >
                                 {item.icon}
-                                {item.label}
+                                {item.to === '/jobs' && user?.role === 'EMPLOYEE' ? 'Internal Careers' : item.label}
                             </NavLink>
                         </li>
                     ))}
