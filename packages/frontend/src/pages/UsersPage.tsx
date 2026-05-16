@@ -1,21 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { usersApi } from '../api/users';
+import { departmentApi } from '../api/departments';
 import type { UserListItem } from '../types';
-import { Card, CardHeader } from '../components/ui/Card';
 import { DataTable, type Column } from '../components/shared/DataTable';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
-import {
-    ComplexFilterBar,
-    type FilterState,
-} from '../components/shared/ComplexFilterBar';
+import { ComplexFilterBar, type FilterState } from '../components/shared/ComplexFilterBar';
 import { useAuthStore } from '../store/useAuthStore';
 import { RoleManagerModal } from '../features/employee/RoleManagerModal';
 import { CreateEmployeeModal } from '../features/employee/CreateEmployeeModal';
-import { departmentApi } from '../api/departments';
-import { useQuery } from '@tanstack/react-query';
+import { FiUsers, FiUserPlus, FiSearch } from 'react-icons/fi';
 
 const defaultFilters: FilterState = { search: '', role: '', status: '' };
 
@@ -28,6 +24,15 @@ const roleLabels: Record<string, string> = {
     EMPLOYEE: 'Employee',
 };
 
+const roleVariant: Record<string, 'info' | 'approved' | 'rejected' | 'neutral' | 'warning'> = {
+    ADMIN: 'rejected',
+    HR_OFFICER: 'info',
+    DEPARTMENT_HEAD: 'warning',
+    FINANCE_OFFICER: 'approved',
+    RECRUITMENT_COMMITTEE: 'neutral',
+    EMPLOYEE: 'neutral',
+};
+
 export default function UsersPage() {
     const [filters, setFilters] = useState<FilterState>(defaultFilters);
     const user = useAuthStore((state) => state.user);
@@ -36,11 +41,11 @@ export default function UsersPage() {
     const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-    const { data: departments } = useQuery({
+    const { data: departments = [] } = useQuery({
         queryKey: ['departments'],
         queryFn: async () => {
             const res = await departmentApi.list();
-            return Array.isArray(res.data) ? res.data : [];
+            return res.data;
         },
     });
 
@@ -59,12 +64,17 @@ export default function UsersPage() {
                 search: filters.search.trim() || undefined,
                 role: filters.role || undefined,
                 status: filters.status || undefined,
-                department: filters.department || undefined,
+                department: (filters as any).department || undefined,
             });
+            // Unwrap backend envelope
+            const raw = res.data as any;
+            if (raw && typeof raw === 'object' && !Array.isArray(raw) && raw.data) {
+                return raw;
+            }
             return res.data;
         },
         initialPageParam: undefined as string | undefined,
-        getNextPageParam: (lastPage) => lastPage?.pagination?.nextCursor,
+        getNextPageParam: (lastPage) => (lastPage as any)?.pagination?.nextCursor,
     });
 
     const updateRoleMutation = useMutation({
@@ -76,8 +86,7 @@ export default function UsersPage() {
     });
 
     const updateStatusMutation = useMutation({
-        mutationFn: (isActive: boolean) =>
-            usersApi.updateStatus(selectedUser!.id, isActive),
+        mutationFn: (isActive: boolean) => usersApi.updateStatus(selectedUser!.id, isActive),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['users'] });
             setSelectedUser(null);
@@ -86,109 +95,163 @@ export default function UsersPage() {
 
     const resetPasswordMutation = useMutation({
         mutationFn: () => usersApi.resetPassword(selectedUser!.id),
-        onSuccess: () => {
-            setSelectedUser(null);
-        },
+        onSuccess: () => setSelectedUser(null),
     });
 
     const users = useMemo(() => {
-        return data?.pages.flatMap((page) => page.data) ?? [];
+        return data?.pages.flatMap((page) => (page as any).data ?? []) ?? [];
     }, [data]);
 
-    const columns = useMemo(() => {
+    const totalCount = (data?.pages[0] as any)?.pagination?.total ?? users.length;
+
+    const canCreate = user?.role === 'ADMIN' || user?.role === 'HR_OFFICER' || user?.role === 'SUPER_ADMIN';
+    const canManage = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+
+    const columns = useMemo<Column<UserListItem>[]>(() => {
         const cols: Column<UserListItem>[] = [
             {
                 key: 'name',
-                header: 'Name',
+                header: 'Employee',
                 render: (r) =>
                     r.employee?.id ? (
                         <Link
                             to={`/employees/${r.employee.id}`}
-                            className="font-medium text-primary hover:underline"
+                            className="flex items-center gap-2.5 group"
                         >
-                            {r.employee.name}
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
+                                <span className="text-xs font-bold text-primary">
+                                    {(r.employee.name || '?')[0].toUpperCase()}
+                                </span>
+                            </div>
+                            <div className="min-w-0">
+                                <p className="font-medium text-sm text-primary truncate group-hover:underline">
+                                    {r.employee.name}
+                                </p>
+                                <p className="text-xs text-gray-400 truncate">
+                                    {r.employee.position || 'No position'}
+                                </p>
+                            </div>
                         </Link>
                     ) : (
-                        r.employee?.name ?? '—'
+                        <span className="text-gray-500 italic text-sm">{r.email}</span>
                     ),
             },
-            { key: 'employeeId', header: 'Employee ID', render: (r) => r.employeeId },
-            { key: 'email', header: 'Email', render: (r) => r.email ?? '—' },
+            {
+                key: 'employeeId',
+                header: 'Employee ID',
+                render: (r) => <span className="font-mono text-xs text-gray-600">{r.employeeId}</span>,
+            },
+            { key: 'email', header: 'Email', render: (r) => <span className="text-sm text-gray-600">{r.email ?? '—'}</span> },
             {
                 key: 'department',
                 header: 'Department',
                 render: (r) => {
                     const dept = r.employee?.department;
                     const deptName = typeof dept === 'object' && dept !== null ? (dept as any).name : dept;
-                    const legacy = (r.employee as { deptLegacy?: string })?.deptLegacy;
-                    return deptName || legacy || '—';
+                    const legacy = (r.employee as any)?.deptLegacy;
+                    return <span className="text-sm">{deptName || legacy || <span className="italic text-amber-500 text-xs">Not assigned</span>}</span>;
                 },
             },
             {
                 key: 'role',
                 header: 'Role',
-                render: (r) => (
-                    <Badge variant="info">{roleLabels[r.role] ?? r.role}</Badge>
-                ),
+                render: (r) => <Badge variant={roleVariant[r.role] ?? 'neutral'}>{roleLabels[r.role] ?? r.role}</Badge>,
             },
             {
                 key: 'status',
                 header: 'Status',
-                render: (r) => (
-                    <Badge variant={r.isActive ? 'approved' : 'rejected'}>
-                        {r.isActive ? 'Active' : 'Inactive'}
-                    </Badge>
-                ),
+                render: (r) => <Badge variant={r.isActive ? 'approved' : 'rejected'}>{r.isActive ? 'Active' : 'Inactive'}</Badge>,
             },
         ];
 
-        if (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') {
-            cols.push({
-                key: 'actions',
-                header: 'Actions',
-                render: (r) => (
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setSelectedUser(r)}
-                        disabled={String(r.id) === String(user.id)}
-                    >
-                        Manage
-                    </Button>
-                ),
-            });
-        }
+        cols.push({
+            key: 'actions',
+            header: 'Actions',
+            render: (r) => (
+                <div className="flex gap-1.5">
+                    {r.employee?.id && (
+                        <Link to={`/employees/${r.employee.id}`}>
+                            <Button variant="secondary" size="sm" id={`view-emp-${r.id}`}>
+                                View
+                            </Button>
+                        </Link>
+                    )}
+                    {canManage && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            id={`manage-role-${r.id}`}
+                            onClick={() => setSelectedUser(r)}
+                            disabled={String(r.id) === String(user?.id)}
+                        >
+                            Manage
+                        </Button>
+                    )}
+                </div>
+            ),
+        });
 
         return cols;
-    }, [user]);
+    }, [canManage, user?.id]);
 
     return (
-        <div className="space-y-4">
-            <Card>
-                <CardHeader
-                    title="Workforce directory"
-                    subtitle="View and manage employees across your campus"
-                    action={
-                        (user?.role === 'ADMIN' || user?.role === 'HR_OFFICER' || user?.role === 'SUPER_ADMIN') ? (
-                            <Button variant="primary" onClick={() => setIsCreateModalOpen(true)}>
-                                + Add Employee
-                            </Button>
-                        ) : undefined
-                    }
-                />
-            </Card>
-            <div className="rounded-card border border-[#E5E7EB] bg-white p-4 shadow-card">
+        <div className="space-y-5">
+
+            {/* ── Page header ───────────────────────────────────────────────── */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                        <FiUsers className="text-primary" size={22} /> Employees
+                    </h1>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                        {isLoading ? 'Loading…' : `${totalCount} employee${totalCount !== 1 ? 's' : ''} in your campus`}
+                    </p>
+                </div>
+                {canCreate && (
+                    <Button
+                        id="add-employee-btn"
+                        variant="primary"
+                        onClick={() => setIsCreateModalOpen(true)}
+                    >
+                        <FiUserPlus size={15} className="mr-1.5" />
+                        Add Employee
+                    </Button>
+                )}
+            </div>
+
+            {/* ── Filter bar ────────────────────────────────────────────────── */}
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm p-4">
                 <ComplexFilterBar filters={filters} onFiltersChange={setFilters} departments={departments} />
             </div>
-            <DataTable
-                columns={columns}
-                data={users}
-                isLoading={isLoading}
-                keyExtractor={(r) => String(r.id)}
-                emptyMessage="No employees found. Adjust your filters or add users to get started."
-            />
+
+            {/* ── Empty state ───────────────────────────────────────────────── */}
+            {!isLoading && users.length === 0 && (
+                <div className="rounded-2xl border border-gray-100 bg-white shadow-sm py-16 flex flex-col items-center gap-3 text-gray-400">
+                    <FiSearch size={36} className="opacity-30" />
+                    <p className="text-sm font-medium">No employees found</p>
+                    <p className="text-xs">Try adjusting your search or filters, or add a new employee.</p>
+                    {canCreate && (
+                        <Button variant="primary" size="sm" onClick={() => setIsCreateModalOpen(true)} className="mt-2">
+                            <FiUserPlus size={13} className="mr-1" /> Add Employee
+                        </Button>
+                    )}
+                </div>
+            )}
+
+            {/* ── Table ─────────────────────────────────────────────────────── */}
+            {(isLoading || users.length > 0) && (
+                <DataTable
+                    columns={columns}
+                    data={users}
+                    isLoading={isLoading}
+                    keyExtractor={(r) => String(r.id)}
+                    emptyMessage="No employees found."
+                />
+            )}
+
+            {/* ── Load more ─────────────────────────────────────────────────── */}
             {hasNextPage && (
-                <div className="flex justify-center mt-4 pt-4 border-t border-gray-200">
+                <div className="flex justify-center pt-2">
                     <Button
                         variant="secondary"
                         onClick={() => fetchNextPage()}
@@ -199,6 +262,7 @@ export default function UsersPage() {
                 </div>
             )}
 
+            {/* ── Modals ────────────────────────────────────────────────────── */}
             {selectedUser && (
                 <RoleManagerModal
                     isOpen={!!selectedUser}
@@ -207,9 +271,7 @@ export default function UsersPage() {
                     currentRole={selectedUser.role}
                     isActive={selectedUser.isActive}
                     onUpdateRole={(role) => updateRoleMutation.mutateAsync(role)}
-                    onToggleStatus={(isActive) =>
-                        updateStatusMutation.mutateAsync(isActive)
-                    }
+                    onToggleStatus={(isActive) => updateStatusMutation.mutateAsync(isActive)}
                     onResetPassword={() => resetPasswordMutation.mutateAsync()}
                 />
             )}
@@ -217,7 +279,7 @@ export default function UsersPage() {
             <CreateEmployeeModal
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
-                departments={departments ?? []}
+                departments={departments}
             />
         </div>
     );

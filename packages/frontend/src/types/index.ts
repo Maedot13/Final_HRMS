@@ -148,7 +148,7 @@ export interface ContactInfo {
 /** Payload for PATCH /employees/:id */
 export interface EmployeeUpdatePayload {
     name?: string;
-    departmentId?: number;
+    departmentId?: number | null;
     position?: string;
     hireDate?: string;
     grossSalary?: number;
