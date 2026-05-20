@@ -33,9 +33,9 @@ interface Props {
 }
 
 const STAGE_ACTOR: Record<string, string> = {
-    HR_OFFICER: 'HR Officer (FINAL)',
-    DEAN: 'College Dean (FINAL)',
-    VICE_PRESIDENT: 'Academic Vice President (FINAL)',
+    HR_OFFICER: 'HR Officer (Final Approval)',
+    DEAN: 'College Dean (Review)',
+    VICE_PRESIDENT: 'Academic Vice President (Review)',
 };
 
 const STAGE_COLOR: Record<string, string> = {
@@ -122,7 +122,7 @@ export function LeaveApprovalModal({ isOpen, onClose, leave }: Props) {
         <Modal
             isOpen={isOpen}
             onClose={handleClose}
-            title="Final Leave Decision"
+            title="Leave Decision"
             size="lg"
             closeOnOverlayClick={!isPending}
         >
@@ -132,7 +132,7 @@ export function LeaveApprovalModal({ isOpen, onClose, leave }: Props) {
                 <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-semibold ${stageBannerClass}`}>
                     <FiShield className="w-3.5 h-3.5 shrink-0" />
                     You are acting as: <strong>{actorLabel}</strong>
-                    <span className="ml-auto text-[10px] font-medium opacity-70">Stage 2 of 2 — Final Decision</span>
+                    <span className="ml-auto text-[10px] font-medium opacity-70">Review & Approve</span>
                 </div>
 
                 {/* Employee info */}

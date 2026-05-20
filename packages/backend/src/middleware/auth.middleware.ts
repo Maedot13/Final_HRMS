@@ -60,7 +60,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     }
 };
 
-export const authorize = (allowedRoles: UserRole[]) => {
+export const authorize = (allowedRoles: UserRole[], allowedPrivileges: string[] = []) => {
     return (req: Request, res: Response, next: NextFunction) => {
         if (!req.user) {
             return sendError(
@@ -73,7 +73,11 @@ export const authorize = (allowedRoles: UserRole[]) => {
             );
         }
 
-        if (!allowedRoles.includes(req.user.role)) {
+        const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
+        const hasRole = allowedRoles.includes(req.user.role);
+        const hasPrivilege = allowedPrivileges.length > 0 && req.user.specialPrivileges?.some(p => allowedPrivileges.includes(p));
+
+        if (!isSuperAdmin && !hasRole && !hasPrivilege) {
             return sendError(
                 res,
                 403,
@@ -119,12 +123,11 @@ export const requireUniversityAdmin = (req: Request, res: Response, next: NextFu
     if (!req.user) {
         return sendError(res, 401, ErrorCode.AUTHENTICATION_FAILED, 'User not authenticated', null, req);
     }
-    
-    const isAllowedRole = req.user.role === UserRole.ADMIN || (req.user.role as string) === 'SUPER_ADMIN';
-    const isUniversityScope = req.user.scope === UserScope.UNIVERSITY;
+    const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
+    const isUnivAdmin = req.user.role === UserRole.ADMIN && req.user.scope === UserScope.UNIVERSITY;
 
-    if (!isAllowedRole || !isUniversityScope) {
-        return sendError(res, 403, ErrorCode.FORBIDDEN, 'University admin access required. Ensure you have the correct role and UNIVERSITY scope.', null, req);
+    if (!isSuperAdmin && !isUnivAdmin) {
+        return sendError(res, 403, ErrorCode.FORBIDDEN, 'University admin access required', null, req);
     }
     next();
 };

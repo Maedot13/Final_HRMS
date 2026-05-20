@@ -66,7 +66,7 @@ import { initiateClearanceSchema, approveCheckSchema, rejectCheckSchema } from '
  *         description: List of clearance requests
  */
 router.get('/requests',
-    authorize([UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER]),
+    authorize([UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER], ['DEAN', 'UNIVERSITY_PRESIDENT']),
     clearanceController.listClearanceRequests
 );
 
@@ -93,7 +93,7 @@ router.post('/requests', authorize([UserRole.HR_OFFICER]), validateBody(initiate
  *         description: Request not found
  */
 router.get('/requests/:id',
-    authorize([UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER, UserRole.CLEARANCE_BODY]),
+    authorize([UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER, UserRole.CLEARANCE_BODY, UserRole.ADMIN], ['DEAN', 'UNIVERSITY_PRESIDENT']),
     clearanceController.getClearance
 );
 

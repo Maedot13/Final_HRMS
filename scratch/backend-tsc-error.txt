@@ -1,0 +1,7 @@
+src/__tests__/integration/recruitment.test.ts(158,43): error TS2339: Property 'SUBMITTED' does not exist on type '{ PENDING: "PENDING"; ACCEPTED: "ACCEPTED"; REJECTED: "REJECTED"; EVALUATED: "EVALUATED"; RECOMMENDED: "RECOMMENDED"; NOT_SELECTED: "NOT_SELECTED"; HIRED: "HIRED"; }'.
+src/__tests__/integration/recruitment.test.ts(226,43): error TS2339: Property 'SHORTLISTED' does not exist on type '{ PENDING: "PENDING"; ACCEPTED: "ACCEPTED"; REJECTED: "REJECTED"; EVALUATED: "EVALUATED"; RECOMMENDED: "RECOMMENDED"; NOT_SELECTED: "NOT_SELECTED"; HIRED: "HIRED"; }'.
+src/lib/prisma.ts(3,34): error TS2307: Cannot find module '@neondatabase/serverless' or its corresponding type declarations.
+src/lib/prisma.ts(7,73): error TS2307: Cannot find module '@prisma/adapter-neon' or its corresponding type declarations.
+src/middleware/cache.middleware.ts(33,86): error TS7006: Parameter 'err' implicitly has an 'any' type.
+src/services/payrollReport.service.ts(2,23): error TS2307: Cannot find module 'xlsx' or its corresponding type declarations.
+

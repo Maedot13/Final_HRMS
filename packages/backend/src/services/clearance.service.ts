@@ -587,9 +587,11 @@ export const finalApproveClearance = async (clearanceId: number, approverId: num
             data: { revoked: true }
         });
 
+
         // Event
         await dispatchEvent(SystemEventTypes.CLEARANCE_COMPLETED, {
             clearanceId,
+            employeeId: clearance.employeeId,
             employeeUserId: clearance.employee.userId,
             employeeName: clearance.employee.name,
             approverId

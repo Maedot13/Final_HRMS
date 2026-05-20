@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
+import type { UserRole } from '../types';
 
 interface RequireAuthProps {
     children: ReactNode;
@@ -26,7 +27,13 @@ export function RequireAuth({ children }: RequireAuthProps) {
             navigate('/force-password-change', { replace: true });
         }
 
-        // Complete lock-out of standard module pages for CLEARANCE_BODY
+        // SUPER_ADMIN: redirect to dedicated super-admin dashboard.
+        // They must NOT reach campus-level pages (/, /users, /hr/*, /departments etc.)
+        if (user?.role === 'SUPER_ADMIN' && location.pathname === '/') {
+            navigate('/super/users', { replace: true });
+        }
+
+        // CLEARANCE_BODY: lock out of shared campus pages
         if (
             user?.role === 'CLEARANCE_BODY' &&
             (location.pathname === '/' || location.pathname === '/contacts' || location.pathname === '/departments')
@@ -40,6 +47,10 @@ export function RequireAuth({ children }: RequireAuthProps) {
     }
 
     if (user?.role === 'CLEARANCE_BODY' && (location.pathname === '/' || location.pathname === '/contacts' || location.pathname === '/departments')) {
+        return null;
+    }
+
+    if (user?.role === 'SUPER_ADMIN' && location.pathname === '/') {
         return null;
     }
 
@@ -64,3 +75,30 @@ export function RequireNoAuth({ children }: RequireNoAuthProps) {
     return <>{children}</>;
 }
 
+// ---------------------------------------------------------------------------
+// RequireRole – route-level role enforcement (second layer after Sidebar)
+// Redirects to / with ?unauthorized=1 if the current user's role is not in
+// the `allowedRoles` list.  Must be rendered inside a RequireAuth subtree.
+// ---------------------------------------------------------------------------
+interface RequireRoleProps {
+    children: ReactNode;
+    allowedRoles: UserRole[];
+}
+
+export function RequireRole({ children, allowedRoles }: RequireRoleProps) {
+    const user = useAuthStore((state) => state.user);
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const isAllowed = user ? allowedRoles.includes(user.role as UserRole) : false;
+
+    useEffect(() => {
+        if (user && !isAllowed) {
+            navigate('/?unauthorized=1', { replace: true, state: { from: location } });
+        }
+    }, [user, isAllowed, navigate, location]);
+
+    if (!user || !isAllowed) return null;
+
+    return <>{children}</>;
+}

@@ -29,10 +29,10 @@ const calculateDays = (start: Date, end: Date): number => {
 /** Determine which stage comes after dept-head approval based on leave type */
 const getNextStage = (leaveType: LeaveType): LeaveStage => {
     switch (leaveType) {
-        case LeaveType.RESEARCH:
-            return LeaveStage.DEAN;
         case LeaveType.SABBATICAL:
-            return LeaveStage.VICE_PRESIDENT;
+        case LeaveType.RESEARCH:
+        case LeaveType.UNPAID:
+            return LeaveStage.DEAN;
         default:
             return LeaveStage.HR_OFFICER;
     }
@@ -210,13 +210,13 @@ export const getHROfficerPending = async (campusId: number | null) => {
     });
 };
 
-/** Dean (DEAN privilege): pending RESEARCH leaves on their campus */
+/** Dean (DEAN privilege): pending SABBATICAL, RESEARCH, and UNPAID leaves on their campus */
 export const getDeanPending = async (campusId: number | null) => {
     return prisma.leaveRequest.findMany({
         where: {
             status: LeaveStatus.PENDING,
             currentStage: LeaveStage.DEAN,
-            leaveType: LeaveType.RESEARCH,
+            leaveType: { in: [LeaveType.SABBATICAL, LeaveType.RESEARCH, LeaveType.UNPAID] },
             ...(campusId ? { campusId } : {}),
         },
         include: {
@@ -226,13 +226,13 @@ export const getDeanPending = async (campusId: number | null) => {
     });
 };
 
-/** VP (VICE_PRESIDENT privilege): pending SABBATICAL leaves university-wide */
+/** Academic Vice President (VICE_PRESIDENT privilege): pending SABBATICAL/RESEARCH/UNPAID leaves university-wide */
 export const getVPPending = async () => {
     return prisma.leaveRequest.findMany({
         where: {
             status: LeaveStatus.PENDING,
             currentStage: LeaveStage.VICE_PRESIDENT,
-            leaveType: LeaveType.SABBATICAL,
+            leaveType: { in: [LeaveType.SABBATICAL, LeaveType.RESEARCH, LeaveType.UNPAID] },
         },
         include: {
             employee: { select: { name: true, deptLegacy: true, position: true } },
@@ -390,10 +390,10 @@ export const finalDecision = async (
                 throw new Error('Only HR Officers can give final approval for this leave type');
             }
             if (stage === LeaveStage.DEAN && !actorPrivileges.includes('DEAN')) {
-                throw new Error('Only users with Dean privilege can approve Research leave');
+                throw new Error('Only users with Dean privilege can review this leave');
             }
             if (stage === LeaveStage.VICE_PRESIDENT && !actorPrivileges.includes('VICE_PRESIDENT')) {
-                throw new Error('Only the Academic Vice President can approve Sabbatical leave');
+                throw new Error('Only the Academic Vice President can review this leave');
             }
 
             // ── Campus scope check (HR Officer and Dean are campus-scoped)
@@ -433,7 +433,41 @@ export const finalDecision = async (
                 return updated;
             }
 
-            // ── APPROVED: deduct balance if applicable
+            // ── MULTI-STAGE FORWARDING (Dean → Academic VP → HR Officer)
+            let nextStage: LeaveStage | null = null;
+            const complexTypes: LeaveType[] = [LeaveType.SABBATICAL, LeaveType.RESEARCH, LeaveType.UNPAID];
+
+            if (stage === LeaveStage.DEAN && complexTypes.includes(request.leaveType)) {
+                nextStage = LeaveStage.VICE_PRESIDENT;
+            } else if (stage === LeaveStage.VICE_PRESIDENT && complexTypes.includes(request.leaveType)) {
+                nextStage = LeaveStage.HR_OFFICER;
+            }
+
+            // ── FORWARD TO NEXT STAGE (if applicable)
+            if (nextStage) {
+                const updated = await tx.leaveRequest.update({
+                    where: { id: requestId },
+                    data: {
+                        currentStage: nextStage,
+                        lastDecisionAt: now,
+                    },
+                });
+
+                await tx.leaveApproval.create({
+                    data: {
+                        leaveId: requestId,
+                        stage,
+                        actorId: actorUserId,
+                        decision: 'FORWARDED',
+                        comment,
+                    },
+                });
+
+                logger.info(`Leave request forwarded to ${nextStage}`, { requestId, stage, actorUserId });
+                return updated;
+            }
+
+            // ── FINAL APPROVAL: deduct balance if applicable
             if (BALANCE_DEDUCTING_TYPES.has(request.leaveType)) {
                 const year = request.startDate.getFullYear();
                 const balanceFieldMap: Record<string, string> = {

@@ -63,30 +63,30 @@ import { updateEmployeeSchema } from '../schemas/employee.schema';
 // List employees in the campus
 router.get(
     '/',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.SUPER_ADMIN], ['DEAN', 'UNIVERSITY_PRESIDENT']),
     employeeController.listEmployees
 );
 
 // Create a new employee (delegates to auth.register internally)
 router.post(
     '/',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.SUPER_ADMIN]),
     employeeController.createEmployee
 );
 
-router.get('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER, UserRole.EMPLOYEE]), employeeController.getEmployee);
+router.get('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.FINANCE_OFFICER, UserRole.EMPLOYEE, UserRole.SUPER_ADMIN], ['DEAN', 'UNIVERSITY_PRESIDENT']), employeeController.getEmployee);
 
 // Activate / deactivate an employee account
 router.post(
     '/:id/activate',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.SUPER_ADMIN]),
     employeeController.activateEmployee
 );
 
 // Upload documents for an employee
 router.post(
     '/:id/documents',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.SUPER_ADMIN]),
     upload.single('document'),
     employeeController.uploadDocument
 );
@@ -135,6 +135,6 @@ router.post(
  *       403:
  *         description: Forbidden
  */
-router.patch('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER]), employeeController.updateEmployee);
+router.patch('/:id', authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.SUPER_ADMIN]), employeeController.updateEmployee);
 
 export default router;

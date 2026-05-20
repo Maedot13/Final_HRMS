@@ -11,9 +11,10 @@ import { getFieldErrors } from '../../utils/apiError';
 
 const schema = z.object({
     name: z.string().min(1, 'Name is required'),
-    position: z.string().min(1, 'Position is required'),
+    position: z.string().optional(),
     departmentId: z.string().optional(),
     officeLocation: z.string().optional(),
+    hireDate: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -45,9 +46,12 @@ export function HrInfoEditForm({
         resolver: zodResolver(schema),
         defaultValues: {
             name: employee.name,
-            position: employee.position,
+            position: employee.position ?? '',
             departmentId: employee.departmentId ? String(employee.departmentId) : '',
             officeLocation: employee.officeLocation ?? '',
+            hireDate: employee.hireDate
+                ? new Date(employee.hireDate).toISOString().split('T')[0]
+                : '',
         },
     });
 
@@ -57,9 +61,10 @@ export function HrInfoEditForm({
     const onFormSubmit = async (values: FormValues) => {
         await onSubmit({
             name: values.name,
-            position: values.position,
+            position: values.position || undefined,
             departmentId: values.departmentId ? parseInt(values.departmentId, 10) : undefined,
             officeLocation: values.officeLocation || undefined,
+            hireDate: values.hireDate || undefined,
         });
     };
 
@@ -87,12 +92,12 @@ export function HrInfoEditForm({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FormField
-                        label="Position"
-                        htmlFor="hr-position"
-                        error={getError('position') ? { message: getError('position')! } : undefined}
-                    >
-                        <Input id="hr-position" {...register('position')} />
-                    </FormField>
+                    label="Position"
+                    htmlFor="hr-position"
+                    error={getError('position') ? { message: getError('position')! } : undefined}
+                >
+                    <Input id="hr-position" placeholder="e.g. Lecturer, Admin Officer" {...register('position')} />
+                </FormField>
 
                     <FormField
                         label="Department"
@@ -108,7 +113,15 @@ export function HrInfoEditForm({
                     htmlFor="hr-location"
                     error={getError('officeLocation') ? { message: getError('officeLocation')! } : undefined}
                 >
-                    <Input id="hr-location" {...register('officeLocation')} />
+                    <Input id="hr-location" placeholder="e.g. Building A, Room 204" {...register('officeLocation')} />
+                </FormField>
+
+                <FormField
+                    label="Hire Date"
+                    htmlFor="hr-hiredate"
+                    error={getError('hireDate') ? { message: getError('hireDate')! } : undefined}
+                >
+                    <Input id="hr-hiredate" type="date" {...register('hireDate')} />
                 </FormField>
 
                 <div className="flex justify-end gap-2 pt-2">

@@ -7,7 +7,7 @@ import UsersPage from '../pages/UsersPage';
 import EmployeeDetailPage from '../pages/EmployeeDetailPage';
 import { AuthLayout } from '../layouts/AuthLayout';
 import { DashboardLayout } from '../layouts/DashboardLayout';
-import { RequireAuth, RequireNoAuth } from './guards';
+import { RequireAuth, RequireNoAuth, RequireRole } from './guards';
 import { LoginForm } from '../features/auth/LoginForm';
 import { ChangePasswordForm } from '../features/auth/ChangePasswordForm';
 import ProfilePage from '../pages/ProfilePage';
@@ -26,6 +26,8 @@ import HeadHRClearancePage from '../pages/HeadHRClearancePage';
 import AppraisalsPage from '../pages/AppraisalsPage';
 import EvaluationFormPage from '../pages/EvaluationFormPage';
 import EvaluationApprovalPage from '../pages/EvaluationApprovalPage';
+import PayrollPage from '../pages/PayrollPage';
+import FinancePage from '../pages/FinancePage';
 
 const router = createBrowserRouter([
     {
@@ -65,6 +67,10 @@ const router = createBrowserRouter([
                 element: <LeaveManagementPage />,
             },
             {
+                path: 'approvals/leave',
+                element: <LeaveManagementPage />,
+            },
+            {
                 path: 'clearance',
                 element: <ClearancePage />,
             },
@@ -78,19 +84,38 @@ const router = createBrowserRouter([
             },
             {
                 path: 'audit-logs',
-                element: <AuditLogsPage />,
+                // Audit logs: HR_OFFICER can review campus-level audit trail.
+                // ADMIN excluded — org admin does not need audit visibility.
+                // SUPER_ADMIN accesses audit via /super/activity-logs.
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
+                        <AuditLogsPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'admin/org',
-                element: <AdminOrgPage />,
+                element: (
+                    <RequireRole allowedRoles={['ADMIN']}>
+                        <AdminOrgPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'admin/clearance-bodies',
-                element: <ClearanceBodiesPage />,
+                element: (
+                    <RequireRole allowedRoles={['ADMIN']}>
+                        <ClearanceBodiesPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'admin/privileges',
-                element: <PrivilegesPage />,
+                element: (
+                    <RequireRole allowedRoles={['ADMIN']}>
+                        <PrivilegesPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'sandbox',
@@ -98,19 +123,40 @@ const router = createBrowserRouter([
             },
             {
                 path: 'campuses',
-                element: <CampusesPage />,
+                element: (
+                    <RequireRole allowedRoles={['SUPER_ADMIN']}>
+                        <CampusesPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'campuses/:id',
-                element: <CampusDetailPage />,
+                element: (
+                    <RequireRole allowedRoles={['SUPER_ADMIN']}>
+                        <CampusDetailPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'departments',
-                element: <DepartmentsPage />,
+                // Departments: ADMIN manages campus department structure.
+                // HR_OFFICER can read departments (for employee assignment).
+                // SUPER_ADMIN uses /super/campuses for structure.
+                element: (
+                    <RequireRole allowedRoles={['ADMIN', 'HR_OFFICER']}>
+                        <DepartmentsPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'users',
-                element: <UsersPage />,
+                // Employee directory: HR_OFFICER manages, DEPARTMENT_HEAD can view.
+                // ADMIN excluded — Admin does not manage individual employee records.
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER', 'DEPARTMENT_HEAD']}>
+                        <UsersPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'employees/:id',
@@ -150,27 +196,102 @@ const router = createBrowserRouter([
         children: [
             {
                 path: 'employees',
-                element: <UsersPage />, // Reuse UsersPage as employees listing
+                // HR Officer employee management route — gated at layout level via RequireAuth.
+                // Additional role guard here ensures only HR Officer accesses /hr/* paths.
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
+                        <UsersPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'leave/approvals',
-                element: <LeaveManagementPage />,
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
+                        <LeaveManagementPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'performance',
-                element: <EvaluationApprovalPage />, 
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
+                        <EvaluationApprovalPage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'payroll',
-                element: <DashboardPage />,
+                // Payroll generation: HR_OFFICER only. ADMIN and FINANCE_OFFICER excluded.
+                // Finance Officer views sent reports via /hr/finance (FinancePage).
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
+                        <PayrollPage />
+                    </RequireRole>
+                ),
+            },
+            {
+                path: 'finance',
+                // Finance dashboard: FINANCE_OFFICER only.
+                // HR_OFFICER generates payroll but does not access Finance's report view.
+                // ADMIN has no access to Finance domain.
+                element: (
+                    <RequireRole allowedRoles={['FINANCE_OFFICER']}>
+                        <FinancePage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'clearance',
-                element: <HeadHRClearancePage />,
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
+                        <HeadHRClearancePage />
+                    </RequireRole>
+                ),
             },
             {
                 path: 'experience',
-                element: <DashboardPage />,
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
+                        <DashboardPage />
+                    </RequireRole>
+                ),
+            }
+        ]
+    },
+    // Super Admin Role Dashboard Routes
+    {
+        path: '/super',
+        element: (
+            <RequireAuth>
+                <DashboardLayout />
+            </RequireAuth>
+        ),
+        errorElement: <ErrorPage />,
+        children: [
+            {
+                path: 'users',
+                element: (
+                    <RequireRole allowedRoles={['SUPER_ADMIN']}>
+                        <UsersPage />
+                    </RequireRole>
+                ),
+            },
+            {
+                path: 'activity-logs',
+                element: (
+                    <RequireRole allowedRoles={['SUPER_ADMIN']}>
+                        <AuditLogsPage />
+                    </RequireRole>
+                ),
+            },
+            {
+                path: 'campuses',
+                element: (
+                    <RequireRole allowedRoles={['SUPER_ADMIN']}>
+                        <CampusesPage />
+                    </RequireRole>
+                ),
             }
         ]
     }

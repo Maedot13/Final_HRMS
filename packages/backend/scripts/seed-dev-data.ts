@@ -14,10 +14,9 @@
  * - EMP_ADMIN    / password123    → Admin (campus-scoped)
  */
 
-import { PrismaClient, UserRole, SalaryType } from '@prisma/client';
+import { UserRole, SalaryType } from '@prisma/client';
 import bcrypt from 'bcrypt';
-
-const prisma = new PrismaClient();
+import { prisma } from '../src/lib/prisma';
 
 const TEST_PASSWORD = 'password123';
 

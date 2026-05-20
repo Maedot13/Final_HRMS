@@ -71,8 +71,11 @@ export const listClearanceRequests = async (req: Request, res: Response) => {
 
         const { status, limit, offset } = req.query;
 
+        const privileges = user.specialPrivileges ?? [];
+        const isPresident = privileges.includes('UNIVERSITY_PRESIDENT');
+        
         const campusCtx = getCampusScope(req);
-        const campusIdFilter = getCampusIdFilter(campusCtx);
+        const campusIdFilter = isPresident ? undefined : getCampusIdFilter(campusCtx);
 
         const result = await clearanceService.listClearanceRequests({
             status: status as string | undefined,
@@ -103,8 +106,13 @@ export const getClearance = async (req: Request, res: Response) => {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'Clearance request not found', null, req);
         }
 
+        const privileges = req.user?.specialPrivileges ?? [];
+        const isPresident = privileges.includes('UNIVERSITY_PRESIDENT');
+
         // Campus isolation: campus users can only view clearances in their campus
-        assertSameCampus(req, clearance.campusId);
+        if (!isPresident) {
+            assertSameCampus(req, clearance.campusId);
+        }
 
         sendSuccess(res, clearance);
     } catch (error: any) {

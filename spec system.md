@@ -17,9 +17,9 @@ This document specifies the complete **Human Resource Management System (HRMS)**
 - Role‑based access control (RBAC) with additive special privileges
 - Immutable system‑wide activity logging
 - Employee self‑service (ESS) portal
-- Automated leave routing and approval (Dean for Sabbatical, President for Without Pay/Research, HR for others)
+- Automated leave routing and approval (Academic VP and HR for Sabbatical/Without Pay/Research, HR for others)
 - Multi‑step clearance workflow (clearance bodies → campus HR → Head HR)
-- Payroll and penalty report generation (Excel/PDF)
+- Payroll reporting (Excel)
 - Performance appraisal management
 - Lecture schedule and timetable management
 - Experience letter generation
@@ -35,7 +35,7 @@ This document specifies the complete **Human Resource Management System (HRMS)**
 | **EMPLOYEE** | Staff member with self‑service access. |
 | **Head HR** | System‑wide HR_OFFICER with final clearance approval (`isHeadHR=true`). |
 | **Clearance Body** | University department (Library, IT, Finance, etc.) that must approve an employee’s separation. |
-| **Special Privilege** | Additive permission (Dean, Director, President, Vice President) granted on top of a base role. |
+| **Special Privilege** | Additive permission (Dean, President) granted on top of a base role. |
 | **ESS** | Employee Self‑Service portal. |
 | **Campus Scoping** | Users see only data from their assigned campus (unless system‑wide). |
 | **Activity Log** | Immutable, tamper‑evident record of every state‑changing action. |
@@ -93,7 +93,7 @@ hrms-backend/
 │   ├── controllers/       # Request handlers
 │   ├── services/          # Business logic
 │   ├── middleware/        # Auth, permission, logging
-│   ├── routes/            # API route definitions
+│   ├── routes/     DIRECTOR       # API route definitions
 │   ├── schemas/           # Zod validation schemas
 │   ├── utils/             # Helpers (JWT, password, etc.)
 │   ├── types/             # TypeScript types
@@ -137,9 +137,7 @@ enum BaseRole {
 
 enum SpecialPrivilege {
   UNIVERSITY_PRESIDENT
-  VICE_PRESIDENT
   DEAN
-  DIRECTOR
 }
 
 enum LeaveType {
@@ -362,7 +360,8 @@ model LeaveRequest {
   rejectionReason String?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
-  approvals       LeaveApproval[]
+  approvals       LeaveApprova| **VICE_PRESIDENT** | `clearance:read`, `employee:read:any` | System‑wide |
+l[]
 }
 
 model LeaveApproval {
@@ -376,7 +375,7 @@ model LeaveApproval {
 }
 ```
 
-### 3.5 Schedule Model
+### optional :3.5 Schedule Model
 
 ```prisma
 model Schedule {
@@ -491,22 +490,26 @@ model ActivityLog {
 | Personal (marriage/bereavement) | All | 3 working days | HR_Officer | Yes |
 | Special (court/election) | All | As needed | HR_Officer | No |
 | Study | Academic staff, higher degree | First year full pay, subsequent 50% pay | HR_Officer | No |
-| Research | Assistant Professor+, 3+ years service | Up to 6 months | University President | No |
-| Sabbatical | Assistant Professor+, 6+ years service | 1 yea### 6.4 Leave Management
+| Research | Assistant Professor+, 3+ years service | Up to 6 months | Academic VP, HR_Officer | No |
+| Sabbatical | Assistant Professor+, 6+ years service | 1 year full pay | Academic VP, HR_Officer | No |
+| Without Pay | All | Up to 2 years | Academic VP, HR_Officer | No |
+
+### 6.4 Leave Management
 | Method | Endpoint | Permission |
 |--------|----------|------------|
 | POST | `/api/v1/leave/apply` | EMPLOYEE (self) |
 | GET | `/api/v1/leave/my-requests` | EMPLOYEE |
-| GET | `/api/v1/leave/pending` | HR_OFFICER / Dean / President (role-specific) |
+| GET | `/api/v1/leave/pending` | HR_OFFICER / Dean / Academic VP (role-specific) |
 | POST | `/api/v1/leave/:id/approve` | Depends on leave type (routing) |
 | POST | `/api/v1/leave/:id/reject` | Same as approve |
-| GET | `/api/v1/leave/balance` | EMPLOYEE (self), HR/ADMIN (others campus)r full pay | Dean (or Director) | No |
-| Without Pay | All | Up to 2 years | University President | No |
+| GET | `/api/v1/leave/balance` | EMPLOYEE (self), HR/ADMIN (others campus) |
 
 **Routing Logic:**
-- Sabbatical → Dean of employee’s college.
-- Without Pay or Research → University President.
-- All others → HR_Officer of employee’s campus.
+- Sabbatical → Department head → Dean of employee’s college → Academic Vice President → HR_Officer → Final Approval. The full information send to finance department dashboard with tag which describes the type of leave and salary information. (The employee must be notified and know the final approval status).
+- Without Pay or Research  → Department head → Dean of employee’s college → Academic Vice President → HR_Officer → Final Approval. The full information send to finance department dashboard with tag which describes the type of leave and salary information. (The employee must be notified and know the final approval status).
+- All others->Deapartment Head (if the employee works in non-academic department it will go directly to HR_Officer of employee’s campus.) → HR_Officer of employee’s campus. ->final approval(the employee should know the final approval status)
+
+**Notification & Status Tracking:** Across *all* leave types and at *every* stage of the process, the applicant must be able to view the real-time status of their request (e.g., pending at which stage) and receive notifications upon final approval or rejection.
 
 **Balance Update:** On approval, deduct `days` from `LeaveBalance.usedDays` within a database transaction (row lock). Prevent negative balance.
 
@@ -550,7 +553,7 @@ Experience letter available
 - Employee receives notification when evaluation saved.
 - Employee can view own evaluations (read‑only).
 
-### 4.5 Schedule Conflict Detection
+### optional : 4.5 Schedule Conflict Detection
 - When creating or updating a schedule, check: same instructor, same day, overlapping time range → reject with conflict details.
 
 ### 4.6 Activity Logging
@@ -591,7 +594,6 @@ Experience letter available
 | `research_leave:approve` | ❌ | ❌ | ❌ | ❌* |
 | `payroll:generate` | ❌ | ❌ | ✅ | ❌ |
 | `payroll:export` | ❌ | ❌ | ✅ | ❌ |
-| `penalty:report:export` | ❌ | ❌ | ✅ | ❌ |
 | `clearance:initiate` | ❌ | ❌ | ✅ | ❌ |
 | `clearance:read` (campus) | ❌ | ✅ | ✅ | ❌ |
 | `clearance_task:approve` | ❌ | ❌ | ❌ | ❌** |
@@ -613,11 +615,9 @@ Experience letter available
 | Privilege | Added Permissions | Scope |
 |-----------|-------------------|-------|
 | **DEAN** | `sabbatical:approve`, `employee:read:college`, `schedule:read`, `leave:read:college`, `clearance:read` | College |
-| **DIRECTOR** | Same as Dean | Department/Unit |
-| **UNIVERSITY_PRESIDENT** | `leave:without_pay:approve`, `research_leave:approve`, `clearance:read`, `employee:read:any` | System‑wide |
-| **VICE_PRESIDENT** | `clearance:read`, `employee:read:any` | System‑wide |
-
+| **UNIVERSITY_PRESIDENT** | `leave:without_pay:approve`, `research_leave:approve`, `clearance:read`, `employee:read:any` | System‑wide 
 > A user retains all base role permissions when granted a special privilege.
+
 
 ---
 
@@ -667,12 +667,12 @@ Experience letter available
 | POST | `/api/v1/leave/:id/reject` | Same as approve |
 | GET | `/api/v1/leave/balance` | EMPLOYEE (self), HR/ADMIN (others campus) |
 
-### 6.5 Schedule
+### optional :6.5 Schedule
 | Method | Endpoint | Permission |
 |--------|----------|------------|
 | GET | `/api/v1/schedules` | All (campus-scoped) |
 | POST | `/api/v1/schedules` | HR_OFFICER |
-| PUT | `/api/v1/schedules/:id` | HR_OFFICER |
+| PUT | `/api/v1/schedules/:id` | HR_OFFICER |S
 | DELETE | `/api/v1/schedules/:id` | HR_OFFICER |
 | POST | `/api/v1/schedules/:id/substitute` | HR_OFFICER |
 
@@ -688,7 +688,6 @@ Experience letter available
 | Method | Endpoint | Permission |
 |--------|----------|------------|
 | POST | `/api/v1/payroll/generate` | HR_OFFICER (Excel) |
-| POST | `/api/v1/payroll/penalty` | HR_OFFICER (PDF) |
 
 ### 6.8 Clearance
 | Method | Endpoint | Permission |
@@ -730,6 +729,9 @@ Experience letter available
 
 ### 7.3 HR_Officer Dashboard
 - `/hr/employees` – list, create, edit employees
+  - **Progressive Employee Profiling**: Employee creation supports incomplete initial data. An employee can be created with or without a department assignment.
+  - **Profile Management**: Department assignment and other profile details are optional during creation and can be assigned or changed later through the HR management workflow. HR users have full ability to edit and manage the employee's complete profile information after creation.
+  - **Data Synchronization**: Any updates made by HR to employee information are immediately reflected and visible within the employee-facing self-service view (`/profile`).
 - `/hr/leave/approvals` – pending leave requests (campus)
 - `/hr/performance` – create/update evaluations
 - `/hr/payroll` – generate reports
@@ -749,6 +751,14 @@ Experience letter available
 ### 7.6 Clearance Body User Interface
 - `/clearance/tasks` – list tasks assigned to the logged‑in body user (Library, IT, etc.)
 - `/clearance/task/:id` – approve/reject with remarks
+
+### 7.7 Academic Approver Dashboard (VP, Dean, Dept Head)
+- Inherits all features from **7.2 Employee Self‑Service (ESS)**.
+- `/approvals/leave` – Dedicated module to review and approve/reject pending leave requests routed to their respective stage (Department, Dean, or VP).
+
+### 7.8 Finance Department Dashboard
+- `/finance/payroll` – Receive and accept payroll-related reports from the HR_Officer.
+- `/finance/leave-data` – Dashboard to view full information with tags describing the type of leave and salary information (especially for Sabbatical, Research, and Without Pay leaves).
 
 ---
 
@@ -845,11 +855,11 @@ Or use a web server (nginx) to serve static files and proxy API requests.
 ## 11. Acceptance Criteria
 
 - [ ] All modules implemented and permission‑protected.
-- [ ] Leave routing works correctly (Dean for Sabbatical, President for Without Pay/Research).
+- [ ] Leave routing works correctly (Academic VP and HR for Sabbatical/Research/Without Pay).
 - [ ] Clearance workflow completes (bodies → campus HR → Head HR) and deactivates account.
 - [ ] Activity logs record every action and are immutable.
 - [ ] SUPER_ADMIN cannot view active employee data but can view deactivated historical records.
-- [ ] HR_OFFICER can generate payroll (Excel) and penalty (PDF) reports.
+- [ ] HR_OFFICER can generate payroll (Excel) report.
 - [ ] No Docker used anywhere.
 - [ ] All tests pass.
 - [ ] Frontend role‑based dashboards function correctly.
@@ -871,9 +881,7 @@ const rolePermissions = {
 
 const privilegePermissions = {
   DEAN: ['sabbatical:approve', 'employee:read:college', 'schedule:read', 'leave:read:college', 'clearance:read'],
-  DIRECTOR: ['sabbatical:approve', 'employee:read:dept', 'schedule:read', 'leave:read:dept', 'clearance:read'],
-  UNIVERSITY_PRESIDENT: ['leave:without_pay:approve', 'research_leave:approve', 'clearance:read', 'employee:read:any'],
-  VICE_PRESIDENT: ['clearance:read', 'employee:read:any']
+  UNIVERSITY_PRESIDENT: ['leave:without_pay:approve', 'research_leave:approve', 'clearance:read', 'employee:read:any']
 };
 ```
 

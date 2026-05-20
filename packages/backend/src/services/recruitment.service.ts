@@ -9,9 +9,10 @@ export const createJobPosting = async (data: {
     title: string;
     description: string;
     requirements: string;
-    deptLegacy: string;
+    departmentId: number;
     position: string;
     deadline: string;
+    vacancies?: number;
     createdBy: number;
 }) => {
     const creator = await prisma.user.findUnique({
@@ -22,20 +23,72 @@ export const createJobPosting = async (data: {
 
     return prisma.jobPosting.create({
         data: {
-            ...data,
+            title: data.title,
+            description: data.description,
+            requirements: data.requirements,
+            departmentId: data.departmentId,
+            position: data.position,
+            createdBy: data.createdBy,
             campusId,
             deadline: new Date(data.deadline),
-            status: JobStatus.OPEN
+            status: JobStatus.OPEN,
+            vacancies: data.vacancies ?? 1
         }
     });
 };
 
-export const getJobPostings = async (filters: { status?: JobStatus; department?: string }, campusId?: number) => {
+export const updateJobPosting = async (id: number, data: Partial<{
+    title: string;
+    description: string;
+    requirements: string;
+    departmentId: number;
+    position: string;
+    deadline: string;
+    vacancies: number;
+}>, campusId?: number) => {
+    // First verify the job exists and is accessible
+    const job = await prisma.jobPosting.findFirst({
+        where: { id, ...(campusId ? { campusId } : {}) }
+    });
+    
+    if (!job) {
+        throw new Error('Job posting not found or access denied');
+    }
+
+    return prisma.jobPosting.update({
+        where: { id },
+        data: {
+            ...(data.title && { title: data.title }),
+            ...(data.description && { description: data.description }),
+            ...(data.requirements && { requirements: data.requirements }),
+            ...(data.departmentId && { departmentId: data.departmentId }),
+            ...(data.position && { position: data.position }),
+            ...(data.deadline && { deadline: new Date(data.deadline) }),
+            ...(data.vacancies !== undefined && { vacancies: data.vacancies }),
+        }
+    });
+};
+
+export const getJobPostings = async (filters: { status?: JobStatus; departmentId?: number }, campusId?: number) => {
     return prisma.jobPosting.findMany({
         where: {
-            ...(campusId ? { campusId } : {}),
+            ...(campusId ? {
+                OR: [
+                    { campusId },
+                    { campusId: null }
+                ]
+            } : {}),
             ...(filters.status && { status: filters.status }),
-            ...(filters.department && { deptLegacy: filters.department })
+            ...(filters.departmentId && { departmentId: filters.departmentId })
+        },
+        include: {
+            _count: {
+                select: { 
+                    applications: {
+                        where: { status: ApplicationStatus.HIRED }
+                    }
+                }
+            }
         },
         orderBy: { createdAt: 'desc' }
     });
@@ -43,7 +96,15 @@ export const getJobPostings = async (filters: { status?: JobStatus; department?:
 
 export const getJobPostingById = async (id: number, campusId?: number) => {
     return prisma.jobPosting.findFirst({
-        where: { id, ...(campusId ? { campusId } : {}) },
+        where: {
+            id,
+            ...(campusId ? {
+                OR: [
+                    { campusId },
+                    { campusId: null }
+                ]
+            } : {})
+        },
         include: {
             _count: {
                 select: { applications: true }
@@ -54,7 +115,15 @@ export const getJobPostingById = async (id: number, campusId?: number) => {
 
 export const updateJobStatus = async (id: number, status: JobStatus, campusId?: number) => {
     const updated = await prisma.jobPosting.updateMany({
-        where: { id, ...(campusId ? { campusId } : {}) },
+        where: {
+            id,
+            ...(campusId ? {
+                OR: [
+                    { campusId },
+                    { campusId: null }
+                ]
+            } : {})
+        },
         data: { status }
     });
     if (updated.count === 0) {
@@ -65,7 +134,7 @@ export const updateJobStatus = async (id: number, status: JobStatus, campusId?: 
 
 export const applyForJob = async (employeeId: number, userId: number, userRole: string, data: {
     jobPostingId: number;
-    coverLetter: string;
+    reasonForApplying: string;
     cvUrl: string;
 }) => {
     const job = await prisma.jobPosting.findUnique({ where: { id: data.jobPostingId } });
@@ -83,6 +152,18 @@ export const applyForJob = async (employeeId: number, userId: number, userRole: 
     if (job.status !== JobStatus.OPEN) throw new Error('Job posting is no longer open');
     if (new Date() > job.deadline) throw new Error('Application deadline has passed');
 
+    // Fetch user and employee for checks and email
+    const applicantUser = await prisma.user.findUnique({ where: { id: userId }, include: { employee: true } });
+    if (!applicantUser || !applicantUser.employee) throw new Error('Applicant not found');
+
+    // Eligibility: Probation check (6 months)
+    const hireDate = new Date(applicantUser.employee.hireDate);
+    const probationEndDate = new Date(hireDate);
+    probationEndDate.setMonth(probationEndDate.getMonth() + 6);
+    if (new Date() < probationEndDate) {
+        throw new Error('You are not eligible: Probation period not completed');
+    }
+
     // Check for duplicate application
     const existing = await prisma.jobApplication.findUnique({
         where: {
@@ -94,11 +175,9 @@ export const applyForJob = async (employeeId: number, userId: number, userRole: 
     });
     if (existing) throw new Error('You have already applied for this position');
 
-    // Fetch user email to send confirmation
-    const applicantUser = await prisma.user.findUnique({ where: { id: userId }, include: { employee: true } });
     const appliedJob = await prisma.jobPosting.findUnique({ where: { id: data.jobPostingId } });
 
-    if (applicantUser && applicantUser.email && appliedJob && applicantUser.employee) {
+    if (applicantUser.email && appliedJob) {
         await sendEmail({
             to: applicantUser.email,
             subject: `Application Received: ${appliedJob.title}`,
@@ -110,7 +189,7 @@ export const applyForJob = async (employeeId: number, userId: number, userRole: 
         data: {
             ...data,
             employeeId,
-            status: ApplicationStatus.SUBMITTED
+            status: ApplicationStatus.PENDING
         }
     });
 };
@@ -124,7 +203,7 @@ export const getApplicationsForJob = async (jobPostingId: number) => {
                     name: true,
                     employeeId: true,
                     position: true,
-                    deptLegacy: true
+                    department: { select: { name: true } }
                 }
             }
         },
@@ -136,7 +215,17 @@ export const updateApplicationStatus = async (
     applicationId: number,
     data: { status: ApplicationStatus; reviewedBy: number; reviewComment?: string }
 ) => {
-    // Let me rewrite the whole function block safely
+    const application = await prisma.jobApplication.findUnique({
+        where: { id: applicationId }
+    });
+
+    if (!application) throw new Error('Application not found');
+
+    // Flow enforcement (simplified for service layer, controller should handle role checks)
+    if (data.status === ApplicationStatus.HIRED && application.status !== ApplicationStatus.RECOMMENDED) {
+        throw new Error('Can only hire applicants who have been recommended by the committee');
+    }
+
     const updatedApplication = await prisma.jobApplication.update({
         where: { id: applicationId },
         data: {
@@ -151,6 +240,27 @@ export const updateApplicationStatus = async (
         }
     });
 
+    if (data.status === ApplicationStatus.HIRED) {
+        // Count total hired for this job
+        const hiredCount = await prisma.jobApplication.count({
+            where: {
+                jobPostingId: updatedApplication.jobPostingId,
+                status: ApplicationStatus.HIRED
+            }
+        });
+
+        const job = await prisma.jobPosting.findUnique({
+            where: { id: updatedApplication.jobPostingId }
+        });
+
+        if (job && hiredCount >= job.vacancies) {
+            await prisma.jobPosting.update({
+                where: { id: updatedApplication.jobPostingId },
+                data: { status: JobStatus.CLOSED }
+            });
+        }
+    }
+
     // NOTIFICATION: Notify the applicant
     await createNotification({
         userId: updatedApplication.employee.userId,
@@ -164,6 +274,54 @@ export const updateApplicationStatus = async (
     return updatedApplication;
 };
 
+export const evaluateApplication = async (
+    applicationId: number,
+    data: {
+        examScore?: number;
+        interviewScore?: number;
+        recommendation: string;
+        status: ApplicationStatus;
+        reviewedBy: number;
+    }
+) => {
+    const application = await prisma.jobApplication.findUnique({
+        where: { id: applicationId },
+        include: { jobPosting: true, employee: true }
+    });
+
+    if (!application) throw new Error('Application not found');
+    
+    // Only accepted applications can be evaluated
+    if (application.status !== ApplicationStatus.ACCEPTED && application.status !== ApplicationStatus.EVALUATED) {
+        throw new Error('Only accepted applications can be evaluated by the committee');
+    }
+
+    const updated = await prisma.jobApplication.update({
+        where: { id: applicationId },
+        data: {
+            examScore: data.examScore,
+            interviewScore: data.interviewScore,
+            recommendation: data.recommendation,
+            status: data.status,
+            reviewedBy: data.reviewedBy,
+            updatedAt: new Date()
+        },
+        include: { jobPosting: true, employee: true }
+    });
+
+    // Notify the applicant
+    await createNotification({
+        userId: updated.employee.userId,
+        type: 'APPLICATION_STATUS_UPDATE',
+        title: `Evaluation Update: ${updated.jobPosting.title}`,
+        message: `The recruitment committee has updated your evaluation. Status: ${data.status}`,
+        relatedId: updated.id,
+        relatedType: 'JOB_APPLICATION'
+    });
+
+    return updated;
+};
+
 export const getEmployeeApplications = async (employeeId: number) => {
     return prisma.jobApplication.findMany({
         where: { employeeId },
@@ -171,7 +329,7 @@ export const getEmployeeApplications = async (employeeId: number) => {
             jobPosting: {
                 select: {
                     title: true,
-                    deptLegacy: true,
+                    department: { select: { name: true } },
                     position: true,
                     status: true
                 }
