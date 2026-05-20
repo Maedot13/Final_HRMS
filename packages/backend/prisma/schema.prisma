@@ -33,6 +33,7 @@ model Campus {
   sabbaticalRequests      SabbaticalRequest[]
   users                   User[]
   clearanceApprovals      ClearanceApproval[]
+  attendance              Attendance[]
 }
 
 model User {
@@ -98,8 +99,45 @@ model Employee {
   leaveRequests      LeaveRequest[]
   payrollTransfers   PayrollTransfer[]
   sabbaticalRequests SabbaticalRequest[]
+  performanceEvaluations PerformanceEvaluation[]
+  attendance         Attendance[]
 
   @@index([campusId])
+}
+
+model PerformanceEvaluation {
+  id               Int      @id @default(autoincrement())
+  employeeId       Int
+  employee         Employee @relation(fields: [employeeId], references: [id])
+  deptHeadId       Int      // User ID of the Dept Head
+  hrApprovedById   Int?     // User ID of HR Officer
+  status           EvaluationStatus @default(PENDING_HR)
+  period           String   
+  
+  // BDU Detailed Criteria
+  qualityScore     Float    // Work Quality & Efficiency (0-100)
+  punctualityScore Float    // Punctuality & Discipline (0-100)
+  knowledgeScore   Float    // Job Knowledge & Skills (0-100)
+  teamworkScore    Float    // Teamwork & Professionalism (0-100)
+  
+  efficiencyScore  Float    // Aggregate weighted score
+  workOutputScore  Float    // Separate output assessment
+  
+  comments         String?
+  rejectionReason  String?
+  hrApprovedAt     DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([deptHeadId])
+  @@index([status])
+}
+
+enum EvaluationStatus {
+  PENDING_HR
+  APPROVED
+  REJECTED
 }
 
 model LeaveRequest {
@@ -228,6 +266,27 @@ model ClearanceCheck {
   @@unique([clearanceId, unitId])
   @@index([unitId, status])
   @@index([clearanceId, status])
+}
+
+model Attendance {
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  date       DateTime @default(now())
+  clockIn    DateTime @default(now())
+  clockOut   DateTime?
+  status     AttendanceStatus @default(PRESENT)
+  campusId   Int?
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  campus     Campus?  @relation(fields: [campusId], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, date])
+  @@index([campusId, date])
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
 }
 
 model ClearanceApproval {
@@ -411,12 +470,19 @@ enum AuditAction {
   USER_STATUS_TOGGLE
   AUDIT_LOG_ACCESSED
   AUDIT_LOG_EXPORTED
+  ATTENDANCE_CLOCK_IN
+  ATTENDANCE_CLOCK_OUT
   CAMPUS_CREATED
   CAMPUS_ACTIVATED
   CAMPUS_SUSPENDED
   DEPARTMENT_CREATED
   DEPARTMENT_HEAD_CHANGED
+  PERFORMANCE_EVALUATION_CREATE
+  PERFORMANCE_EVALUATION_UPDATE
+  PERFORMANCE_EVALUATION_APPROVE
+  PERFORMANCE_EVALUATION_REJECT
 }
+
 enum SpecialPrivilege {
   DEAN
   DIRECTOR

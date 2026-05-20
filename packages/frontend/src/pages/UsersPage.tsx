@@ -142,6 +142,18 @@ export default function UsersPage() {
             },
         ];
 
+        if (user?.role === 'DEPARTMENT_HEAD' || user?.role === 'ADMIN') {
+            cols.push({
+                key: 'evaluate',
+                header: 'Efficiency',
+                render: (r) => (
+                    <Link to={`/evaluations/new?employeeId=${r.employee?.id}`}>
+                        <Button variant="secondary" size="sm">Evaluate</Button>
+                    </Link>
+                ),
+            });
+        }
+
         if (user?.role === 'ADMIN') {
             cols.push({
                 key: 'actions',

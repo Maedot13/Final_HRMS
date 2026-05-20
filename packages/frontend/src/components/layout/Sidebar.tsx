@@ -1,5 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useQuery } from '@tanstack/react-query';
+import { getPendingEvaluations } from '../../api/appraisals';
 import {
     FiGrid,
     FiLayers,
@@ -10,7 +12,8 @@ import {
     FiFileText,
     FiUser,
     FiPhone,
-    FiShield
+    FiShield,
+    FiTrendingUp
 } from 'react-icons/fi';
 
 type Role =
@@ -79,6 +82,12 @@ const navItems: NavItem[] = [
         icon: <FiFileText className="w-4 h-4" />,
     },
     {
+        label: 'Campuses',
+        to: '/campuses',
+        roles: ['ADMIN'],
+        icon: <FiLayers className="w-4 h-4" />,
+    },
+    {
         label: 'Org Setup',
         to: '/admin/org',
         roles: ['ADMIN'],
@@ -107,14 +116,39 @@ const navItems: NavItem[] = [
         to: '/profile',
         icon: <FiUser className="w-4 h-4" />,
     },
+    {
+        label: 'Perf. Approvals',
+        to: '/evaluations/approvals',
+        roles: ['HR_OFFICER'],
+        icon: <FiCheckSquare className="w-4 h-4" />,
+    },
+    {
+        label: 'Performance',
+        to: '/evaluations',
+        roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR_OFFICER'],
+        icon: <FiTrendingUp className="w-4 h-4" />,
+    },
 ];
 
 export function Sidebar() {
     const user = useAuthStore((state) => state.user);
 
+    const { data: pending } = useQuery({
+        queryKey: ['pending-evaluations'],
+        queryFn: getPendingEvaluations,
+        enabled: !!user && user.role === 'HR_OFFICER',
+    });
+
     const filteredItems = navItems.filter((item) => {
         if (!item.roles || !user) return true;
-        return item.roles.includes(user.role as Role);
+        const hasRole = item.roles.includes(user.role as Role);
+        
+        // Extra protection: Only show 'Campuses' and 'Privileges' to University-scoped Admins
+        if (['Campuses', 'Privileges'].includes(item.label)) {
+            return hasRole && user.scope === 'UNIVERSITY';
+        }
+
+        return hasRole;
     });
 
     return (
@@ -128,10 +162,10 @@ export function Sidebar() {
                         <li key={item.to}>
                             <NavLink
                                 to={item.to}
-                                end={item.to === '/'}
+                                end={item.to === '/' || item.to === '/evaluations'}
                                 className={({ isActive }) =>
                                     [
-                                        'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                                        'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors w-full',
                                         isActive
                                             ? 'bg-primary text-white'
                                             : 'text-text-secondary hover:bg-gray-100 hover:text-text-primary',
@@ -139,7 +173,12 @@ export function Sidebar() {
                                 }
                             >
                                 {item.icon}
-                                {item.label}
+                                <span className="flex-1">{item.label}</span>
+                                {item.label === 'Perf. Approvals' && pending && pending.length > 0 && (
+                                    <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                                        {pending.length}
+                                    </span>
+                                )}
                             </NavLink>
                         </li>
                     ))}

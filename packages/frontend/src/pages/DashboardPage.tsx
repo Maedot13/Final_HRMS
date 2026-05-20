@@ -139,7 +139,11 @@ export default function DashboardPage() {
             <div>
                 <h1 className="text-2xl font-bold tracking-tight text-gray-900">Dashboard</h1>
                 <p className="text-sm text-gray-500 mt-1">
-                    Welcome back, {user?.employee?.firstName || 'User'}! Here is what's happening today.
+                    Welcome back, {user?.employee?.name || user?.employee?.firstName || 'User'}! 
+                    <span className="ml-1 font-semibold text-primary">
+                        ({user?.role === 'ADMIN' ? (user.scope === 'UNIVERSITY' ? 'Super Admin' : 'Campus Admin') : user?.role.replace('_', ' ')})
+                    </span>
+                    . Here is what's happening today.
                 </p>
             </div>
 
@@ -197,6 +201,16 @@ export default function DashboardPage() {
                             <div className="font-medium text-gray-900">My Profile</div>
                             <div className="text-xs text-gray-500 mt-1">View your profile & leave balance</div>
                         </button>
+                        {!isAdmin && (
+                            <button 
+                                onClick={() => navigate('/evaluations')}
+                                className="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-100 text-left transition-colors"
+                            >
+                                <FiTrendingUp className="w-6 h-6 text-primary mb-2" />
+                                <div className="font-medium text-gray-900">My Efficiency</div>
+                                <div className="text-xs text-gray-500 mt-1">View your performance metrics</div>
+                            </button>
+                        )}
                     </div>
                 </Card>
             </div>

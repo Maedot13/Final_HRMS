@@ -28,12 +28,11 @@ export const PAGINATION = {
 
 export const RATE_LIMITS = {
     GLOBAL: {
-        WINDOW_MS: 15 * 60 * 1000 as number,
-        MAX_REQUESTS: 5000 as number, // Increased for test phase
+        WINDOW_MS: 15 * 60 * 1000, // 15 minutes
+        MAX_REQUESTS: 1000, // Increased for dev
     },
     AUTH: {
-        WINDOW_MS: 15 * 60 * 1000 as number,
-        // 5 in test, 50 in development (frequent logins during testing), 20 in production
-        MAX_REQUESTS: process.env.NODE_ENV === 'test' ? 5 : (process.env.NODE_ENV === 'production' ? 20 : 50) as number,
+        WINDOW_MS: 60 * 60 * 1000, // 1 hour
+        MAX_REQUESTS: 300, // Prevent brute force
     },
 };

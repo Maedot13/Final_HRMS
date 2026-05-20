@@ -23,6 +23,9 @@ import ClearanceBodiesPage from '../pages/admin/ClearanceBodiesPage';
 import PrivilegesPage from '../pages/admin/PrivilegesPage';
 import ClearanceBodyDashboard from '../pages/ClearanceBodyDashboard';
 import HeadHRClearancePage from '../pages/HeadHRClearancePage';
+import AppraisalsPage from '../pages/AppraisalsPage';
+import EvaluationFormPage from '../pages/EvaluationFormPage';
+import EvaluationApprovalPage from '../pages/EvaluationApprovalPage';
 
 const router = createBrowserRouter([
     {
@@ -121,6 +124,18 @@ const router = createBrowserRouter([
                 path: 'contacts',
                 element: <ContactDirectoryPage />,
             },
+            {
+                path: 'evaluations',
+                element: <AppraisalsPage />,
+            },
+            {
+                path: 'evaluations/new',
+                element: <EvaluationFormPage />,
+            },
+            {
+                path: 'evaluations/approvals',
+                element: <EvaluationApprovalPage />,
+            },
         ],
     },
     // Head HR Role Dashboard Routes
@@ -143,8 +158,7 @@ const router = createBrowserRouter([
             },
             {
                 path: 'performance',
-                // Placeholder if Page doesn't exist yet, wait, we don't have performance page yet, map to Dashboard
-                element: <DashboardPage />, 
+                element: <EvaluationApprovalPage />, 
             },
             {
                 path: 'payroll',

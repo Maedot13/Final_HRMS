@@ -114,13 +114,17 @@ export const authorizeHeadHR = (req: Request, res: Response, next: NextFunction)
     next();
 };
 
-/** Requires ADMIN role and UNIVERSITY scope (university-level admin only). */
+/** Requires ADMIN or SUPER_ADMIN role and UNIVERSITY scope (university-level admin only). */
 export const requireUniversityAdmin = (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
         return sendError(res, 401, ErrorCode.AUTHENTICATION_FAILED, 'User not authenticated', null, req);
     }
-    if (req.user.role !== UserRole.ADMIN || req.user.scope !== UserScope.UNIVERSITY) {
-        return sendError(res, 403, ErrorCode.FORBIDDEN, 'University admin access required', null, req);
+    
+    const isAllowedRole = req.user.role === UserRole.ADMIN || (req.user.role as string) === 'SUPER_ADMIN';
+    const isUniversityScope = req.user.scope === UserScope.UNIVERSITY;
+
+    if (!isAllowedRole || !isUniversityScope) {
+        return sendError(res, 403, ErrorCode.FORBIDDEN, 'University admin access required. Ensure you have the correct role and UNIVERSITY scope.', null, req);
     }
     next();
 };
