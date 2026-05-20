@@ -6,6 +6,7 @@ export interface User {
     id: number;
     email: string;
     role: UserRole;
+    scope?: 'UNIVERSITY' | 'CAMPUS';
     isActive: boolean;
     isHeadHR: boolean;
     specialPrivileges: SpecialPrivilege[];

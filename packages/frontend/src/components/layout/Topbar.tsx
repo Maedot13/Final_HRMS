@@ -178,8 +178,10 @@ export function Topbar() {
             </div>
             <div className="flex items-center gap-3">
                 {user && (
-                    <span className="text-xs text-text-secondary uppercase tracking-wide">
-                        {user.role}
+                    <span className="text-xs font-semibold text-primary uppercase tracking-wide px-2 py-0.5 bg-primary/10 rounded">
+                        {user.role === 'ADMIN' 
+                            ? (user.scope === 'UNIVERSITY' ? 'Super Admin' : 'Campus Admin')
+                            : user.role.replace('_', ' ')}
                     </span>
                 )}
 
