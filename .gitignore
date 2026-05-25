@@ -52,3 +52,39 @@ pnpm-debug.log*
 
 # Misc
 .cache
+
+# Development artifacts — test output & error dumps
+**/test-output*.txt
+**/test_error*.txt
+**/tsc_errors*.txt
+**/prisma_error*.txt
+**/start_error*.txt
+**/seed_output*.txt
+**/reset_log*.txt
+**/out.txt
+backend_run_log.txt
+lint-output.txt
+
+# Scratch / throwaway files
+scratch/
+
+# One-off dev/debug scripts (keep only production seed scripts)
+packages/backend/scripts/audit-credentials.ts
+packages/backend/scripts/fetch-test-creds-ws.ts
+packages/backend/scripts/reset-test-passwords-ws.ts
+packages/backend/scripts/setup-clearance-test.ts
+packages/backend/scripts/setup-hr-test.ts
+packages/backend/scripts/setup-multi-campus-clearance.ts
+packages/backend/scripts/update-employee-names.ts
+packages/backend/scripts/verify-clearance-names.ts
+packages/backend/scripts/debug-db.ts
+packages/backend/scripts/fix-hr-password.ts
+packages/backend/scripts/force-admin-setup.ts
+packages/backend/scripts/reset-admin-password.ts
+packages/backend/scripts/test-db-connection.ts
+packages/backend/scripts/test-head.ts
+packages/backend/scripts/test-pending.ts
+packages/backend/scripts/test-search.ts
+packages/backend/scripts/verify-university-admin.ts
+packages/backend/scripts/create-campus-admin.ts
+packages/backend/test-clearance-flow.ts
