@@ -7,6 +7,9 @@ import { AuditAction } from '@prisma/client';
 import { logAction } from '../services/auditLog.service';
 import { upload } from '../middleware/upload.middleware';
 import { assertSameCampus } from '../lib/campusScope';
+import { uploadToCloudinary } from '../utils/cloudinary';
+import { logger } from '../utils/logger';
+import fs from 'fs/promises';
 
 // ─── Employee: Apply for Leave ────────────────────────────────────────────────
 
@@ -21,13 +24,47 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'Employee profile not found', null, req);
         }
 
-        const attachmentUrl = req.file
-            ? `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`
-            : req.body.attachmentUrl;
+        let attachmentUrl = req.body.attachmentUrl;
+        let attachmentMetadata = undefined;
+
+        if (req.file) {
+            try {
+                const uploadResult = await uploadToCloudinary(
+                    req.file.path,
+                    req.file.originalname,
+                    req.file.mimetype,
+                    user.userId
+                );
+                
+                // If it emulated local storage, let's construct the full local URL
+                if (uploadResult.secure_url.startsWith('/uploads/')) {
+                    attachmentUrl = `${req.protocol}://${req.get('host')}${uploadResult.secure_url}`;
+                } else {
+                    attachmentUrl = uploadResult.secure_url;
+                    // Delete local file since it was successfully uploaded to Cloudinary
+                    try {
+                        await fs.unlink(req.file.path);
+                    } catch (cleanupError) {
+                        logger.error('Failed to delete temp file after Cloudinary upload:', cleanupError);
+                    }
+                }
+
+                attachmentMetadata = {
+                    userId: user.userId,
+                    fileName: req.file.originalname,
+                    fileType: req.file.mimetype,
+                    publicId: uploadResult.public_id,
+                };
+            } catch (uploadError: any) {
+                logger.error('Document upload failed:', uploadError);
+                return sendError(res, 500, ErrorCode.INTERNAL_ERROR, 'Supporting document upload failed: ' + uploadError.message, null, req);
+            }
+        }
 
         const request = await leaveService.createLeaveRequest(employee.id, {
             ...req.body,
             attachmentUrl,
+            attachmentMetadata,
         });
 
         await logAction({
@@ -41,7 +78,17 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
 
         return sendSuccess(res, request, 201);
     } catch (error: any) {
-        return sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+        // Business logic errors from the service are already user-friendly.
+        // Log the full error for debugging, then return an appropriate status.
+        const message = error?.message || 'Leave request creation failed';
+        const isPrismaInternal = message.includes('prisma') || message.includes('database') || message.includes('migration');
+
+        if (isPrismaInternal) {
+            logger.error('Leave request creation failed with infrastructure error', { error: message, stack: error?.stack });
+            return sendError(res, 500, ErrorCode.INTERNAL_ERROR, message, null, req);
+        }
+
+        return sendError(res, 400, ErrorCode.VALIDATION_ERROR, message, null, req);
     }
 };
 

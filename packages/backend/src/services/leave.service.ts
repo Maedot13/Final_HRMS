@@ -1,7 +1,47 @@
-import { LeaveStatus, LeaveType, LeaveStage } from '@prisma/client';
+import { LeaveStatus, LeaveType, LeaveStage, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logger } from '../utils/logger';
 import { LEAVE_BALANCES } from '../config/constants';
+
+// ─── Prisma Error Helpers ─────────────────────────────────────────────────────
+
+/** Re-throw Prisma-specific errors with user-friendly messages while logging full details. */
+function handlePrismaError(error: unknown, context: string): never {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        logger.error(`Prisma error in ${context}`, {
+            code: error.code,
+            meta: error.meta,
+            message: error.message,
+        });
+
+        switch (error.code) {
+            case 'P2021': // Table does not exist
+                throw new Error(
+                    `A required database table is missing. Please contact the system administrator to run pending migrations.`
+                );
+            case 'P2003': // Foreign key constraint failed
+                throw new Error(
+                    `A referenced record does not exist. Please verify the linked data and try again.`
+                );
+            case 'P2002': // Unique constraint violation
+                throw new Error(
+                    `A duplicate record already exists. Please check your request and try again.`
+                );
+            default:
+                throw new Error(
+                    `A database error occurred while processing your request. Please try again later.`
+                );
+        }
+    }
+
+    if (error instanceof Prisma.PrismaClientValidationError) {
+        logger.error(`Prisma validation error in ${context}`, { message: error.message });
+        throw new Error(`Invalid data provided. Please verify all required fields and try again.`);
+    }
+
+    // Re-throw non-Prisma errors (business logic) unchanged
+    throw error;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -11,6 +51,12 @@ interface CreateLeaveInput {
     endDate: string;
     reason: string;
     attachmentUrl?: string;
+    attachmentMetadata?: {
+        userId: number;
+        fileName: string;
+        fileType: string;
+        publicId?: string;
+    };
 }
 
 interface ReviewInput {
@@ -143,27 +189,55 @@ export const createLeaveRequest = async (
         throw new Error('You already have a leave request overlapping these dates');
     }
 
-    // Create the request — always starts at DEPT_HEAD stage
-    const request = await prisma.leaveRequest.create({
-        data: {
-            campusId,
-            employeeId,
-            leaveType: data.leaveType,
-            startDate: start,
-            endDate: end,
-            days,
-            reason: data.reason,
-            attachmentUrl: data.attachmentUrl,
-            status: LeaveStatus.PENDING,
-            currentStage: LeaveStage.DEPT_HEAD,
-        },
-        include: {
-            employee: { select: { name: true, deptLegacy: true, departmentId: true } },
-        },
-    });
+    // Create the request — always starts at DEPT_HEAD stage.
+    // Uses a transaction so LeaveRequest + LeaveDocument creation is atomic.
+    try {
+        const request = await prisma.$transaction(async (tx) => {
+            const leaveRequest = await tx.leaveRequest.create({
+                data: {
+                    campusId,
+                    employeeId,
+                    leaveType: data.leaveType,
+                    startDate: start,
+                    endDate: end,
+                    days,
+                    reason: data.reason,
+                    attachmentUrl: data.attachmentUrl,
+                    status: LeaveStatus.PENDING,
+                    currentStage: LeaveStage.DEPT_HEAD,
+                },
+            });
 
-    logger.info('Leave request created', { requestId: request.id, leaveType: data.leaveType, employeeId });
-    return request;
+            // Create the document record separately (not nested) for better error isolation.
+            if (data.attachmentMetadata) {
+                await tx.leaveDocument.create({
+                    data: {
+                        userId: data.attachmentMetadata.userId,
+                        leaveRequestId: leaveRequest.id,
+                        leaveType: data.leaveType,
+                        fileUrl: data.attachmentUrl || '',
+                        fileName: data.attachmentMetadata.fileName,
+                        fileType: data.attachmentMetadata.fileType,
+                        publicId: data.attachmentMetadata.publicId || null,
+                    },
+                });
+            }
+
+            // Re-fetch with includes for the response
+            return tx.leaveRequest.findUniqueOrThrow({
+                where: { id: leaveRequest.id },
+                include: {
+                    employee: { select: { name: true, deptLegacy: true, departmentId: true } },
+                    leaveDocument: true,
+                },
+            });
+        });
+
+        logger.info('Leave request created', { requestId: request.id, leaveType: data.leaveType, employeeId });
+        return request;
+    } catch (error) {
+        handlePrismaError(error, 'createLeaveRequest');
+    }
 };
 
 // ─── Read helpers ─────────────────────────────────────────────────────────────
@@ -174,6 +248,7 @@ export const getEmployeeRequests = async (employeeId: number) => {
         include: {
             employee: { select: { name: true, deptLegacy: true } },
             approvals: { orderBy: { timestamp: 'asc' } },
+            leaveDocument: true,
         },
         orderBy: { createdAt: 'desc' },
     });
@@ -190,6 +265,7 @@ export const getDeptHeadPending = async (headDepartmentId: number | null) => {
         },
         include: {
             employee: { select: { name: true, deptLegacy: true, position: true } },
+            leaveDocument: true,
         },
         orderBy: { createdAt: 'asc' },
     });
@@ -205,6 +281,7 @@ export const getHROfficerPending = async (campusId: number | null) => {
         },
         include: {
             employee: { select: { name: true, deptLegacy: true, position: true } },
+            leaveDocument: true,
         },
         orderBy: { createdAt: 'asc' },
     });
@@ -221,6 +298,7 @@ export const getDeanPending = async (campusId: number | null) => {
         },
         include: {
             employee: { select: { name: true, deptLegacy: true, position: true } },
+            leaveDocument: true,
         },
         orderBy: { createdAt: 'asc' },
     });
@@ -236,6 +314,7 @@ export const getVPPending = async () => {
         },
         include: {
             employee: { select: { name: true, deptLegacy: true, position: true } },
+            leaveDocument: true,
         },
         orderBy: { createdAt: 'asc' },
     });
@@ -251,6 +330,7 @@ export const getAllCampusRequests = async (campusId: number | null, status?: Lea
         include: {
             employee: { select: { name: true, deptLegacy: true, position: true } },
             approvals: { orderBy: { timestamp: 'asc' } },
+            leaveDocument: true,
         },
         orderBy: { createdAt: 'desc' },
     });
@@ -262,6 +342,7 @@ export const getLeaveRequestById = async (id: number) => {
         include: {
             employee: { select: { name: true, deptLegacy: true, position: true, departmentId: true } },
             approvals: { orderBy: { timestamp: 'asc' } },
+            leaveDocument: true,
         },
     });
 };

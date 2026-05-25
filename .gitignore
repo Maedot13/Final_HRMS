@@ -88,3 +88,6 @@ packages/backend/scripts/test-search.ts
 packages/backend/scripts/verify-university-admin.ts
 packages/backend/scripts/create-campus-admin.ts
 packages/backend/test-clearance-flow.ts
+
+# Uploaded files (multer temp storage)
+packages/backend/uploads/
