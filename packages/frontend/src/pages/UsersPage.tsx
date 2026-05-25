@@ -168,7 +168,12 @@ export default function UsersPage() {
             key: 'actions',
             header: 'Actions',
             render: (r) => (
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 align-middle">
+                    {r.employee?.id && (user?.role === 'DEPARTMENT_HEAD' || user?.role === 'ADMIN') && (
+                        <Link to={`/evaluations/new?employeeId=${r.employee?.id}`}>
+                            <Button variant="secondary" size="sm">Evaluate</Button>
+                        </Link>
+                    )}
                     {r.employee?.id && (
                         <Link to={`/employees/${r.employee.id}`}>
                             <Button variant="secondary" size="sm" id={`view-emp-${r.id}`}>

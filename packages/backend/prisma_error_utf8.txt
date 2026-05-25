@@ -1,0 +1,55 @@
+﻿Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+node.exe : 
+At C:\Program 
+Files\nodejs\npx.ps1:29 
+char:3
++   & $NODE_EXE 
+$NPX_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (:  
+  String) [], RemoteExc   
+ eption
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+Error: Prisma schema 
+validation - (validate 
+wasm)
+Error code: P1012
+[1;91merror[0m: 
+[1mError validating 
+field `campus` in model 
+`Attendance`: The 
+relation field `campus` 
+on model `Attendance` is 
+missing an opposite 
+relation field on the 
+model `Campus`. Either 
+run `prisma format` or 
+add it manually.[0m
+  [1;94m-->[0m  [4mpris
+ma\schema.prisma:271[0m
+[1;94m   | [0m
+[1;94m270 | [0m  
+employee   Employee 
+@relation(fields: 
+[employeeId], references: 
+[id])
+[1;94m271 | [0m  
+[1;91mcampus     Campus? 
+ @relation(fields: 
+[campusId], references: 
+[id], onDelete: 
+Restrict)[0m
+[1;94m272 | [0m
+[1;94m   | [0m
+
+Validation Error Count: 1
+[Context: validate]
+
+Prisma CLI Version : 
+5.22.0

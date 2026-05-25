@@ -118,7 +118,7 @@ export const authorizeHeadHR = (req: Request, res: Response, next: NextFunction)
     next();
 };
 
-/** Requires ADMIN role and UNIVERSITY scope (university-level admin only). */
+/** Requires ADMIN or SUPER_ADMIN role and UNIVERSITY scope (university-level admin only). */
 export const requireUniversityAdmin = (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
         return sendError(res, 401, ErrorCode.AUTHENTICATION_FAILED, 'User not authenticated', null, req);

@@ -18,7 +18,7 @@ router.get('/:id/users',
 // All other campus management routes require university admin (ADMIN + scope: UNIVERSITY)
 router.use(requireUniversityAdmin);
 
-router.get('/', cacheMiddleware(60), campusController.getCampuses);
+router.get('/', campusController.getCampuses);
 router.post('/', campusController.createCampus);
 router.get('/:id', campusController.getCampusById);
 router.get('/:id/readiness', campusController.getCampusReadiness);

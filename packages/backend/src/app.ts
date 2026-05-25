@@ -32,9 +32,11 @@ import auditRoutes from './routes/audit.routes';
 import privilegeRoutes from './routes/privilege.routes';
 import campusRoutes from './routes/campus.routes';
 import departmentRoutes from './routes/department.routes';
+import appraisalRoutes from './routes/appraisal.routes';
+// import attendanceRoutes from './routes/attendance.routes';
 
 // Workers
-import './workers/notification.worker';
+// import './workers/notification.worker';
 
 const app = express();
 
@@ -129,6 +131,8 @@ if (process.env.NODE_ENV !== 'test') {
     app.use('/api/v1/sabbatical', csrfProtection);
     app.use('/api/v1/clearance', csrfProtection);
     app.use('/api/v1/users', csrfProtection);
+    app.use('/api/v1/evaluations', csrfProtection);
+    // app.use('/api/v1/attendance', csrfProtection);
 }
 
 // Apply stricter rate limiting to auth routes
@@ -154,6 +158,8 @@ app.use('/api/v1/activity-logs', authenticate, blockIfPasswordChangeRequired, au
 app.use('/api/v1/privileges', authenticate, blockIfPasswordChangeRequired, privilegeRoutes);
 app.use('/api/v1/campuses', authenticate, blockIfPasswordChangeRequired, campusRoutes);
 app.use('/api/v1/departments', authenticate, blockIfPasswordChangeRequired, departmentRoutes);
+app.use('/api/v1/evaluations', authenticate, blockIfPasswordChangeRequired, appraisalRoutes);
+// app.use('/api/v1/attendance', authenticate, blockIfPasswordChangeRequired, attendanceRoutes);
 
 // Initialize Event Listeners
 // (Worker initialized via import above)
