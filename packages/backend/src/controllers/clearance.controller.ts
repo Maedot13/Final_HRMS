@@ -255,6 +255,19 @@ export const finalApproveClearance = async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
 
+        if (!user.isHeadHR) {
+            await logAction({
+                userId: user.userId,
+                action: AuditAction.ACCESS_DENIED,
+                entityType: 'ClearanceRequest',
+                entityId: clearanceId,
+                changes: { reason: 'Final approval requires Head HR role' },
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent')
+            });
+            return sendError(res, 403, ErrorCode.FORBIDDEN, 'Only Head HR can grant final clearance approval', null, req);
+        }
+
         const { action, reason } = req.body;
         const isApprove = action !== 'REJECT';
         const sanitizedReason = reason ? sanitizeInput(reason) : undefined;

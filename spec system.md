@@ -34,7 +34,7 @@ This document specifies the complete **Human Resource Management System (HRMS)**
 | **HR_OFFICER** | Operational HR; handles leaves, payroll, clearance initiation, performance evaluations, and experience letters. Campus‑scoped unless Head HR. |
 | **EMPLOYEE** | Staff member with self‑service access. |
 | **Head HR** | System‑wide HR_OFFICER with final clearance approval (`isHeadHR=true`). |
-| **Clearance Body** | University department (Library, IT, Finance, etc.) that must approve an employee’s separation. |
+| **Clearance Body** | University department (Library, IT, Store, Lab) that must approve an employee’s separation. |
 | **Special Privilege** | Additive permission (Dean, President) granted on top of a base role. |
 | **ESS** | Employee Self‑Service portal. |
 | **Campus Scoping** | Users see only data from their assigned campus (unless system‑wide). |
@@ -426,7 +426,7 @@ model ClearanceTask {
   id           String              @id @default(cuid())
   clearanceId  String
   clearance    Clearance           @relation(fields: [clearanceId], references: [id])
-  bodyName     String              // Library, IT, Finance, etc.
+  bodyName     String              // Library, IT, Store, Lab
   status       ClearanceTaskStatus @default(PENDING)
   approverId   String?             // User ID of body approver
   remarks      String?
@@ -520,10 +520,8 @@ HR_Officer initiates clearance
          │
          ▼
 ┌────────────────────────────────────┐
-│ All Clearance Bodies (parallel or  │
-│ sequential per config)             │
-│ - Library, IT, Finance, Store,     │
-│   Lab, Sport, Security, etc.       │
+│ All Clearance Bodies                 │
+│ - Library, IT, Store, Lab            │
 └────────────────────────────────────┘
          │ (all approved)
          ▼
@@ -617,6 +615,15 @@ Experience letter available
 | **DEAN** | `sabbatical:approve`, `employee:read:college`, `schedule:read`, `leave:read:college`, `clearance:read` | College |
 | **UNIVERSITY_PRESIDENT** | `leave:without_pay:approve`, `research_leave:approve`, `clearance:read`, `employee:read:any` | System‑wide 
 > A user retains all base role permissions when granted a special privilege.
+
+### 5.3 Head HR Access-Control Specification
+The **Head HR** (`isHeadHR=true`) operates as a system-wide `HR_OFFICER` with explicitly elevated access control. The role must have unrestricted, system-wide authorization for the following modules:
+- **Employee Management:** Full authority to list, create, edit, and manage all employee records across all campuses.
+- **Leave Approvals:** System-wide access to review and process leave requests.
+- **Performance Management:** System-wide access to manage, create, and review performance evaluations.
+- **Payroll:** System-wide access to view, generate, and export payroll reports.
+- **Experience:** System-wide authority to generate experience letters for any employee.
+- **Clearance (Final Approval):** System-wide access to initiate, monitor, and process clearances. The Head HR represents the highest level in the clearance approval hierarchy and is exclusively authorized to perform final approval actions (`clearance:final:approve`).
 
 
 ---
@@ -749,7 +756,7 @@ Experience letter available
 - `/super/campuses` – manage campuses
 
 ### 7.6 Clearance Body User Interface
-- `/clearance/tasks` – list tasks assigned to the logged‑in body user (Library, IT, etc.)
+- `/clearance/tasks` – list tasks assigned to the logged‑in body user (Library, IT, Store, Lab)
 - `/clearance/task/:id` – approve/reject with remarks
 
 ### 7.7 Academic Approver Dashboard (VP, Dean, Dept Head)
@@ -759,6 +766,11 @@ Experience letter available
 ### 7.8 Finance Department Dashboard
 - `/finance/payroll` – Receive and accept payroll-related reports from the HR_Officer.
 - `/finance/leave-data` – Dashboard to view full information with tags describing the type of leave and salary information (especially for Sabbatical, Research, and Without Pay leaves).
+
+### 7.9 Head HR Dashboard
+- Inherits all features from **7.3 HR_Officer Dashboard**, but operates with a system-wide scope.
+- Provides unrestricted authorization for the following modules across all campuses: **Employee Management**, **Leave Approvals**, **Performance Management**, **Payroll**, **Clearance**, and **Experience**.
+- `/hr/clearance` – Includes specialized functionality exclusive to the Head HR for executing the final approval step (`clearance:final:approve`) in the clearance workflow.
 
 ---
 
@@ -904,13 +916,10 @@ const privilegePermissions = {
 
 | Body Name | Default Mode | Order |
 |-----------|--------------|-------|
-| Library | PARALLEL | 1 |
-| IT | PARALLEL | 2 |
-| Finance | SEQUENTIAL | 3 |
-| Store | PARALLEL | 4 |
-| Lab | PARALLEL | 5 |
-| Sport | PARALLEL | 6 |
-| Security | SEQUENTIAL | 7 |
+| Library | PARALLEL | 0 |
+| IT | PARALLEL | 0 |
+| Store | PARALLEL | 0 |
+| Lab | PARALLEL | 0|
 
 ---
 

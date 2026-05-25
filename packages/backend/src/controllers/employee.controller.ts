@@ -5,7 +5,7 @@ import { UserRole, UserScope } from '@hrms/types';
 import { operationalUpdateSchema, updateEmployeeSchema } from '../schemas/employee.schema';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 import { auditEmployeeUpdate, AuditAction } from '../utils/auditLog';
-import { assertSameCampus, assertCanWriteCampusResource } from '../lib/campusScope';
+import { assertSameCampus, assertCanWriteCampusResource, getCampusScope, getCampusIdFilter } from '../lib/campusScope';
 import { prisma } from '../lib/prisma';
 
 export const getEmployee = async (req: Request, res: Response) => {
@@ -221,8 +221,12 @@ export const updateEmployee = async (req: Request, res: Response) => {
 export const listEmployees = async (req: Request, res: Response) => {
     try {
         const user = req.user!;
-        const isPresident = (user.specialPrivileges ?? []).includes('UNIVERSITY_PRESIDENT');
-        const campusId = isPresident && req.query.campusId ? parseInt(req.query.campusId as string) : user.campusId;
+        const privileges = user.specialPrivileges ?? [];
+        const isPresident = privileges.includes('UNIVERSITY_PRESIDENT');
+        
+        const campusCtx = getCampusScope(req);
+        // President or Head HR can view all campuses if no campusId is specified.
+        const campusId = (isPresident || user.isHeadHR) && !req.query.campusId ? undefined : getCampusIdFilter(campusCtx);
         const { search, status, cursor, limit } = req.query as Record<string, string>;
 
         const employees = await prisma.employee.findMany({

@@ -50,6 +50,14 @@ describe('Clearance Integration', () => {
             userId: 1
         } as any);
 
+        prismaMock.employee.findFirst.mockResolvedValue({
+            id: 1,
+            campusId: 1,
+            department: 'Engineering',
+            name: 'John Doe',
+            userId: 1
+        } as any);
+
         prismaMock.user.findMany.mockResolvedValue([{ id: 1 }] as any);
         prismaMock.notification.createMany.mockResolvedValue({ count: 1 } as any);
     });
@@ -60,6 +68,7 @@ describe('Clearance Integration', () => {
             lastWorkingDate.setDate(lastWorkingDate.getDate() + 30);
 
             const clearanceData = {
+                targetEmployeeId: 'EMP001',
                 reason: 'Resignation for better opportunity',
                 lastWorkingDay: lastWorkingDate.toISOString().split('T')[0]
             };
@@ -110,7 +119,7 @@ describe('Clearance Integration', () => {
 
             const res = await request(app)
                 .post('/api/v1/clearance/requests')
-                .send({ reason: 'Validation text length', lastWorkingDay: lastWorkingDate.toISOString().split('T')[0] });
+                .send({ targetEmployeeId: 'EMP001', reason: 'Validation text length', lastWorkingDay: lastWorkingDate.toISOString().split('T')[0] });
 
             expect(res.status).toBe(400);
             expect(res.body.message).toContain('Active clearance request already exists');

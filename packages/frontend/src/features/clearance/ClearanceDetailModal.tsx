@@ -7,6 +7,7 @@ import { clearanceApi } from '../../api/clearance';
 import { toast } from 'react-toastify';
 import { FiAlertTriangle, FiCheck, FiX, FiMapPin, FiRefreshCw } from 'react-icons/fi';
 import { format } from 'date-fns';
+import { useAuthStore } from '../../store/useAuthStore';
 
 interface Props {
     isOpen: boolean;
@@ -15,13 +16,16 @@ interface Props {
 }
 
 const statusBadge = (status: string) => {
-    if (status === 'APPROVED') return <Badge variant="approved">Approved</Badge>;
+    if (status === 'COMPLETED' || status === 'APPROVED') return <Badge variant="approved">{status === 'COMPLETED' ? 'Completed' : 'Approved'}</Badge>;
     if (status === 'REJECTED') return <Badge variant="rejected">Rejected</Badge>;
-    return <Badge variant="warning">Pending</Badge>;
+    if (status === 'HR_APPROVAL_PENDING') return <Badge variant="info">HR Pending</Badge>;
+    if (status === 'HR_APPROVED') return <Badge variant="info">Final Approval</Badge>;
+    return <Badge variant="warning">{status === 'BODY_APPROVAL_PENDING' ? 'Body Pending' : 'Pending'}</Badge>;
 };
 
 export function ClearanceDetailModal({ isOpen, onClose, requestId }: Props) {
     const queryClient = useQueryClient();
+    const user = useAuthStore((s) => s.user);
     const [rejectComment, setRejectComment] = useState('');
     const [rejectingUnitId, setRejectingUnitId] = useState<number | null>(null);
 
@@ -58,6 +62,18 @@ export function ClearanceDetailModal({ isOpen, onClose, requestId }: Props) {
         },
         onError: (error: any) => toast.error(error.response?.data?.message || 'Rejection failed'),
     });
+
+    const hrApproveMutation = useMutation({
+        mutationFn: ({ action, notes }: { action: 'APPROVE' | 'REJECT'; notes?: string }) =>
+            clearanceApi.approveCampusHR(requestId!, { action, notes }),
+        onSuccess: (_, vars) => {
+            queryClient.invalidateQueries({ queryKey: ['clearanceRequest', requestId] });
+            queryClient.invalidateQueries({ queryKey: ['clearanceRequests'] });
+            toast.success(`Campus HR ${vars.action === 'APPROVE' ? 'approved' : 'rejected'} successfully`);
+        },
+        onError: (error: any) => toast.error(error.response?.data?.message || 'Campus HR action failed'),
+    });
+
 
 
     // Group checks by campus name
@@ -251,7 +267,36 @@ export function ClearanceDetailModal({ isOpen, onClose, requestId }: Props) {
                         </div>
 
                         {/* Sticky footer */}
-                        <div className="border-t border-gray-200 pt-3 mt-3 flex justify-end">
+                        <div className="border-t border-gray-200 pt-3 mt-3 flex justify-between items-center bg-white">
+                            <div>
+                                {request.status === 'HR_APPROVAL_PENDING' && user?.role === 'HR_OFFICER' && !user?.isHeadHR && (!request.campusId || request.campusId === user?.campusId) && (
+                                    <div className="flex gap-2">
+                                        <Button
+                                            variant="primary"
+                                            size="sm"
+                                            isLoading={hrApproveMutation.isPending && hrApproveMutation.variables?.action === 'APPROVE'}
+                                            onClick={() => hrApproveMutation.mutate({ action: 'APPROVE' })}
+                                        >
+                                            <FiCheck className="w-4 h-4 mr-1" />
+                                            Approve as Campus HR
+                                        </Button>
+                                        <Button
+                                            variant="danger"
+                                            size="sm"
+                                            isLoading={hrApproveMutation.isPending && hrApproveMutation.variables?.action === 'REJECT'}
+                                            onClick={() => {
+                                                const notes = window.prompt('Enter rejection reason:');
+                                                if (notes !== null) {
+                                                    hrApproveMutation.mutate({ action: 'REJECT', notes });
+                                                }
+                                            }}
+                                        >
+                                            <FiX className="w-4 h-4 mr-1" />
+                                            Reject
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
                             <Button variant="secondary" onClick={onClose}>Close</Button>
                         </div>
                     </>

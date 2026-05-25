@@ -74,7 +74,7 @@ export const authorize = (allowedRoles: UserRole[], allowedPrivileges: string[] 
         }
 
         const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
-        const hasRole = allowedRoles.includes(req.user.role);
+        const hasRole = allowedRoles.includes(req.user.role) || (req.user.isHeadHR && allowedRoles.includes(UserRole.HR_OFFICER));
         const hasPrivilege = allowedPrivileges.length > 0 && req.user.specialPrivileges?.some(p => allowedPrivileges.includes(p));
 
         if (!isSuperAdmin && !hasRole && !hasPrivilege) {

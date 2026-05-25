@@ -51,10 +51,25 @@ export default function ClearancePage() {
             render: (r) => {
                 const variants: Record<string, 'info' | 'approved' | 'rejected' | 'neutral' | 'warning'> = {
                     PENDING: 'warning',
+                    IN_PROGRESS: 'warning',
+                    BODY_APPROVAL_PENDING: 'warning',
+                    HR_APPROVAL_PENDING: 'info',
+                    HR_APPROVED: 'info',
                     APPROVED: 'approved',
+                    COMPLETED: 'approved',
                     REJECTED: 'rejected',
                 };
-                return <Badge variant={variants[r.status] || 'neutral'}>{r.status}</Badge>;
+                
+                const formatLabel = (s: string) => {
+                    const map: Record<string, string> = {
+                        BODY_APPROVAL_PENDING: 'Body Pending',
+                        HR_APPROVAL_PENDING: 'HR Pending',
+                        HR_APPROVED: 'Final Approval',
+                    };
+                    return map[s] || s;
+                };
+
+                return <Badge variant={variants[r.status] || 'neutral'}>{formatLabel(r.status)}</Badge>;
             },
         },
         {

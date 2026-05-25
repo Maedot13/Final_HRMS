@@ -12,9 +12,10 @@ export type CampusScopeContext =
  */
 export function getCampusScope(req: Request): CampusScopeContext {
   const scope = req.user?.scope ?? UserScope.CAMPUS;
+  const isHeadHR = req.user?.isHeadHR ?? false;
   const campusId = req.user?.campusId ?? null;
 
-  if (scope === UserScope.UNIVERSITY) {
+  if (scope === UserScope.UNIVERSITY || isHeadHR) {
     const raw = req.headers['x-campus-id'] ?? req.query.campusId;
     const parsed = raw != null ? parseInt(String(raw), 10) : NaN;
     const viewCampusId = !isNaN(parsed) && parsed > 0 ? parsed : null;
@@ -82,7 +83,7 @@ export function assertCanWriteCampusResource(
 
   // 1. If University Admin, block the write operation to local campus data UNLESS allowed
   if (ctx.scope === UserScope.UNIVERSITY) {
-    if (options.allowUniversity) {
+    if (options.allowUniversity || req.user?.isHeadHR) {
       return; // Central HR / Admin is allowed to write specific fields
     }
     logger.warn('Campus isolation: University Admin blocked from writing to local campus resource', {

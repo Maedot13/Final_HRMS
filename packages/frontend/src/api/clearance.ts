@@ -57,4 +57,8 @@ export const clearanceApi = {
     listPendingFinalApproval: () => apiClient.get('/clearance/requests', { params: { status: 'HR_APPROVED' } }),
     finalApprove: (requestId: number, data: { action: 'APPROVE' | 'REJECT'; reason?: string }) =>
         apiClient.patch(`/clearance/requests/${requestId}/final-approve`, data),
+        
+    // Campus HR - approve stage
+    approveCampusHR: (requestId: number, data: { action: 'APPROVE' | 'REJECT'; notes?: string }) =>
+        apiClient.patch(`/clearance/requests/${requestId}/hr-approve`, data),
 };

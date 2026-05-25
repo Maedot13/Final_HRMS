@@ -1,7 +1,7 @@
 
 import { Router } from 'express';
 import * as clearanceController from '../controllers/clearance.controller';
-import { authenticate, authorize, authorizeHeadHR } from '../middleware/auth.middleware';
+import { authenticate, authorize } from '../middleware/auth.middleware';
 import { UserRole } from '@hrms/types';
 
 const router = Router();
@@ -180,7 +180,6 @@ router.patch('/requests/:id/hr-approve',
 );
 
 router.patch('/requests/:id/final-approve',
-    authorizeHeadHR,
     clearanceController.finalApproveClearance
 );
 

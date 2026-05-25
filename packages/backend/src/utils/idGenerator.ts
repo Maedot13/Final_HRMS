@@ -1,32 +1,20 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 
 export async function generateNextEmployeeId(campusId: number, tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">): Promise<string> {
-    type CampusIncrementResult = {
-        employeeIdPrefix: string;
-        employeeNumericLength: number;
-        employeeSequenceCurrent: number;
-    };
+    // Obtain a transaction-level advisory lock to serialize ID generation globally
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(1001)`;
 
-    // Fast-fail check outside the raw query if needed, but the raw query handles not found.
-    const result = await tx.$queryRaw<CampusIncrementResult[]>`
-        UPDATE "Campus"
-        SET "employeeSequenceCurrent" = "employeeSequenceCurrent" + 1,
-            "isPatternLocked" = true
-        WHERE "id" = ${campusId}
-        RETURNING "employeeIdPrefix", "employeeNumericLength", "employeeSequenceCurrent"
+    // Find the maximum numeric part of any existing employee ID that matches 'EMPXXXX'
+    const result = await tx.$queryRaw<{ max_id: number }[]>`
+        SELECT COALESCE(MAX(CAST(SUBSTRING("employeeId" FROM 4) AS INTEGER)), 0) as max_id
+        FROM "User"
+        WHERE "employeeId" ~ '^EMP[0-9]+$'
     `;
 
-    if (!result || result.length === 0) {
-        throw new Error('Campus not found or invalid configuration.');
-    }
+    const nextSeq = Number(result[0].max_id) + 1;
+    
+    // Pad with zeros to at least 4 digits
+    const paddedSequence = nextSeq.toString().padStart(4, '0');
 
-    const { employeeIdPrefix, employeeNumericLength, employeeSequenceCurrent } = result[0];
-
-    const paddedSequence = employeeSequenceCurrent.toString().padStart(employeeNumericLength, '0');
-
-    if (paddedSequence.length > employeeNumericLength) {
-        throw new Error(`Employee ID sequence overflow for campus prefix ${employeeIdPrefix}. Maximum length reached.`);
-    }
-
-    return `${employeeIdPrefix}${paddedSequence}`;
+    return `EMP${paddedSequence}`;
 }

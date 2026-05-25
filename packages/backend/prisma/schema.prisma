@@ -426,6 +426,7 @@ enum AuditAction {
   CAMPUS_SUSPENDED
   DEPARTMENT_CREATED
   DEPARTMENT_HEAD_CHANGED
+  ACCESS_DENIED
 }
 
 enum SpecialPrivilege {

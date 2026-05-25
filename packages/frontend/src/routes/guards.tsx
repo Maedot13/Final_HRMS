@@ -90,7 +90,7 @@ export function RequireRole({ children, allowedRoles }: RequireRoleProps) {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const isAllowed = user ? allowedRoles.includes(user.role as UserRole) : false;
+    const isAllowed = user ? (allowedRoles.includes(user.role as UserRole) || (user.isHeadHR && allowedRoles.includes('HR_OFFICER'))) : false;
 
     useEffect(() => {
         if (user && !isAllowed) {

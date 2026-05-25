@@ -1,7 +1,7 @@
 
 import { ClearanceStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { notifyDepartmentHead, notifyRole } from './notification.service';
+import { notifyDepartmentHead, notifyRole, notifyUsers } from './notification.service';
 import { canApproveForUnit } from './authorization.service';
 import { logger } from '../utils/logger';
 import { dispatchEvent, SystemEventTypes } from './eventBus.service';
@@ -26,9 +26,11 @@ export const initiateClearance = async (employeeId: number, reason: string, last
     });
     const campusId = employee?.campusId ?? null;
 
-    // Fetch ALL active units across all campuses so every campus body must approve
+    // Fetch all active clearance units across all campuses
     const units = await prisma.clearanceUnit.findMany({
-        where: { isActive: true }
+        where: { 
+            isActive: true
+        }
     });
 
     if (units.length === 0) {
@@ -71,32 +73,22 @@ export const initiateClearance = async (employeeId: number, reason: string, last
     if (createdRequest) {
         // Iterate through units to notify correct people
         for (const unit of units) {
-            const unitName = unit.name.toUpperCase();
             const message = `Clearance request from ${createdRequest.employee.name} requires your review.`;
+            
+            // Find all CLEARANCE_BODY users for this unit
+            const bodyUsers = await prisma.user.findMany({
+                where: {
+                    role: 'CLEARANCE_BODY',
+                    isActive: true,
+                    clearanceUnitId: unit.id
+                }
+            });
 
-            if (unitName === 'HR' || unitName === 'HUMAN RESOURCES') {
-                await notifyRole('HR_OFFICER', {
+            if (bodyUsers.length > 0) {
+                const userIds = bodyUsers.map(u => u.id);
+                await notifyUsers(userIds, {
                     type: 'CLEARANCE_REVIEW_REQUIRED',
-                    title: 'Clearance Request: HR',
-                    message,
-                    relatedId: clearance.id,
-                    relatedType: 'CLEARANCE_REQUEST',
-                    campusId
-                });
-            } else if (unitName === 'FINANCE') {
-                await notifyRole('FINANCE_OFFICER', {
-                    type: 'CLEARANCE_REVIEW_REQUIRED',
-                    title: 'Clearance Request: Finance',
-                    message,
-                    relatedId: clearance.id,
-                    relatedType: 'CLEARANCE_REQUEST',
-                    campusId
-                });
-            } else if (unitName === 'DEPARTMENT HEAD' || unitName === createdRequest.employee.deptLegacy.toUpperCase()) {
-                // If the unit is specifically "Department Head" or matches the employee's department name
-                await notifyDepartmentHead(createdRequest.employee.deptLegacy, {
-                    type: 'CLEARANCE_REVIEW_REQUIRED',
-                    title: 'Clearance Request: Department',
+                    title: `Clearance Request: ${unit.name}`,
                     message,
                     relatedId: clearance.id,
                     relatedType: 'CLEARANCE_REQUEST',
@@ -113,7 +105,11 @@ export const initiateClearance = async (employeeId: number, reason: string, last
 export const listClearanceRequests = async (params: { status?: string; campusId?: number; limit?: number; offset?: number }) => {
     const where: any = {};
     if (params.status && params.status !== 'ALL') {
-        where.status = params.status;
+        if (params.status === 'PENDING') {
+            where.status = { in: ['IN_PROGRESS', 'BODY_APPROVAL_PENDING', 'HR_APPROVAL_PENDING'] };
+        } else {
+            where.status = params.status;
+        }
     }
     if (params.campusId != null) {
         where.campusId = params.campusId;
@@ -164,21 +160,7 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
         throw new Error('You do not have permission to approve for this unit');
     }
 
-    // Campus isolation: campus users can only approve clearances in their campus
-    if (approverCampusId != null) {
-        const clearance = await prisma.clearanceRequest.findUnique({
-            where: { id: clearanceId },
-            select: { campusId: true, campus: { select: { isClearanceSequential: true } } }
-        });
-        if (!clearance || clearance.campusId !== approverCampusId) {
-            logger.warn('Campus isolation: Cross-campus clearance approval denied', {
-                clearanceId,
-                approverCampusId,
-                clearanceCampusId: clearance?.campusId ?? null,
-            });
-            throw new Error('Cross-campus access denied');
-        }
-    }
+
 
     return prisma.$transaction(async (tx) => {
         // Enforce sequential clearance logic if active
@@ -195,7 +177,7 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
                 const earlierPending = await tx.clearanceCheck.count({
                     where: {
                         clearanceId,
-                        status: ClearanceStatus.PENDING,
+                        status: { not: ClearanceStatus.APPROVED },
                         unit: { priorityOrder: { lt: currentUnit.priorityOrder } }
                     }
                 });
@@ -246,6 +228,23 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
                 data: { status: ClearanceStatus.HR_APPROVAL_PENDING }
             });
 
+            // Fetch employee for notification
+            const clearanceWithEmployee = await tx.clearanceRequest.findUnique({
+                where: { id: clearanceId },
+                include: { employee: true }
+            });
+
+            if (clearanceWithEmployee) {
+                await notifyRole('HR_OFFICER', {
+                    type: 'CLEARANCE_FINAL_SIGN_OFF',
+                    title: 'Campus HR Clearance Sign-off Required',
+                    message: `All units have approved ${clearanceWithEmployee.employee.name}'s clearance. Campus HR action is now required.`,
+                    relatedId: clearanceId,
+                    relatedType: 'CLEARANCE_REQUEST',
+                    campusId: clearanceWithEmployee.campusId
+                });
+            }
+
             return { status: 'HR_APPROVAL_PENDING', message: 'All clearance bodies approved. Waiting for Campus HR approval.' };
         }
 
@@ -269,28 +268,6 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
                 employeeUserId: clearanceWithEmployee.employee.userId,
                 unitName: unit?.name || 'Unknown'
             });
-
-            // PROACTIVE: If only HR is left, notify HR specifically for "Final Sign-off"
-            const remainingPending = await tx.clearanceCheck.count({
-                where: { clearanceId, status: ClearanceStatus.PENDING }
-            });
-            if (remainingPending === 1) {
-                const finalCheck = await tx.clearanceCheck.findFirst({
-                    where: { clearanceId, status: ClearanceStatus.PENDING },
-                    include: { unit: true }
-                });
-
-                if (finalCheck?.unit?.name.toUpperCase() === 'HR') {
-                    await notifyRole('HR_OFFICER', {
-                        type: 'CLEARANCE_FINAL_SIGN_OFF',
-                        title: 'Final Clearance Sign-off Required',
-                        message: `All units except HR have approved ${clearanceWithEmployee.employee.name}'s clearance. Final HR action is now required to complete the process.`,
-                        relatedId: clearanceId,
-                        relatedType: 'CLEARANCE_REQUEST',
-                        campusId: approverCampusId
-                    });
-                }
-            }
         }
 
         return { status: 'PROGRESS', message: 'Unit approved, others pending' };
@@ -305,21 +282,7 @@ export const rejectCheck = async (clearanceId: number, unitId: number, approverI
         throw new Error('You do not have permission to reject for this unit');
     }
 
-    // Campus isolation: campus users can only reject clearances in their campus
-    if (approverCampusId != null) {
-        const clearance = await prisma.clearanceRequest.findUnique({
-            where: { id: clearanceId },
-            select: { campusId: true, campus: { select: { isClearanceSequential: true } } }
-        });
-        if (!clearance || clearance.campusId !== approverCampusId) {
-            logger.warn('Campus isolation: Cross-campus clearance rejection denied', {
-                clearanceId,
-                approverCampusId,
-                clearanceCampusId: clearance?.campusId ?? null,
-            });
-            throw new Error('Cross-campus access denied');
-        }
-    }
+
 
     return prisma.$transaction(async (tx) => {
         // Enforce sequential clearance logic if active
@@ -402,12 +365,11 @@ export const rejectCheck = async (clearanceId: number, unitId: number, approverI
 };
 
 // Get pending checks for a specific unit (for the approver dashboard)
-export const getPendingChecksForUnit = async (unitId: number, campusId?: number) => {
+export const getPendingChecksForUnit = async (unitId: number, _campusId?: number) => {
     return prisma.clearanceCheck.findMany({
         where: {
             unitId,
-            status: { in: [ClearanceStatus.PENDING, ClearanceStatus.REJECTED] },
-            ...(campusId != null ? { clearance: { campusId } } : {})
+            status: { in: [ClearanceStatus.PENDING, ClearanceStatus.REJECTED] }
         },
         include: {
             clearance: {
@@ -502,6 +464,10 @@ export const approveCampusHR = async (clearanceId: number, campusId: number, app
             throw new Error(`Clearance is not in HR approval phase (${clearance.status})`);
         }
 
+        if (clearance.campusId !== null && clearance.campusId !== campusId) {
+             throw new Error('Campus isolation: You can only approve campus HR for your own campus');
+        }
+
         const taskStatus = isApprove ? ClearanceStatus.APPROVED : ClearanceStatus.REJECTED;
 
         await tx.clearanceApproval.upsert({
@@ -517,13 +483,11 @@ export const approveCampusHR = async (clearanceId: number, campusId: number, app
             });
         }
 
-        const allCampusIds = [...new Set(clearance.checks.map(c => c.unit.campusId).filter(id => id !== null))];
-
         const approvedCount = await tx.clearanceApproval.count({
             where: { clearanceId, status: ClearanceStatus.APPROVED }
         });
 
-        if (approvedCount >= allCampusIds.length) {
+        if (approvedCount >= 1) {
             return tx.clearanceRequest.update({
                 where: { id: clearanceId },
                 data: { status: ClearanceStatus.HR_APPROVED }
