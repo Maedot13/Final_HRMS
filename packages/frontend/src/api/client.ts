@@ -2,7 +2,7 @@ import axios, { AxiosError } from 'axios';
 import { useAuthStore } from '../store/useAuthStore';
 
 const apiClient = axios.create({
-    baseURL: '/api/v1',
+    baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
     headers: {
         'Content-Type': 'application/json',
     },
@@ -16,7 +16,8 @@ const getCsrfToken = async () => {
     if (csrfToken) return csrfToken;
     if (csrfTokenPromise) return csrfTokenPromise;
 
-    csrfTokenPromise = axios.get('/api/v1/csrf-token', { withCredentials: true }).then(res => {
+    const base = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+    csrfTokenPromise = axios.get(`${base}/csrf-token`, { withCredentials: true }).then(res => {
         csrfToken = res.data.csrfToken;
         return csrfToken as string;
     }).finally(() => {
@@ -59,7 +60,8 @@ apiClient.interceptors.response.use(
                 const refreshToken = useAuthStore.getState().refreshToken;
                 const user = useAuthStore.getState().user;
                 if (refreshToken && user) {
-                    const res = await axios.post('/api/v1/auth/refresh', { refreshToken });
+                    const base = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+                    const res = await axios.post(`${base}/auth/refresh`, { refreshToken });
                     const { token: accessToken, refreshToken: newRefreshToken } = res.data;
 
                     useAuthStore.getState().setAuth(
