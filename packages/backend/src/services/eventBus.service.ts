@@ -4,15 +4,27 @@ import { logger } from '../utils/logger';
 
 // We create a fresh connection specifically for BullMQ to avoid
 // blocking the main Redis client used for rate limiting/caching.
-const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-    maxRetriesPerRequest: null,
-});
+let connection: Redis | null = null;
+let systemQueue: Queue | null = null;
 
-connection.on('error', (err) => {
-    logger.error('BullMQ Redis Connection Error:', err);
-});
+const redisUrl = process.env.REDIS_URL;
 
-export const systemQueue = new Queue('SystemEvents', { connection: connection as any });
+if (redisUrl) {
+    connection = new Redis(redisUrl, {
+        maxRetriesPerRequest: null,
+    });
+
+    connection.on('error', (err) => {
+        logger.error('BullMQ Redis Connection Error:', err);
+    });
+
+    systemQueue = new Queue('SystemEvents', { connection: connection as any });
+    logger.info('[EventBus] BullMQ queue initialized with Redis');
+} else {
+    logger.warn('[EventBus] REDIS_URL not set — BullMQ queue disabled. Events will be logged but not queued.');
+}
+
+export { systemQueue };
 
 export enum SystemEventTypes {
     CLEARANCE_COMPLETED = 'CLEARANCE_COMPLETED',
@@ -29,6 +41,10 @@ export enum SystemEventTypes {
  * @param payload The data associated with the event
  */
 export const dispatchEvent = async (eventName: SystemEventTypes, payload: any) => {
+    if (!systemQueue) {
+        logger.warn(`[EventBus] Queue unavailable — skipping event: ${eventName}`);
+        return;
+    }
     try {
         await systemQueue.add(eventName, payload, {
             attempts: 3,

@@ -8,44 +8,56 @@ import { sendEmail } from '../services/email.service';
 import { templates } from '../utils/emailTemplates';
 import { triggerClearancePayrollTransfer } from '../services/payroll.service';
 
-const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-    maxRetriesPerRequest: null,
-});
+const redisUrl = process.env.REDIS_URL;
 
-export const systemWorker = new Worker('SystemEvents', async (job: Job) => {
-    logger.info(`[Worker] Processing job ${job.id} of type ${job.name}`);
+let systemWorker: Worker | null = null;
 
-    switch (job.name) {
-        case SystemEventTypes.CLEARANCE_COMPLETED:
-            await handleClearanceCompleted(job.data);
-            break;
-        case SystemEventTypes.CLEARANCE_UNIT_APPROVED:
-            await handleClearanceUnitApproved(job.data);
-            break;
-        case SystemEventTypes.CLEARANCE_UNIT_REJECTED:
-            await handleClearanceUnitRejected(job.data);
-            break;
-        case SystemEventTypes.LEAVE_REQUESTED:
-            await handleLeaveRequested(job.data);
-            break;
-        case SystemEventTypes.LEAVE_APPROVED:
-            await handleLeaveApproved(job.data);
-            break;
-        case SystemEventTypes.LEAVE_REJECTED:
-            await handleLeaveRejected(job.data);
-            break;
-        default:
-            logger.warn(`[Worker] Unhandled event type: ${job.name}`);
-    }
-}, { connection: connection as any });
+if (redisUrl) {
+    const connection = new Redis(redisUrl, {
+        maxRetriesPerRequest: null,
+    });
 
-systemWorker.on('completed', (job: Job) => {
-    logger.info(`[Worker] Job ${job.id} completed successfully`);
-});
+    systemWorker = new Worker('SystemEvents', async (job: Job) => {
+        logger.info(`[Worker] Processing job ${job.id} of type ${job.name}`);
 
-systemWorker.on('failed', (job: Job | undefined, err: Error) => {
-    logger.error(`[Worker] Job ${job?.id} failed:`, err);
-});
+        switch (job.name) {
+            case SystemEventTypes.CLEARANCE_COMPLETED:
+                await handleClearanceCompleted(job.data);
+                break;
+            case SystemEventTypes.CLEARANCE_UNIT_APPROVED:
+                await handleClearanceUnitApproved(job.data);
+                break;
+            case SystemEventTypes.CLEARANCE_UNIT_REJECTED:
+                await handleClearanceUnitRejected(job.data);
+                break;
+            case SystemEventTypes.LEAVE_REQUESTED:
+                await handleLeaveRequested(job.data);
+                break;
+            case SystemEventTypes.LEAVE_APPROVED:
+                await handleLeaveApproved(job.data);
+                break;
+            case SystemEventTypes.LEAVE_REJECTED:
+                await handleLeaveRejected(job.data);
+                break;
+            default:
+                logger.warn(`[Worker] Unhandled event type: ${job.name}`);
+        }
+    }, { connection: connection as any });
+
+    systemWorker.on('completed', (job: Job) => {
+        logger.info(`[Worker] Job ${job.id} completed successfully`);
+    });
+
+    systemWorker.on('failed', (job: Job | undefined, err: Error) => {
+        logger.error(`[Worker] Job ${job?.id} failed:`, err);
+    });
+
+    logger.info('[Worker] Notification worker started with Redis');
+} else {
+    logger.warn('[Worker] REDIS_URL not set — notification worker disabled.');
+}
+
+export { systemWorker };
 
 // HANDLERS
 
