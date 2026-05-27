@@ -147,7 +147,7 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
         }
     } else if (creatorRole === UserRole.HR_OFFICER) {
         // HR Officer can ONLY create EMPLOYEE, but Head HR can create VICE_PRESIDENT (AVP)
-        const isHeadHrCreatingAvp = creatorContext.isHeadHR && targetRole === 'VICE_PRESIDENT';
+        const isHeadHrCreatingAvp = creatorContext.isHeadHR && (targetRole as any) === 'VICE_PRESIDENT';
         if (targetRole !== UserRole.EMPLOYEE && !isHeadHrCreatingAvp) {
             throw new Error(`As an ${creatorRole}, you only have permission to register accounts with the EMPLOYEE role.`);
         }
