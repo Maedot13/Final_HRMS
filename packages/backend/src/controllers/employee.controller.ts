@@ -53,7 +53,7 @@ export const getEmployee = async (req: Request, res: Response) => {
         // 1. Admin/HR can view anyone
         // 2. Employee can view themselves
         const isSelf = employee.userId === user.userId;
-        const isAdminOrHR = user.role === UserRole.ADMIN || user.role === UserRole.HR_OFFICER;
+        const isAdminOrHR = user.role === UserRole.ADMIN || user.role === UserRole.HR_OFFICER || user.role === UserRole.SUPER_ADMIN;
         const isPresident = (user.specialPrivileges ?? []).includes('UNIVERSITY_PRESIDENT');
         const isDean = (user.specialPrivileges ?? []).includes('DEAN');
 

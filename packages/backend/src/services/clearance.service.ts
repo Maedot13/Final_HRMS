@@ -26,11 +26,16 @@ export const initiateClearance = async (employeeId: number, reason: string, last
     });
     const campusId = employee?.campusId ?? null;
 
-    // Fetch all active clearance units across all campuses
+    // Fetch all active clearance units across all active campuses
     const units = await prisma.clearanceUnit.findMany({
         where: { 
-            isActive: true
+            isActive: true,
+            campus: { isActive: true }
         }
+    });
+
+    const activeCampuses = await prisma.campus.findMany({
+        where: { isActive: true }
     });
 
     if (units.length === 0) {
@@ -101,6 +106,22 @@ export const initiateClearance = async (employeeId: number, reason: string, last
     return clearance;
 };
 
+// Self-healing: reconcile request status if checks are out of sync
+const reconcileRequestStatus = async (request: any) => {
+    if (request.status === 'BODY_APPROVAL_PENDING' && request.checks?.length > 0) {
+        const allChecksApproved = request.checks.every((c: any) => c.status === 'APPROVED');
+        if (allChecksApproved) {
+            logger.warn(`Reconciling stuck request #${request.id}: all checks approved but status was BODY_APPROVAL_PENDING`);
+            await prisma.clearanceRequest.update({
+                where: { id: request.id },
+                data: { status: ClearanceStatus.HR_APPROVAL_PENDING }
+            });
+            request.status = 'HR_APPROVAL_PENDING';
+        }
+    }
+    return request;
+};
+
 // 1b. List Clearance Requests (with optional status filter and campus isolation)
 export const listClearanceRequests = async (params: { status?: string; campusId?: number; limit?: number; offset?: number }) => {
     const where: any = {};
@@ -115,12 +136,15 @@ export const listClearanceRequests = async (params: { status?: string; campusId?
         where.campusId = params.campusId;
     }
 
+    where.campus = { isActive: true };
+
     const [data, total] = await Promise.all([
         prisma.clearanceRequest.findMany({
             where,
             include: {
                 employee: { select: { employeeId: true, name: true, deptLegacy: true } },
                 checks: { include: { unit: true } },
+                hrApprovals: true,
             },
             orderBy: { createdAt: 'desc' },
             take: params.limit || 50,
@@ -129,16 +153,22 @@ export const listClearanceRequests = async (params: { status?: string; campusId?
         prisma.clearanceRequest.count({ where }),
     ]);
 
+    // Self-heal any stuck requests
+    for (const req of data) {
+        await reconcileRequestStatus(req);
+    }
+
     return { data, total };
 };
 
 // 2. Get Clearance Details
 export const getClearance = async (id: number) => {
-    return prisma.clearanceRequest.findUnique({
+    const request = await prisma.clearanceRequest.findUnique({
         where: { id },
         include: {
             employee: { select: { employeeId: true, name: true, deptLegacy: true } },
             campus: { select: { name: true } },
+            hrApprovals: { include: { campus: { select: { name: true } } } },
             checks: {
                 include: {
                     unit: {
@@ -149,6 +179,8 @@ export const getClearance = async (id: number) => {
             }
         }
     });
+    if (request) await reconcileRequestStatus(request);
+    return request;
 };
 
 // 3. Approve Specific Check
@@ -241,7 +273,7 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
                     message: `All units have approved ${clearanceWithEmployee.employee.name}'s clearance. Campus HR action is now required.`,
                     relatedId: clearanceId,
                     relatedType: 'CLEARANCE_REQUEST',
-                    campusId: clearanceWithEmployee.campusId
+                    campusId: null
                 });
             }
 
@@ -271,7 +303,7 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
         }
 
         return { status: 'PROGRESS', message: 'Unit approved, others pending' };
-    });
+    }, { timeout: 15000 });
 };
 
 // 4. Reject Specific Check
@@ -361,7 +393,7 @@ export const rejectCheck = async (clearanceId: number, unitId: number, approverI
         }
 
         return { status: 'REJECTED', message: 'Clearance check rejected. Employee must resolve issues.' };
-    });
+    }, { timeout: 15000 });
 };
 
 // Get pending checks for a specific unit (for the approver dashboard)
@@ -382,7 +414,10 @@ export const getPendingChecksForUnit = async (unitId: number, _campusId?: number
 
 export const listClearanceUnits = async (campusId?: number) => {
     return prisma.clearanceUnit.findMany({
-        where: campusId ? { campusId } : {},
+        where: {
+            ...(campusId ? { campusId } : {}),
+            campus: { isActive: true }
+        },
         orderBy: { name: 'asc' },
         include: {
             users: {
@@ -439,7 +474,7 @@ export const createClearanceUnit = async (data: { name: string; fullName?: strin
             }
         }
         return unit;
-    });
+    }, { timeout: 15000 });
 };
 
 export const updateClearanceUnit = async (unitId: number, data: { name?: string; fullName?: string; description?: string; isActive?: boolean; priorityOrder?: number; loginId?: string; loginPassword?: string }) => {
@@ -518,7 +553,7 @@ export const updateClearanceUnit = async (unitId: number, data: { name?: string;
         }
 
         return updatedUnit;
-    });
+    }, { timeout: 15000 });
 };
 export const deleteClearanceUnit = async (unitId: number) => {
     return prisma.$transaction(async (tx) => {
@@ -558,7 +593,7 @@ export const deleteClearanceUnit = async (unitId: number) => {
         return tx.clearanceUnit.delete({
             where: { id: unitId }
         });
-    });
+    }, { timeout: 15000 });
 };
 
 // 5. approveCampusHR - HR Officer approval step
@@ -572,10 +607,6 @@ export const approveCampusHR = async (clearanceId: number, campusId: number, app
         if (!clearance) throw new Error('Clearance request not found');
         if (clearance.status !== ClearanceStatus.HR_APPROVAL_PENDING) {
             throw new Error(`Clearance is not in HR approval phase (${clearance.status})`);
-        }
-
-        if (clearance.campusId !== null && clearance.campusId !== campusId) {
-             throw new Error('Campus isolation: You can only approve campus HR for your own campus');
         }
 
         const taskStatus = isApprove ? ClearanceStatus.APPROVED : ClearanceStatus.REJECTED;
@@ -593,11 +624,12 @@ export const approveCampusHR = async (clearanceId: number, campusId: number, app
             });
         }
 
+        const activeCampusesCount = await tx.campus.count({ where: { isActive: true } });
         const approvedCount = await tx.clearanceApproval.count({
             where: { clearanceId, status: ClearanceStatus.APPROVED }
         });
 
-        if (approvedCount >= 1) {
+        if (approvedCount >= activeCampusesCount) {
             return tx.clearanceRequest.update({
                 where: { id: clearanceId },
                 data: { status: ClearanceStatus.HR_APPROVED }
@@ -605,7 +637,7 @@ export const approveCampusHR = async (clearanceId: number, campusId: number, app
         }
 
         return tx.clearanceRequest.findUnique({ where: { id: clearanceId }});
-    });
+    }, { timeout: 15000 });
 };
 
 // 6. finalApproveClearance - Head HR
@@ -681,5 +713,5 @@ export const finalApproveClearance = async (clearanceId: number, approverId: num
         });
 
         return completed;
-    });
+    }, { timeout: 15000 });
 };

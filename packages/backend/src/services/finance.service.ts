@@ -2,20 +2,22 @@ import { LeaveType, LeaveStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logger } from '../utils/logger';
 
-export const getFinanceLeaveData = async () => {
+export const getFinanceLeaveData = async (campusId?: number) => {
     const leaves = await prisma.leaveRequest.findMany({
         where: {
             status: LeaveStatus.APPROVED,
             leaveType: {
                 in: [LeaveType.SABBATICAL, LeaveType.RESEARCH, LeaveType.UNPAID]
-            }
+            },
+            ...(campusId ? { employee: { campusId } } : {})
         },
         include: {
             employee: true
         },
         orderBy: {
             resolvedAt: 'desc'
-        }
+        },
+        distinct: ['employeeId', 'leaveType']
     });
 
     return leaves.map(request => {

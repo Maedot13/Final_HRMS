@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -9,8 +9,10 @@ import { format } from 'date-fns';
 import { ClearanceRequestModal } from '../features/clearance/ClearanceRequestModal';
 import { ClearanceDetailModal } from '../features/clearance/ClearanceDetailModal';
 import { useAuthStore } from '../store/useAuthStore';
+import { toast } from 'react-toastify';
 
 export default function ClearancePage() {
+    const queryClient = useQueryClient();
     const user = useAuthStore((s) => s.user);
     const isHRofficer = user?.role === 'HR_OFFICER';
     const [statusFilter, setStatusFilter] = useState<string>('PENDING');
@@ -26,6 +28,16 @@ export default function ClearancePage() {
             );
             return Array.isArray(res.data) ? res.data : [];
         },
+    });
+
+    const hrApproveMutation = useMutation({
+        mutationFn: ({ requestId, action }: { requestId: number; action: 'APPROVE' | 'REJECT'; notes?: string }) =>
+            clearanceApi.approveCampusHR(requestId, { action }),
+        onSuccess: (_, vars) => {
+            queryClient.invalidateQueries({ queryKey: ['clearanceRequests'] });
+            toast.success(`Campus HR ${vars.action === 'APPROVE' ? 'approved' : 'rejected'} successfully`);
+        },
+        onError: (error: any) => toast.error(error.response?.data?.message || 'Campus HR action failed'),
     });
 
     const columns: Column<any>[] = [
@@ -75,18 +87,56 @@ export default function ClearancePage() {
         {
             key: 'actions',
             header: 'Actions',
-            render: (r) => (
-                <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => {
-                        setSelectedRequestId(r.id);
-                        setIsDetailModalOpen(true);
-                    }}
-                >
-                    View Details
-                </Button>
-            ),
+            render: (r) => {
+                const hasApprovedForMyCampus = r.hrApprovals?.some((a: any) => a.campusId === user?.campusId && a.status === 'APPROVED');
+                const canApproveHR = r.status === 'HR_APPROVAL_PENDING' && isHRofficer && !user?.isHeadHR && !hasApprovedForMyCampus;
+
+                return (
+                    <div className="flex gap-2 items-center">
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => {
+                                setSelectedRequestId(r.id);
+                                setIsDetailModalOpen(true);
+                            }}
+                        >
+                            View Details
+                        </Button>
+                        {canApproveHR && (
+                            <>
+                                <Button 
+                                    variant="primary" 
+                                    size="sm" 
+                                    isLoading={hrApproveMutation.isPending && hrApproveMutation.variables?.requestId === r.id && hrApproveMutation.variables?.action === 'APPROVE'}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        hrApproveMutation.mutate({ requestId: r.id, action: 'APPROVE' });
+                                    }}
+                                >
+                                    Approve
+                                </Button>
+                                <Button 
+                                    variant="danger" 
+                                    size="sm" 
+                                    isLoading={hrApproveMutation.isPending && hrApproveMutation.variables?.requestId === r.id && hrApproveMutation.variables?.action === 'REJECT'}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        const notes = window.prompt('Enter rejection reason:');
+                                        if (notes !== null && notes.trim() !== '') {
+                                            hrApproveMutation.mutate({ requestId: r.id, action: 'REJECT', notes: notes.trim() });
+                                        } else if (notes !== null) {
+                                            toast.error('Rejection reason is mandatory.');
+                                        }
+                                    }}
+                                >
+                                    Reject
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                );
+            },
         },
     ];
 

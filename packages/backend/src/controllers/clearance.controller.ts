@@ -73,9 +73,10 @@ export const listClearanceRequests = async (req: Request, res: Response) => {
 
         const privileges = user.specialPrivileges ?? [];
         const isPresident = privileges.includes('UNIVERSITY_PRESIDENT');
+        const isHROfficer = user.role === UserRole.HR_OFFICER;
         
         const campusCtx = getCampusScope(req);
-        const campusIdFilter = isPresident ? undefined : getCampusIdFilter(campusCtx);
+        const campusIdFilter = (isPresident || isHROfficer) ? undefined : getCampusIdFilter(campusCtx);
 
         const result = await clearanceService.listClearanceRequests({
             status: status as string | undefined,
@@ -111,7 +112,10 @@ export const getClearance = async (req: Request, res: Response) => {
 
         // Campus isolation: campus users can only view clearances in their campus
         if (!isPresident) {
-            assertSameCampus(req, clearance.campusId);
+            const isHROfficer = req.user?.role === UserRole.HR_OFFICER;
+            if (!isHROfficer) {
+                assertSameCampus(req, clearance.campusId);
+            }
         }
 
         sendSuccess(res, clearance);

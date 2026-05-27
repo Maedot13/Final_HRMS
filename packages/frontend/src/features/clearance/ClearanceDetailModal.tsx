@@ -94,6 +94,9 @@ export function ClearanceDetailModal({ isOpen, onClose, requestId }: Props) {
 
     const rejectedChecks = request?.checks?.filter((c: any) => c.status === 'REJECTED') ?? [];
 
+    const hasApprovedForMyCampus = request?.hrApprovals?.some((a: any) => a.campusId === user?.campusId && a.status === 'APPROVED');
+    const canApproveHR = request?.status === 'HR_APPROVAL_PENDING' && user?.role === 'HR_OFFICER' && !user?.isHeadHR && !hasApprovedForMyCampus;
+
     if (!isOpen) return null;
 
     return (
@@ -264,12 +267,27 @@ export function ClearanceDetailModal({ isOpen, onClose, requestId }: Props) {
                                     </div>
                                 </div>
                             ))}
+
+                            {/* HR Approvals Progress */}
+                            {request.hrApprovals && request.hrApprovals.length > 0 && (
+                                <div className="mt-4 border-t border-gray-200 pt-4">
+                                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Campus HR Reviews</h4>
+                                    <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+                                        {request.hrApprovals.map((approval: any) => (
+                                            <div key={approval.id} className="flex items-center justify-between bg-white border border-gray-100 p-2 rounded shadow-sm text-sm">
+                                                <span className="font-medium text-gray-800">{approval.campus?.name || `Campus ${approval.campusId}`}</span>
+                                                {statusBadge(approval.status)}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Sticky footer */}
                         <div className="border-t border-gray-200 pt-3 mt-3 flex justify-between items-center bg-white">
                             <div>
-                                {request.status === 'HR_APPROVAL_PENDING' && user?.role === 'HR_OFFICER' && !user?.isHeadHR && (!request.campusId || request.campusId === user?.campusId) && (
+                                {canApproveHR && (
                                     <div className="flex gap-2">
                                         <Button
                                             variant="primary"
@@ -286,8 +304,10 @@ export function ClearanceDetailModal({ isOpen, onClose, requestId }: Props) {
                                             isLoading={hrApproveMutation.isPending && hrApproveMutation.variables?.action === 'REJECT'}
                                             onClick={() => {
                                                 const notes = window.prompt('Enter rejection reason:');
-                                                if (notes !== null) {
-                                                    hrApproveMutation.mutate({ action: 'REJECT', notes });
+                                                if (notes !== null && notes.trim() !== '') {
+                                                    hrApproveMutation.mutate({ action: 'REJECT', notes: notes.trim() });
+                                                } else if (notes !== null) {
+                                                    toast.error('Rejection reason is mandatory.');
                                                 }
                                             }}
                                         >

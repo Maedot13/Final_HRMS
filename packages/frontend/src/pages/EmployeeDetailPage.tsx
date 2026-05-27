@@ -103,7 +103,7 @@ export default function EmployeeDetailPage() {
             const res = await usersApi.getById(employee.userId);
             return (res as any).data?.data ?? res.data;
         },
-        enabled: !!employee?.userId && (user?.role === 'ADMIN' || user?.role === 'HR_OFFICER'),
+        enabled: !!employee?.userId && (user?.role === 'ADMIN' || user?.role === 'HR_OFFICER' || user?.role === 'SUPER_ADMIN'),
     });
 
     const { data: departments = [] } = useQuery({

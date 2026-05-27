@@ -174,7 +174,7 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
     let finalGeneratedEmployeeId = '';
 
     // Use transaction to create User and Employee atomically
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
         // 1. Generate atomic ID first (Concurrency safe)
         finalGeneratedEmployeeId = await generateNextEmployeeId(assignedCampusId, tx as any);
 
