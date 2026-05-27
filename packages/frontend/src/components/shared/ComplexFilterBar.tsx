@@ -3,7 +3,9 @@ import { Select, type SelectOption } from '../ui/Select';
 
 const ROLE_OPTIONS: SelectOption[] = [
     { value: '', label: 'All roles' },
+    { value: 'SUPER_ADMIN', label: 'Super Admin' },
     { value: 'ADMIN', label: 'Admin' },
+    { value: 'HEAD_HR', label: 'Head HR' },
     { value: 'HR_OFFICER', label: 'HR Officer' },
     { value: 'DEPARTMENT_HEAD', label: 'Department Head' },
     { value: 'FINANCE_OFFICER', label: 'Finance Officer' },
@@ -29,6 +31,7 @@ interface ComplexFilterBarProps {
     onFiltersChange: (filters: FilterState) => void;
     searchPlaceholder?: string;
     departments?: { id: number; name: string }[];
+    allowedRoles?: string[];
 }
 
 export function ComplexFilterBar({
@@ -36,10 +39,15 @@ export function ComplexFilterBar({
     onFiltersChange,
     searchPlaceholder = 'Search by name, email, or employee ID...',
     departments,
+    allowedRoles,
 }: ComplexFilterBarProps) {
     const setFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
         onFiltersChange({ ...filters, [key]: value });
     };
+
+    const roleOptions = allowedRoles
+        ? ROLE_OPTIONS.filter((opt) => opt.value === '' || allowedRoles.includes(opt.value))
+        : ROLE_OPTIONS;
 
     const deptOptions: SelectOption[] = [
         { value: '', label: 'All departments' },
@@ -72,7 +80,7 @@ export function ComplexFilterBar({
                 )}
                 <div className="w-full md:w-40">
                     <Select
-                        options={ROLE_OPTIONS}
+                        options={roleOptions}
                         value={filters.role}
                         onChange={(e) => setFilter('role', e.target.value)}
                         placeholder="Role"

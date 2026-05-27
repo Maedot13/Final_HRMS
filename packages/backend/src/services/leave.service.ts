@@ -2,6 +2,7 @@ import { LeaveStatus, LeaveType, LeaveStage, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logger } from '../utils/logger';
 import { LEAVE_BALANCES } from '../config/constants';
+import { sendLeaveToFinance } from './finance.service';
 
 // ─── Prisma Error Helpers ─────────────────────────────────────────────────────
 
@@ -154,9 +155,8 @@ export const createLeaveRequest = async (
 
     // ── Balance check (only for balance-deducting types)
     if (BALANCE_DEDUCTING_TYPES.has(data.leaveType)) {
-        const balance = await prisma.leaveBalance.findUnique({
-            where: { employeeId_year: { employeeId, year } },
-        });
+        // getLeaveBalances auto-creates the record with defaults if it doesn't exist
+        const balance = await getLeaveBalances(employeeId, year);
 
         const fieldMap: Record<string, string> = {
             [LeaveType.ANNUAL]: 'annualBalance',
@@ -259,15 +259,14 @@ export const getDeptHeadPending = async (headDepartmentId: number | null) => {
     if (!headDepartmentId) return [];
     return prisma.leaveRequest.findMany({
         where: {
-            status: LeaveStatus.PENDING,
-            currentStage: LeaveStage.DEPT_HEAD,
             employee: { departmentId: headDepartmentId },
         },
         include: {
             employee: { select: { name: true, deptLegacy: true, position: true } },
             leaveDocument: true,
+            approvals: { orderBy: { timestamp: 'asc' } },
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
     });
 };
 
@@ -348,8 +347,31 @@ export const getLeaveRequestById = async (id: number) => {
 };
 
 export const getLeaveBalances = async (employeeId: number, year: number) => {
-    return prisma.leaveBalance.findUnique({
+    // Fetch the employee to determine gender and campus for gender-specific allocations
+    const emp = await prisma.employee.findUnique({
+        where: { id: employeeId },
+        select: { campusId: true, gender: true, serviceYears: true },
+    });
+
+    // Annual balance scales with service: base 20, +1 per year, capped at 30
+    const annualDefault = Math.min(
+        LEAVE_BALANCES.ANNUAL + (emp?.serviceYears ?? 0),
+        30
+    );
+
+    return prisma.leaveBalance.upsert({
         where: { employeeId_year: { employeeId, year } },
+        update: {},  // No-op if record already exists — preserve current balances
+        create: {
+            employeeId,
+            year,
+            campusId: emp?.campusId ?? null,
+            annualBalance: annualDefault,
+            sickBalance: LEAVE_BALANCES.SICK,
+            maternityBalance: emp?.gender === 'FEMALE' ? LEAVE_BALANCES.MATERNITY : 0,
+            paternityBalance: emp?.gender === 'MALE' ? LEAVE_BALANCES.PATERNITY : 0,
+            personalBalance: LEAVE_BALANCES.PERSONAL,
+        },
     });
 };
 
@@ -594,6 +616,21 @@ export const finalDecision = async (
             });
 
             logger.info('Leave request finally approved', { requestId, stage, actorUserId });
+
+            // Automatically send Sabbatical, Research, and Without Pay leaves to Finance
+            if (['SABBATICAL', 'RESEARCH', 'UNPAID'].includes(request.leaveType)) {
+                let paymentInstruction: 'Full Pay' | 'Partial Pay' | 'No Pay' = 'No Pay';
+                if (request.leaveType === 'SABBATICAL') paymentInstruction = 'Full Pay';
+                if (request.leaveType === 'RESEARCH') paymentInstruction = 'Full Pay'; // Default to full pay for Research as per spec
+                
+                await sendLeaveToFinance({
+                    employeeDetails: request.employee,
+                    leaveType: request.leaveType,
+                    durationDays: request.days,
+                    paymentInstruction
+                });
+            }
+
             return updated;
         },
         { isolationLevel: 'Serializable' }

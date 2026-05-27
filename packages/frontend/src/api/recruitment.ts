@@ -36,7 +36,7 @@ export const recruitmentApi = {
             headers: { 'Content-Type': 'multipart/form-data' }
         }),
 
-    reviewApplication: (appId: number, data: { status: string; reviewComment?: string }) =>
+    reviewApplication: (appId: number, data: { status: string; reviewComment?: string; assignedFacultyId?: number }) =>
         apiClient.patch(`/recruitment/applications/${appId}/status`, data),
 
     evaluateApplication: (appId: number, data: { 

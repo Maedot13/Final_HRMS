@@ -11,6 +11,7 @@
         "lint": "eslint .",
         "prisma:generate": "prisma generate",
         "prisma:migrate": "prisma migrate dev",
+        "migrate:deploy": "ts-node --transpile-only apply-migrations.ts",
         "test": "jest",
         "seed:dev": "ts-node scripts/seed-dev-data.ts"
     },
@@ -21,6 +22,7 @@
         "@prisma/client": "^5.22.0",
         "bcrypt": "^6.0.0",
         "bullmq": "^5.70.1",
+        "cloudinary": "^2.10.0",
         "cookie-parser": "^1.4.7",
         "cors": "^2.8.5",
         "csurf": "^1.11.0",
@@ -40,7 +42,7 @@
         "swagger-jsdoc": "^6.2.8",
         "swagger-ui-express": "^5.0.1",
         "winston": "^3.19.0",
-        "ws": "^8.20.1",
+        "ws": "^8.21.0",
         "xlsx": "^0.18.5",
         "zod": "^3.25.76"
     },

@@ -79,7 +79,7 @@ function BalanceCard({ label, days, total, color, bgColor, icon }: BalanceCardPr
     );
 }
 
-function LeaveBalanceWidget({ employeeId }: { employeeId: number }) {
+function LeaveBalanceWidget({ employeeId, gender }: { employeeId: number, gender?: string }) {
     const { data: balances, isLoading } = useQuery({
         queryKey: ['leaveBalances', employeeId],
         queryFn: () => leaveApi.getBalances(employeeId).then(r => r.data),
@@ -89,8 +89,8 @@ function LeaveBalanceWidget({ employeeId }: { employeeId: number }) {
 
     if (isLoading) {
         return (
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-                {Array.from({ length: 5 }).map((_, i) => (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className="h-28 rounded-xl bg-gray-100 animate-pulse" />
                 ))}
             </div>
@@ -103,19 +103,25 @@ function LeaveBalanceWidget({ employeeId }: { employeeId: number }) {
             <h3 className="text-sm font-semibold text-gray-600 flex items-center gap-2">
                 <FiCalendar className="w-4 h-4" /> Leave Balances — {new Date().getFullYear()}
             </h3>
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <BalanceCard label="Annual" days={balances.annualBalance ?? 0} total={30}
                     color="text-blue-600" bgColor="bg-blue-100"
                     icon={<FiSun className="w-4 h-4 text-blue-500" />} />
                 <BalanceCard label="Sick" days={balances.sickBalance ?? 0} total={180}
                     color="text-orange-500" bgColor="bg-orange-100"
                     icon={<FiHeart className="w-4 h-4 text-orange-500" />} />
-                <BalanceCard label="Maternity" days={balances.maternityBalance ?? 0} total={120}
-                    color="text-pink-500" bgColor="bg-pink-100"
-                    icon={<FiUser className="w-4 h-4 text-pink-500" />} />
-                <BalanceCard label="Paternity" days={balances.paternityBalance ?? 0} total={10}
-                    color="text-indigo-600" bgColor="bg-indigo-100"
-                    icon={<FiUser className="w-4 h-4 text-indigo-500" />} />
+                
+                {(!gender || gender === 'FEMALE') && (
+                    <BalanceCard label="Maternity" days={balances.maternityBalance ?? 0} total={120}
+                        color="text-pink-500" bgColor="bg-pink-100"
+                        icon={<FiUser className="w-4 h-4 text-pink-500" />} />
+                )}
+                {(!gender || gender === 'MALE') && (
+                    <BalanceCard label="Paternity" days={balances.paternityBalance ?? 0} total={10}
+                        color="text-indigo-600" bgColor="bg-indigo-100"
+                        icon={<FiUser className="w-4 h-4 text-indigo-500" />} />
+                )}
+                
                 <BalanceCard label="Personal" days={balances.personalBalance ?? 0} total={3}
                     color="text-purple-600" bgColor="bg-purple-100"
                     icon={<FiClock className="w-4 h-4 text-purple-500" />} />
@@ -145,7 +151,7 @@ export default function LeaveManagementPage() {
     const isHrOrAdmin = user?.role === 'HR_OFFICER' || user?.role === 'ADMIN';
     const isDean = privileges.includes('DEAN');
     const isVP = privileges.includes('VICE_PRESIDENT') || privileges.includes('UNIVERSITY_PRESIDENT');
-    const isEmployee = user?.role === 'EMPLOYEE';
+    const isEmployee = user?.role === 'EMPLOYEE' || user?.role === 'CLEARANCE_BODY';
 
     const isFinalApprover = isHrOrAdmin || isDean || isVP;
     const isAnyApprover = isDeptHead || isFinalApprover;
@@ -317,7 +323,10 @@ export default function LeaveManagementPage() {
 
             {/* Balance widget — only in My Requests view */}
             {viewMode === 'MY_REQUESTS' && employeeId && (
-                <LeaveBalanceWidget employeeId={employeeId} />
+                <LeaveBalanceWidget 
+                    employeeId={employeeId} 
+                    gender={(user as any)?.employee?.gender} 
+                />
             )}
 
             {/* Info bar for current role */}

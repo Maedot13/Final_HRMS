@@ -19,4 +19,10 @@ export const privilegesApi = {
         
     revoke: (userId: number) => 
         apiClient.delete<{ message: string; user: { id: number; role: string } }>(`/privileges/${userId}`),
+
+    assignAVP: (data: { employeeId: string }) =>
+        apiClient.post<{ message: string; user: PrivilegedUser }>('/privileges/avp/assign', data),
+
+    revokeAVP: (employeeId: string) =>
+        apiClient.delete<{ message: string; user: PrivilegedUser }>(`/privileges/avp/${employeeId}`),
 };

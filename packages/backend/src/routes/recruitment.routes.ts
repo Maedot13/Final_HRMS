@@ -170,7 +170,7 @@ router.post('/apply', attachEmployee, upload.single('cv'), recruitmentController
 router.get('/my-applications', attachEmployee, recruitmentController.getMyApplications);
 
 router.post('/postings',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.RECRUITMENT_COMMITTEE]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER]),
     recruitmentController.createJobPosting
 );
 
@@ -207,12 +207,12 @@ router.post('/postings',
  *         description: Forbidden
  */
 router.patch('/postings/:id/status',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.RECRUITMENT_COMMITTEE]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER]),
     recruitmentController.updateJobStatus
 );
 
 router.patch('/postings/:id',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.RECRUITMENT_COMMITTEE]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER]),
     recruitmentController.updateJobPosting
 );
 
@@ -276,7 +276,7 @@ router.get('/postings/:id/applications',
  *         description: Forbidden
  */
 router.patch('/applications/:id/status',
-    authorize([UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.RECRUITMENT_COMMITTEE]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER]),
     recruitmentController.updateApplicationStatus
 );
 

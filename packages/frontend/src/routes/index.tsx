@@ -112,7 +112,7 @@ const router = createBrowserRouter([
             {
                 path: 'admin/privileges',
                 element: (
-                    <RequireRole allowedRoles={['ADMIN']}>
+                    <RequireRole allowedRoles={['ADMIN', 'SUPER_ADMIN']} allowHeadHR={true}>
                         <PrivilegesPage />
                     </RequireRole>
                 ),
@@ -151,9 +151,9 @@ const router = createBrowserRouter([
             {
                 path: 'users',
                 // Employee directory: HR_OFFICER manages, DEPARTMENT_HEAD can view.
-                // ADMIN excluded — Admin does not manage individual employee records.
+                // ADMIN included to create HR Officers.
                 element: (
-                    <RequireRole allowedRoles={['HR_OFFICER', 'DEPARTMENT_HEAD']}>
+                    <RequireRole allowedRoles={['HR_OFFICER', 'DEPARTMENT_HEAD', 'ADMIN']}>
                         <UsersPage />
                     </RequireRole>
                 ),
@@ -180,7 +180,11 @@ const router = createBrowserRouter([
             },
             {
                 path: 'evaluations/approvals',
-                element: <EvaluationApprovalPage />,
+                element: (
+                    <RequireRole allowedRoles={['HR_OFFICER']}>
+                        <EvaluationApprovalPage />
+                    </RequireRole>
+                ),
             },
         ],
     },

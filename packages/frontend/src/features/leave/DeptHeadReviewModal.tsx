@@ -39,7 +39,7 @@ const NEXT_STAGE_LABEL: Record<string, string> = {
     STUDY: 'HR Officer',
     UNPAID: 'HR Officer',
     RESEARCH: 'College Dean',
-    SABBATICAL: 'Academic Vice President',
+    SABBATICAL: 'College Dean',
 };
 
 export function DeptHeadReviewModal({ isOpen, onClose, leave }: Props) {

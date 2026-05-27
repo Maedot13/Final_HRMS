@@ -1,24 +1,17 @@
 import { Badge } from '../ui/Badge';
 import type { EmployeeDetail, UserDetail } from '../../types';
 import { FiMail, FiBriefcase } from 'react-icons/fi';
+import { getRoleLabel } from '../../utils/roleUtils';
 
 interface ProfileHeaderProps {
     employee: EmployeeDetail;
-    user?: Pick<UserDetail, 'role' | 'isActive' | 'email'> | null;
+    user?: Pick<UserDetail, 'role' | 'isActive' | 'email' | 'isHeadHR'> & { scope?: string, specialPrivileges?: string[] } | null;
     showRole?: boolean;
 }
 
-const roleLabels: Record<string, string> = {
-    ADMIN: 'Admin',
-    HR_OFFICER: 'HR Officer',
-    DEPARTMENT_HEAD: 'Department Head',
-    FINANCE_OFFICER: 'Finance Officer',
-    RECRUITMENT_COMMITTEE: 'Recruitment Committee',
-    EMPLOYEE: 'Employee',
-};
-
 export function ProfileHeader({ employee, user, showRole = true }: ProfileHeaderProps) {
-    const role = user?.role ?? employee.user?.role;
+    const roleUserObj = user ?? employee.user;
+    const roleLabel = getRoleLabel(roleUserObj as any);
     const isActive = user?.isActive ?? employee.user?.isActive ?? true;
 
     return (
@@ -51,9 +44,9 @@ export function ProfileHeader({ employee, user, showRole = true }: ProfileHeader
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-4">
-                    {showRole && role && (
+                    {showRole && roleUserObj && (
                         <div className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                            {roleLabels[role] ?? role}
+                            {roleLabel}
                         </div>
                     )}
                     {user?.email && (

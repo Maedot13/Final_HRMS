@@ -34,7 +34,8 @@ export const applyForJobSchema = z.object({
 
 export const updateApplicationStatusSchema = z.object({
     status: z.nativeEnum(ApplicationStatus),
-    reviewComment: z.string().optional()
+    reviewComment: z.string().optional(),
+    assignedFacultyId: z.number().int().positive().optional()
 });
 
 export const evaluateApplicationSchema = z.object({

@@ -155,7 +155,7 @@ describe('Recruitment Integration', () => {
             } as any);
             prismaMock.jobApplication.create.mockResolvedValue({
                 id: 100, jobPostingId: 1, employeeId: 10,
-                status: ApplicationStatus.SUBMITTED
+                status: ApplicationStatus.PENDING
             } as any);
 
             const res = await request(app)
@@ -220,10 +220,10 @@ describe('Recruitment Integration', () => {
     // ─── Update Application Status ────────────────────────────────────────────
 
     describe('PATCH /api/v1/recruitment/applications/:id/status', () => {
-        it('should allow HR to update application status to SHORTLISTED', async () => {
+        it('should allow HR to update application status to ACCEPTED', async () => {
             prismaMock.jobApplication.update.mockResolvedValue({
                 id: 100,
-                status: ApplicationStatus.SHORTLISTED,
+                status: ApplicationStatus.ACCEPTED,
                 employee: { userId: 5, name: 'John Doe' },
                 jobPosting: { title: 'Software Engineer' }
             } as any);
@@ -233,11 +233,11 @@ describe('Recruitment Integration', () => {
 
             const res = await request(app)
                 .patch('/api/v1/recruitment/applications/100/status')
-                .send({ status: 'SHORTLISTED', reviewComment: 'Looks good' });
+                .send({ status: 'ACCEPTED', reviewComment: 'Looks good' });
 
             if (res.status >= 400) console.dir(res.body, { depth: null });
             expect(res.status).toBe(200);
-            expect(res.body.status).toBe('SHORTLISTED');
+            expect(res.body.status).toBe('ACCEPTED');
         });
     });
 });

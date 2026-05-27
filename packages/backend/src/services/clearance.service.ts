@@ -383,11 +383,22 @@ export const getPendingChecksForUnit = async (unitId: number, _campusId?: number
 export const listClearanceUnits = async (campusId?: number) => {
     return prisma.clearanceUnit.findMany({
         where: campusId ? { campusId } : {},
-        orderBy: { name: 'asc' }
+        orderBy: { name: 'asc' },
+        include: {
+            users: {
+                select: { employeeId: true }
+            }
+        }
     });
 };
 
 export const createClearanceUnit = async (data: { name: string; fullName?: string; description?: string; campusId: number; priorityOrder?: number; loginId?: string; loginPassword?: string }) => {
+    let passwordHash: string | undefined;
+    if (data.loginPassword) {
+        const bcrypt = require('bcrypt');
+        passwordHash = await bcrypt.hash(data.loginPassword, 10);
+    }
+
     return prisma.$transaction(async (tx) => {
         const unit = await tx.clearanceUnit.create({
             data: {
@@ -401,53 +412,152 @@ export const createClearanceUnit = async (data: { name: string; fullName?: strin
             }
         });
 
-        if (data.loginId && data.loginPassword) {
-            // Use bcrypt directly to hash the default clearance body password
-            const bcrypt = require('bcrypt');
-            const passwordHash = await bcrypt.hash(data.loginPassword, 10);
+        if (data.loginId) {
+            const existingUser = await tx.user.findUnique({ where: { employeeId: data.loginId } });
             
-            await tx.user.create({
-                data: {
-                    email: `${data.loginId}@body.local`, // Mock email as Prisma forces unique email schema
-                    passwordHash,
-                    role: 'CLEARANCE_BODY',
-                    employeeId: data.loginId, // Explicit mapping to employeeId for login schema
-                    isActive: true,
-                    campusId: data.campusId,
-                    clearanceUnitId: unit.id
-                }
-            });
+            if (existingUser) {
+                const updateData: any = { clearanceUnitId: unit.id, role: 'CLEARANCE_BODY' };
+                if (passwordHash) updateData.passwordHash = passwordHash;
+                
+                await tx.user.update({
+                    where: { id: existingUser.id },
+                    data: updateData
+                });
+            } else {
+                if (!passwordHash) throw new Error('Password is required for new clearance body account');
+                await tx.user.create({
+                    data: {
+                        email: `${data.loginId}@body.local`,
+                        passwordHash,
+                        role: 'CLEARANCE_BODY',
+                        employeeId: data.loginId,
+                        isActive: true,
+                        campusId: data.campusId,
+                        clearanceUnitId: unit.id
+                    }
+                });
+            }
         }
         return unit;
     });
 };
 
-export const updateClearanceUnit = async (unitId: number, data: { name?: string; fullName?: string; description?: string; isActive?: boolean; priorityOrder?: number }) => {
-    const unit = await prisma.clearanceUnit.findUnique({ where: { id: unitId } });
-    if (!unit) throw new Error('Clearance unit not found');
-
-    if (unit.isSystemGenerated && data.name) {
-        throw new Error('Cannot rename system-generated clearance units');
+export const updateClearanceUnit = async (unitId: number, data: { name?: string; fullName?: string; description?: string; isActive?: boolean; priorityOrder?: number; loginId?: string; loginPassword?: string }) => {
+    let passwordHash: string | undefined;
+    if (data.loginPassword) {
+        const bcrypt = require('bcrypt');
+        passwordHash = await bcrypt.hash(data.loginPassword, 10);
     }
 
-    return prisma.clearanceUnit.update({
-        where: { id: unitId },
-        data
+    return prisma.$transaction(async (tx) => {
+        const unit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
+        if (!unit) throw new Error('Clearance unit not found');
+
+        if (unit.isSystemGenerated && data.name) {
+            throw new Error('Cannot rename system-generated clearance units');
+        }
+
+        const updatedUnit = await tx.clearanceUnit.update({
+            where: { id: unitId },
+            data: {
+                name: data.name,
+                fullName: data.fullName,
+                description: data.description,
+                isActive: data.isActive,
+                priorityOrder: data.priorityOrder
+            }
+        });
+
+        if (data.loginId) {
+            const existingUserInUnit = await tx.user.findFirst({
+                where: { clearanceUnitId: unit.id }
+            });
+
+            const existingUserByLoginId = await tx.user.findUnique({ where: { employeeId: data.loginId } });
+
+            if (existingUserByLoginId) {
+                if (existingUserInUnit && existingUserInUnit.id !== existingUserByLoginId.id) {
+                    await tx.user.update({
+                        where: { id: existingUserInUnit.id },
+                        data: { clearanceUnitId: null }
+                    });
+                }
+                
+                const updateData: any = { clearanceUnitId: unit.id, role: 'CLEARANCE_BODY' };
+                if (passwordHash) updateData.passwordHash = passwordHash;
+                
+                await tx.user.update({
+                    where: { id: existingUserByLoginId.id },
+                    data: updateData
+                });
+            } else if (existingUserInUnit) {
+                const updateData: any = {
+                    employeeId: data.loginId,
+                    email: `${data.loginId}@body.local`
+                };
+                if (passwordHash) updateData.passwordHash = passwordHash;
+                
+                await tx.user.update({
+                    where: { id: existingUserInUnit.id },
+                    data: updateData
+                });
+            } else {
+                if (!passwordHash) throw new Error('Password is required for new clearance body account');
+                await tx.user.create({
+                    data: {
+                        email: `${data.loginId}@body.local`,
+                        passwordHash,
+                        role: 'CLEARANCE_BODY',
+                        employeeId: data.loginId,
+                        isActive: true,
+                        campusId: unit.campusId,
+                        clearanceUnitId: unit.id
+                    }
+                });
+            }
+        }
+
+        return updatedUnit;
     });
 };
 export const deleteClearanceUnit = async (unitId: number) => {
-    const unit = await prisma.clearanceUnit.findUnique({
-        where: { id: unitId }
-    });
+    return prisma.$transaction(async (tx) => {
+        const unit = await tx.clearanceUnit.findUnique({
+            where: { id: unitId },
+            include: { checks: true }
+        });
 
-    if (!unit) throw new Error('Clearance unit not found');
+        if (!unit) throw new Error('Clearance unit not found');
 
-    if (unit.isSystemGenerated) {
-        throw new Error('System-generated clearance units cannot be deleted');
-    }
+        if (unit.isSystemGenerated) {
+            throw new Error('System-generated clearance units cannot be deleted');
+        }
+        
+        await tx.clearanceCheck.deleteMany({
+            where: { unitId: unitId }
+        });
 
-    return prisma.clearanceUnit.delete({
-        where: { id: unitId }
+        const users = await tx.user.findMany({
+            where: { clearanceUnitId: unitId },
+            select: { id: true }
+        });
+
+        if (users.length > 0) {
+            const userIds = users.map(u => u.id);
+            await tx.notification.deleteMany({
+                where: { userId: { in: userIds } }
+            });
+            await tx.refreshToken.deleteMany({
+                where: { userId: { in: userIds } }
+            });
+            await tx.user.deleteMany({
+                where: { clearanceUnitId: unitId }
+            });
+        }
+
+        return tx.clearanceUnit.delete({
+            where: { id: unitId }
+        });
     });
 };
 

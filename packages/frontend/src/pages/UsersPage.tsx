@@ -9,20 +9,14 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { ComplexFilterBar, type FilterState } from '../components/shared/ComplexFilterBar';
 import { useAuthStore } from '../store/useAuthStore';
-import { RoleManagerModal } from '../features/employee/RoleManagerModal';
+import { RoleManagerModal, type FacultyOpts } from '../features/employee/RoleManagerModal';
 import { CreateEmployeeModal } from '../features/employee/CreateEmployeeModal';
 import { FiUsers, FiUserPlus, FiSearch } from 'react-icons/fi';
+import { EditEmployeeModal } from '../features/employee/EditEmployeeModal';
 
 const defaultFilters: FilterState = { search: '', role: '', status: '' };
 
-const roleLabels: Record<string, string> = {
-    ADMIN: 'Admin',
-    HR_OFFICER: 'HR Officer',
-    DEPARTMENT_HEAD: 'Dept Head',
-    FINANCE_OFFICER: 'Finance',
-    RECRUITMENT_COMMITTEE: 'Recruitment',
-    EMPLOYEE: 'Employee',
-};
+import { getShortRoleLabel } from '../utils/roleUtils';
 
 const roleVariant: Record<string, 'info' | 'approved' | 'rejected' | 'neutral' | 'warning'> = {
     ADMIN: 'rejected',
@@ -40,6 +34,7 @@ export default function UsersPage() {
 
     const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
 
     const { data: departments = [] } = useQuery({
         queryKey: ['departments'],
@@ -78,9 +73,11 @@ export default function UsersPage() {
     });
 
     const updateRoleMutation = useMutation({
-        mutationFn: (role: string) => usersApi.updateRole(selectedUser!.id, role),
+        mutationFn: ({ role, facultyOpts }: { role: string; facultyOpts?: FacultyOpts }) =>
+            usersApi.updateRole(selectedUser!.id, role, facultyOpts),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['users'] });
+            queryClient.invalidateQueries({ queryKey: ['faculties', 'campus'] });
             setSelectedUser(null);
         },
     });
@@ -155,7 +152,12 @@ export default function UsersPage() {
             {
                 key: 'role',
                 header: 'Role',
-                render: (r) => <Badge variant={roleVariant[r.role] ?? 'neutral'}>{roleLabels[r.role] ?? r.role}</Badge>,
+                render: (r) => {
+                    if (r.isHeadHR) {
+                        return <Badge variant="info">Head HR</Badge>;
+                    }
+                    return <Badge variant={roleVariant[r.role] ?? 'neutral'}>{getShortRoleLabel(r)}</Badge>;
+                },
             },
             {
                 key: 'status',
@@ -169,7 +171,17 @@ export default function UsersPage() {
             header: 'Actions',
             render: (r) => (
                 <div className="flex gap-1.5 align-middle">
-                    {r.employee?.id && (user?.role === 'DEPARTMENT_HEAD' || user?.role === 'ADMIN') && (
+                    {r.employee?.id && user?.role === 'HR_OFFICER' && (
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            id={`edit-emp-${r.id}`}
+                            onClick={() => setEditingEmployeeId(r.employee!.id)}
+                        >
+                            Edit
+                        </Button>
+                    )}
+                    {r.employee?.id && user?.role === 'DEPARTMENT_HEAD' && (
                         <Link to={`/evaluations/new?employeeId=${r.employee?.id}`}>
                             <Button variant="secondary" size="sm">Evaluate</Button>
                         </Link>
@@ -196,8 +208,12 @@ export default function UsersPage() {
             ),
         });
 
+        if (user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN') {
+            return cols.filter((c) => c.key !== 'department');
+        }
+
         return cols;
-    }, [canManage, user?.id]);
+    }, [canManage, user?.id, user?.role]);
 
     return (
         <div className="space-y-5">
@@ -226,7 +242,20 @@ export default function UsersPage() {
 
             {/* ── Filter bar ────────────────────────────────────────────────── */}
             <div className="rounded-2xl border border-gray-100 bg-white shadow-sm p-4">
-                <ComplexFilterBar filters={filters} onFiltersChange={setFilters} departments={departments} />
+                <ComplexFilterBar
+                    filters={filters}
+                    onFiltersChange={setFilters}
+                    departments={user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' ? undefined : departments}
+                    allowedRoles={
+                        user?.role === 'SUPER_ADMIN' 
+                            ? ['SUPER_ADMIN', 'ADMIN', 'HEAD_HR'] 
+                            : user?.role === 'ADMIN'
+                                ? ['ADMIN', 'HR_OFFICER', 'CLEARANCE_BODY']
+                                : user?.role === 'HR_OFFICER'
+                                    ? ['HR_OFFICER', 'EMPLOYEE', 'DEPARTMENT_HEAD', 'FINANCE_OFFICER', 'CLEARANCE_BODY']
+                                    : undefined
+                    }
+                />
             </div>
 
             {/* ── Empty state ───────────────────────────────────────────────── */}
@@ -273,9 +302,9 @@ export default function UsersPage() {
                     isOpen={!!selectedUser}
                     onClose={() => setSelectedUser(null)}
                     userName={selectedUser.employee?.name ?? selectedUser.email}
-                    currentRole={selectedUser.role}
+                    currentRole={selectedUser.isHeadHR ? 'HEAD_HR' : selectedUser.role}
                     isActive={selectedUser.isActive}
-                    onUpdateRole={(role) => updateRoleMutation.mutateAsync(role)}
+                    onUpdateRole={(role, facultyOpts) => updateRoleMutation.mutateAsync({ role, facultyOpts })}
                     onToggleStatus={(isActive) => updateStatusMutation.mutateAsync(isActive)}
                     onResetPassword={() => resetPasswordMutation.mutateAsync()}
                 />
@@ -286,6 +315,14 @@ export default function UsersPage() {
                 onClose={() => setIsCreateModalOpen(false)}
                 departments={departments}
             />
+
+            {editingEmployeeId !== null && (
+                <EditEmployeeModal
+                    isOpen={editingEmployeeId !== null}
+                    onClose={() => setEditingEmployeeId(null)}
+                    employeeId={editingEmployeeId}
+                />
+            )}
         </div>
     );
 }

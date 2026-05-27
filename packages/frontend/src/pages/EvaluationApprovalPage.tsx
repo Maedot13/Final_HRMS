@@ -4,7 +4,7 @@ import { getPendingEvaluations, approveEvaluation, rejectEvaluation } from '../a
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FiCheck, FiX, FiInfo } from 'react-icons/fi';
-import { format } from 'date-fns';
+
 import { toast } from 'react-toastify';
 
 const EvaluationApprovalPage: React.FC = () => {

@@ -9,7 +9,11 @@ import { usersApi } from '../../api/users';
 import { toast } from 'react-toastify';
 import { Modal } from '../../components/ui/Modal';
 import type { SpecialPrivilege } from '../../types';
-import { FiSearch, FiUser, FiShield, FiX } from 'react-icons/fi';
+import { FiSearch, FiUser, FiShield, FiX, FiUserPlus, FiCopy, FiCheckCircle } from 'react-icons/fi';
+import { useAuthStore } from '../../store/useAuthStore';
+import { employeesApi } from '../../api/employees';
+import { Input } from '../../components/ui/Input';
+import { FormField } from '../../components/shared/FormField';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -38,6 +42,8 @@ function PrivilegeBadge({ privilege }: { privilege: SpecialPrivilege }) {
 
 export default function PrivilegesPage() {
     const queryClient = useQueryClient();
+    const currentUser = useAuthStore((state) => state.user);
+    const isOnlyHeadHR = currentUser?.isHeadHR && currentUser?.role !== 'SUPER_ADMIN' && currentUser?.role !== 'ADMIN';
 
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,6 +56,13 @@ export default function PrivilegesPage() {
     // Privilege selection state
     const [isHeadHR, setIsHeadHR] = useState(false);
     const [selectedPrivileges, setSelectedPrivileges] = useState<SpecialPrivilege[]>([]);
+
+    // Create AVP state
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [createName, setCreateName] = useState('');
+    const [createEmail, setCreateEmail] = useState('');
+    const [createdCredentials, setCreatedCredentials] = useState<{name: string, email: string, employeeId: string, password?: string} | null>(null);
+    const [copied, setCopied] = useState<string | null>(null);
 
     // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -84,7 +97,16 @@ export default function PrivilegesPage() {
     // ── Mutations ────────────────────────────────────────────────────────────
 
     const assignMutation = useMutation({
-        mutationFn: privilegesApi.assign,
+        mutationFn: (variables: any) => {
+            if (isOnlyHeadHR) {
+                return privilegesApi.assignAVP({ employeeId: variables.employeeId });
+            }
+            return privilegesApi.assign({
+                userId: variables.userId,
+                isHeadHR: variables.isHeadHR,
+                specialPrivileges: variables.specialPrivileges
+            });
+        },
         onSuccess: () => {
             toast.success('Privileges saved successfully.');
             queryClient.invalidateQueries({ queryKey: ['privilegedUsers'] });
@@ -96,14 +118,45 @@ export default function PrivilegesPage() {
     });
 
     const revokeMutation = useMutation({
-        mutationFn: privilegesApi.revoke,
+        mutationFn: (variables: { userId: number; employeeId?: string }) => {
+            if (isOnlyHeadHR && variables.employeeId) {
+                return privilegesApi.revokeAVP(variables.employeeId);
+            }
+            return privilegesApi.revoke(variables.userId);
+        },
         onSuccess: () => {
-            toast.success('All privileges revoked.');
+            toast.success('Privileges revoked.');
             queryClient.invalidateQueries({ queryKey: ['privilegedUsers'] });
         },
         onError: (err: any) => {
             toast.error(err.response?.data?.message || 'Failed to revoke privileges.');
         },
+    });
+
+    const createAvpMutation = useMutation({
+        mutationFn: () => employeesApi.create({
+            name: createName,
+            email: createEmail,
+            role: 'VICE_PRESIDENT'
+        }),
+        onSuccess: (res: any) => {
+            toast.success('AVP created successfully.');
+            queryClient.invalidateQueries({ queryKey: ['privilegedUsers'] });
+            
+            const data = res.data;
+            const empId = data?.user?.employeeId || data?.employeeId || 'Generated';
+            setCreatedCredentials({
+                name: createName,
+                email: createEmail,
+                employeeId: empId,
+                password: data?.rawPassword
+            });
+            setCreateName('');
+            setCreateEmail('');
+        },
+        onError: (err: any) => {
+            toast.error(err.response?.data?.message || 'Failed to create AVP.');
+        }
     });
 
     // ── Handlers ─────────────────────────────────────────────────────────────
@@ -115,6 +168,20 @@ export default function PrivilegesPage() {
         setShowDropdown(false);
         setIsHeadHR(false);
         setSelectedPrivileges([]);
+    };
+
+    const closeCreateModal = () => {
+        setIsCreateModalOpen(false);
+        setCreatedCredentials(null);
+        setCreateName('');
+        setCreateEmail('');
+    };
+
+    const handleCopy = (text: string, key: string) => {
+        navigator.clipboard.writeText(text).then(() => {
+            setCopied(key);
+            setTimeout(() => setCopied(null), 2000);
+        });
     };
 
     const handleUserSelect = (user: any) => {
@@ -140,13 +207,14 @@ export default function PrivilegesPage() {
     const handleAssign = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedUserId) return toast.error('Please select an employee first.');
-        if (!isHeadHR && selectedPrivileges.length === 0) {
+        if (!isHeadHR && selectedPrivileges.length === 0 && !isOnlyHeadHR) {
             return toast.error('Select at least one privilege to assign.');
         }
         assignMutation.mutate({
             userId: selectedUserId,
+            employeeId: (selectedUser as any)?.employeeId,
             isHeadHR,
-            specialPrivileges: selectedPrivileges,
+            specialPrivileges: isOnlyHeadHR ? ['VICE_PRESIDENT'] : selectedPrivileges,
         });
     };
 
@@ -201,20 +269,26 @@ export default function PrivilegesPage() {
         {
             key: 'actions',
             header: '',
-            render: (r) => (
+            render: (r) => {
+                // If Head HR, they can only revoke if the user is an AVP
+                if (isOnlyHeadHR && (!r.specialPrivileges || !r.specialPrivileges.includes('VICE_PRESIDENT'))) {
+                    return null;
+                }
+                return (
                 <Button
                     variant="danger"
                     size="sm"
                     onClick={() => {
-                        if (window.confirm(`Revoke all privileges from ${r.employee?.name ?? r.email}?`)) {
-                            revokeMutation.mutate(r.id);
+                        if (window.confirm(`Revoke ${isOnlyHeadHR ? 'AVP position' : 'all privileges'} from ${r.employee?.name ?? r.email}?`)) {
+                            revokeMutation.mutate({ userId: r.id, employeeId: r.employee?.employeeId });
                         }
                     }}
                     disabled={revokeMutation.isPending}
                 >
                     Revoke
                 </Button>
-            ),
+                );
+            },
         },
     ];
 
@@ -225,16 +299,27 @@ export default function PrivilegesPage() {
             {/* Page header */}
             <Card>
                 <CardHeader
-                    title="Privilege Management"
-                    subtitle="Assign elevated privileges to employees. Privileges are additive — they extend, never replace, the base role."
+                    title={isOnlyHeadHR ? "Academic Vice President Management" : "Privilege Management"}
+                    subtitle={isOnlyHeadHR ? "Assign or revoke the Academic Vice President (AVP) role." : "Assign elevated privileges to employees. Privileges are additive — they extend, never replace, the base role."}
                     action={
-                        <Button
-                            variant="primary"
-                            onClick={() => setIsModalOpen(true)}
-                        >
-                            <FiShield className="w-4 h-4 mr-1.5" />
-                            Assign Privileges
-                        </Button>
+                        <div className="flex gap-2">
+                            {isOnlyHeadHR && (
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => setIsCreateModalOpen(true)}
+                                >
+                                    <FiUserPlus className="w-4 h-4 mr-1.5" />
+                                    Create AVP
+                                </Button>
+                            )}
+                            <Button
+                                variant="primary"
+                                onClick={() => setIsModalOpen(true)}
+                            >
+                                <FiShield className="w-4 h-4 mr-1.5" />
+                                {isOnlyHeadHR ? "Assign AVP" : "Assign Privileges"}
+                            </Button>
+                        </div>
                     }
                 />
             </Card>
@@ -358,51 +443,62 @@ export default function PrivilegesPage() {
                     {selectedUserId && (
                         <div className="space-y-3 pt-1 border-t border-gray-100">
                             <p className="text-sm font-medium text-text-primary pt-2">
-                                Assign Privileges
+                                {isOnlyHeadHR ? "Assign AVP Role" : "Assign Privileges"}
                             </p>
 
-                            {/* Head HR toggle — separated visually */}
-                            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
-                                <label className="flex items-start gap-3 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={isHeadHR}
-                                        onChange={() => setIsHeadHR(!isHeadHR)}
-                                        className="mt-0.5 w-4 h-4 accent-amber-600"
-                                    />
-                                    <div>
-                                        <p className="text-sm font-semibold text-amber-800">Head HR</p>
-                                        <p className="text-xs text-amber-700 mt-0.5">
-                                            Grants final clearance approval authority across all campuses.
-                                        </p>
+                            {isOnlyHeadHR ? (
+                                <div className="rounded-md border border-primary/30 bg-primary-light px-4 py-3">
+                                    <p className="text-sm font-semibold text-primary">Academic Vice President (AVP)</p>
+                                    <p className="text-xs text-primary/80 mt-0.5">
+                                        This will grant the selected employee the AVP role to oversee Deans and academic units.
+                                    </p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Head HR toggle — separated visually */}
+                                    <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
+                                        <label className="flex items-start gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={isHeadHR}
+                                                onChange={() => setIsHeadHR(!isHeadHR)}
+                                                className="mt-0.5 w-4 h-4 accent-amber-600"
+                                            />
+                                            <div>
+                                                <p className="text-sm font-semibold text-amber-800">Head HR</p>
+                                                <p className="text-xs text-amber-700 mt-0.5">
+                                                    Grants final clearance approval authority across all campuses.
+                                                </p>
+                                            </div>
+                                        </label>
                                     </div>
-                                </label>
-                            </div>
 
-                            {/* Special additive privileges */}
-                            <div className="space-y-2">
-                                {SPECIAL_PRIVILEGES.map(({ value, label, description }) => (
-                                    <label
-                                        key={value}
-                                        className={`flex items-start gap-3 cursor-pointer rounded-md border px-4 py-3 transition ${
-                                            selectedPrivileges.includes(value)
-                                                ? 'border-primary/40 bg-primary-light'
-                                                : 'border-gray-200 hover:border-gray-300 bg-white'
-                                        }`}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedPrivileges.includes(value)}
-                                            onChange={() => togglePrivilege(value)}
-                                            className="mt-0.5 w-4 h-4 accent-primary"
-                                        />
-                                        <div>
-                                            <p className="text-sm font-medium text-text-primary">{label}</p>
-                                            <p className="text-xs text-text-secondary mt-0.5">{description}</p>
-                                        </div>
-                                    </label>
-                                ))}
-                            </div>
+                                    {/* Special additive privileges */}
+                                    <div className="space-y-2">
+                                        {SPECIAL_PRIVILEGES.map(({ value, label, description }) => (
+                                            <label
+                                                key={value}
+                                                className={`flex items-start gap-3 cursor-pointer rounded-md border px-4 py-3 transition ${
+                                                    selectedPrivileges.includes(value)
+                                                        ? 'border-primary/40 bg-primary-light'
+                                                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                                                }`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedPrivileges.includes(value)}
+                                                    onChange={() => togglePrivilege(value)}
+                                                    className="mt-0.5 w-4 h-4 accent-primary"
+                                                />
+                                                <div>
+                                                    <p className="text-sm font-medium text-text-primary">{label}</p>
+                                                    <p className="text-xs text-text-secondary mt-0.5">{description}</p>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
                         </div>
                     )}
 
@@ -424,6 +520,103 @@ export default function PrivilegesPage() {
                         </Button>
                     </div>
                 </form>
+            </Modal>
+
+            {/* ── Create AVP modal ─────────────────────────────────────────────── */}
+            <Modal
+                isOpen={isCreateModalOpen}
+                onClose={closeCreateModal}
+                title="Create Academic Vice President"
+                size="md"
+            >
+                {createdCredentials ? (
+                    <div className="space-y-5">
+                        <div className="flex items-start gap-3 rounded-xl bg-green-50 border border-green-200 p-4">
+                            <FiCheckCircle className="mt-0.5 shrink-0 text-green-500" size={18} />
+                            <div>
+                                <p className="font-semibold text-green-800 text-sm">
+                                    Account created for {createdCredentials.name}
+                                </p>
+                                <p className="text-xs text-green-700 mt-0.5">
+                                    Share these credentials securely. They will be prompted to change their password on first login.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+                            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-white">
+                                <div className="min-w-0">
+                                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Employee ID / Username</p>
+                                    <p className="mt-0.5 text-sm font-bold text-gray-900 select-all">{createdCredentials.employeeId}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handleCopy(createdCredentials.employeeId, 'id')}
+                                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-primary transition-colors"
+                                >
+                                    {copied === 'id' ? <FiCheckCircle size={13} className="text-green-500" /> : <FiCopy size={13} />}
+                                    {copied === 'id' ? 'Copied' : 'Copy'}
+                                </button>
+                            </div>
+                            {createdCredentials.password && (
+                                <div className="flex items-center justify-between gap-3 px-4 py-3 bg-white">
+                                    <div className="min-w-0">
+                                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Temporary Password</p>
+                                        <p className="mt-0.5 text-sm font-bold text-gray-900 select-all font-mono">{createdCredentials.password}</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCopy(createdCredentials.password!, 'pwd')}
+                                        className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-primary transition-colors"
+                                    >
+                                        {copied === 'pwd' ? <FiCheckCircle size={13} className="text-green-500" /> : <FiCopy size={13} />}
+                                        {copied === 'pwd' ? 'Copied' : 'Copy'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end pt-2">
+                            <Button variant="primary" onClick={closeCreateModal}>Done</Button>
+                        </div>
+                    </div>
+                ) : (
+                    <form onSubmit={(e) => { e.preventDefault(); createAvpMutation.mutate(); }} className="space-y-5" noValidate>
+                        <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-4">
+                            <FormField label="Full Name" htmlFor="create-avp-name" required>
+                                <Input
+                                    id="create-avp-name"
+                                    value={createName}
+                                    onChange={(e) => setCreateName(e.target.value)}
+                                    placeholder="e.g. Abebe Girma"
+                                    required
+                                    autoFocus
+                                />
+                            </FormField>
+                            <FormField label="Work Email" htmlFor="create-avp-email" required>
+                                <Input
+                                    id="create-avp-email"
+                                    type="email"
+                                    value={createEmail}
+                                    onChange={(e) => setCreateEmail(e.target.value)}
+                                    placeholder="abebe@university.edu.et"
+                                    required
+                                />
+                            </FormField>
+                        </div>
+                        <p className="text-xs text-gray-400">
+                            A system-generated Employee ID and temporary password will be created automatically. The employee will have the base role of Employee with AVP privileges system-wide.
+                        </p>
+                        <div className="flex justify-end gap-2 pt-1 border-t border-gray-100">
+                            <Button type="button" variant="ghost" onClick={closeCreateModal} disabled={createAvpMutation.isPending}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" variant="primary" isLoading={createAvpMutation.isPending} disabled={!createName.trim() || !createEmail.trim()}>
+                                Create AVP
+                            </Button>
+                        </div>
+                    </form>
+                )}
             </Modal>
         </div>
     );

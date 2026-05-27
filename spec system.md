@@ -30,7 +30,7 @@ This document specifies the complete **Human Resource Management System (HRMS)**
 |------|------------|
 | **HRMS** | Human Resource Management System |
 | **SUPER_ADMIN** | System administrator; creates Admin/HR accounts, views activity logs, manages campuses. Cannot view active employee data. |
-| **ADMIN** | Campus‑level administrator; manages org hierarchy, employees, and clearance body configuration within one campus. |
+| **ADMIN** | Campus‑level administrator; manages org hierarchy, creates HR Officers, manages employees, and clearance body configuration within one campus. |
 | **HR_OFFICER** | Operational HR; handles leaves, payroll, clearance initiation, performance evaluations, and experience letters. Campus‑scoped unless Head HR. |
 | **EMPLOYEE** | Staff member with self‑service access. |
 | **Head HR** | System‑wide HR_OFFICER with final clearance approval (`isHeadHR=true`). |
@@ -322,9 +322,7 @@ model Employee {
   updatedAt      DateTime       @updatedAt
   leaveBalances  LeaveBalance[]
   leaveRequests  LeaveRequest[]
-  evaluations    PerformanceEvaluation[]
   clearance      Clearance?
-  schedules      Schedule[]
 }
 ```
 
@@ -481,20 +479,31 @@ model ActivityLog {
 
 ### 4.2 Leave Management Rules
 
-| Leave Type | Eligibility | Max Duration | Approval Authority | Balance Deduction |
-|------------|-------------|--------------|--------------------|--------------------|
-| Annual | All employees | 20 days +1/year up to 30 | HR_Officer | Yes |
-| Maternity | Female employees | 30d prenatal + 90d postnatal | HR_Officer | No |
-| Paternity | Male employees | 10 working days | HR_Officer | No |
-| Sick | Medical certificate required | 6 months full pay + 2 months half pay | HR_Officer | Yes |
-| Personal (marriage/bereavement) | All | 3 working days | HR_Officer | Yes |
-| Special (court/election) | All | As needed | HR_Officer | No |
-| Study | Academic staff, higher degree | First year full pay, subsequent 50% pay | HR_Officer | No |
-| Research | Assistant Professor+, 3+ years service | Up to 6 months | Academic VP, HR_Officer | No |
-| Sabbatical | Assistant Professor+, 6+ years service | 1 year full pay | Academic VP, HR_Officer | No |
-| Without Pay | All | Up to 2 years | Academic VP, HR_Officer | No |
+| Leave Type | Eligibility | Max Duration | Supporting Document | Approval Authority | Balance Deduction |
+|------------|-------------|--------------|---------------------|--------------------|-------------------|
+| Annual | All employees | 20 days +1/year up to 30 | None | HR_Officer | Yes |
+| Maternity | Female employees | 30d prenatal + 90d postnatal | Medical certificate / proof | HR_Officer | No |
+| Paternity | Male employees | 10 working days | Medical certificate / proof | HR_Officer | No |
+| Sick | All employees | 6 months full pay + 2 months half pay | Medical certificate required | HR_Officer | Yes |
+| Personal (marriage/bereavement) | All | 3 working days | None | HR_Officer | Yes |
+| Special (court/election) | All | As needed | None | HR_Officer | No |
+| Study | Academic staff, higher degree | First year full pay, subsequent 50% pay | Letter of admission / proof | HR_Officer | No |
+| Research | Assistant Professor+, 3+ years service | Up to 6 months | Research proposal / proof | Academic VP, HR_Officer | No |
+| Sabbatical | Assistant Professor+, 6+ years service | 1 year full pay | None (Optional plan document) | Academic VP, HR_Officer | No |
+| Without Pay | All | Up to 2 years | None | Academic VP, HR_Officer | No |
 
-### 6.4 Leave Management
+**Supporting Document Requirements:**
+To ensure administrative validity, the system strictly enforces the upload of a supporting document (in PDF, DOC, DOCX, JPG, JPEG, or PNG format) at submission time for the following leave types:
+- **Maternity Leave:** Requires a medical certificate or clinical proof.
+- **Paternity Leave:** Requires a medical certificate or clinical birth proof.
+- **Sick Leave:** Requires a certified medical certificate.
+- **Study Leave:** Requires a formal letter of admission or university sponsorship proof.
+- **Research Leave:** Requires an approved research proposal or research approval proof.
+
+Applications for these leave types will be blocked by the API and validation schemas if submitted without a valid document attachment.
+
+### 4.2.1 Leave Management
+
 | Method | Endpoint | Permission |
 |--------|----------|------------|
 | POST | `/api/v1/leave/apply` | EMPLOYEE (self) |
@@ -559,6 +568,31 @@ Experience letter available
 - Logs are immutable – no update or delete API.
 - Retention: minimum 5 years (cron job to delete older logs).
 - SUPER_ADMIN can view all logs; ADMIN can view logs scoped to their campus.
+
+### 4.7 Organizational Hierarchy & Dean Management
+- The system follows the organizational hierarchy: **College → Faculty → Department**.
+- **Campus Admin Capabilities:**
+  - Campus Admins have full authority to create, update, and manage Colleges, Faculties, and Departments within their assigned campus.
+  - Campus Admins can assign, update, or remove Dean support for a College/Faculty.
+  - Assignment is performed using an existing employee's unique `Employee_ID`. The system must validate the existence and active status of the `Employee_ID` before assigning them as Dean.
+- **Dean Access Control:**
+  - The Dean role is implemented using the existing Role-Based Access Control (RBAC) and **Special Privilege** system. It is *not* a standalone base role.
+  - When an employee is assigned as Dean, they are granted the `DEAN` special privilege on top of their existing base role.
+  - Deans manage multiple departments that fall under their assigned College/Faculty structure.
+  - This assignment mechanism does not affect or break existing functionality, workflows, permissions, or system behavior.
+
+### 4.8 Academic Vice President (AVP) Management
+- The Academic Vice President (AVP) is a high-level academic role responsible for overseeing Deans and academic units.
+- **Assignment by Head HR:**
+  - Only Head HR (or SUPER_ADMIN) has the authority to create and assign the AVP position.
+  - The assignment is performed by providing an existing employee's unique `Employee_ID`.
+  - The system validates the employee's existence and active status.
+- **AVP Access Control:**
+  - The AVP role is strictly additive and implemented via the `VICE_PRESIDENT` Special Privilege, meaning it does not require a standalone "President" or "VP" base role.
+  - Assigning AVP grants the `VICE_PRESIDENT` privilege on top of the employee's base role (e.g., EMPLOYEE).
+  - This ensures RBAC is updated only for the AVP, preserving all other roles and workflows.
+- **Audit Logging:**
+  - The assignment or removal of the AVP privilege generates an immutable `ASSIGN` ActivityLog entry, ensuring full traceability.
 
 ---
 
@@ -746,14 +780,16 @@ The **Head HR** (`isHeadHR=true`) operates as a system-wide `HR_OFFICER` with ex
 - `/hr/experience` – generate experience letters
 
 ### 7.4 Admin Dashboard
+- `/users` – create HR Officers and manage employees
 - `/admin/org` – manage campuses, colleges, departments, units
 - `/admin/clearance-bodies` – configure clearance bodies
 - `/admin/privileges` – assign special privileges
 
 ### 7.5 Super Admin Dashboard
-- `/super/users` – create Admin/HR_Officer accounts
+- `/super/users` – create Admin and Head HR accounts
 - `/super/activity-logs` – view and filter logs
 - `/super/campuses` – manage campuses
+- `/profile` – My Profile section (shared self-service)
 
 ### 7.6 Clearance Body User Interface
 - `/clearance/tasks` – list tasks assigned to the logged‑in body user (Library, IT, Store, Lab)
@@ -768,8 +804,8 @@ The **Head HR** (`isHeadHR=true`) operates as a system-wide `HR_OFFICER` with ex
 - `/finance/leave-data` – Dashboard to view full information with tags describing the type of leave and salary information (especially for Sabbatical, Research, and Without Pay leaves).
 
 ### 7.9 Head HR Dashboard
-- Inherits all features from **7.3 HR_Officer Dashboard**, but operates with a system-wide scope.
-- Provides unrestricted authorization for the following modules across all campuses: **Employee Management**, **Leave Approvals**, **Performance Management**, **Payroll**, **Clearance**, and **Experience**.
+- Operates with a system-wide scope, providing unrestricted authorization for the following modules across all campuses: **Employee Management**, **Leave Approvals**, **Performance Management**, **Payroll**, **Clearance**, and **Experience**.
+- **UI Distinctions**: The generic shared sidebar items (`Employees`, `Departments`, `Leave`, `Clearance`, `Recruitment`, `Payroll`, `Audit Logs`, `Perf. Approvals`, `Performance`, and `Contacts`) are intentionally hidden. Head HR users must use their dedicated "Head HR Control" sidebar section to access these modules. Additionally, the top right role badge explicitly displays **HEAD HR**.
 - `/hr/clearance` – Includes specialized functionality exclusive to the Head HR for executing the final approval step (`clearance:final:approve`) in the clearance workflow.
 
 ---

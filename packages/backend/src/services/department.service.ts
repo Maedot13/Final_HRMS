@@ -57,9 +57,9 @@ export const createDepartment = async (
     });
 };
 
-export const getDepartments = async (campusId: number) => {
+export const getDepartments = async (campusId?: number) => {
     return prisma.department.findMany({
-        where: { campusId },
+        where: campusId ? { campusId } : undefined,
         include: {
             head: {
                 select: {

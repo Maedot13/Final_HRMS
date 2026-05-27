@@ -94,19 +94,34 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
         throw new Error('Email already in use');
     }
 
-    let assignedCampusId: number;
+    let assignedCampusId: number | null = null;
 
     if (creatorContext.scope === UserScope.UNIVERSITY) {
-        if (!requestedCampusId) {
-            throw new Error('UNIVERSITY scoped admins must explicitly provide a campusId when registering a user.');
+        let actualCampusId = requestedCampusId;
+
+        if (role !== 'HEAD_HR' && role !== 'VICE_PRESIDENT' && !actualCampusId) {
+            if (departmentId) {
+                const dept = await prisma.department.findUnique({
+                    where: { id: departmentId },
+                    select: { campusId: true }
+                });
+                if (dept) {
+                    actualCampusId = dept.campusId;
+                }
+            }
+            if (!actualCampusId) {
+                throw new Error('UNIVERSITY scoped admins must explicitly provide a campusId when registering a user.');
+            }
         }
 
-        // Verify the requested campus exists
-        const campusExists = await prisma.campus.findUnique({ where: { id: requestedCampusId } });
-        if (!campusExists) {
-            throw new Error(`Campus with ID ${requestedCampusId} not found.`);
+        if (actualCampusId) {
+            // Verify the requested campus exists
+            const campusExists = await prisma.campus.findUnique({ where: { id: actualCampusId } });
+            if (!campusExists) {
+                throw new Error(`Campus with ID ${actualCampusId} not found.`);
+            }
         }
-        assignedCampusId = requestedCampusId;
+        assignedCampusId = actualCampusId || null;
     } else {
         // Force the new user into the same campus as the HR Officer creating them
         if (!creatorContext.campusId) {
@@ -125,9 +140,15 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
 
     if (creatorRole === (UserRole.SUPER_ADMIN as any)) {
         // Super Admin can create any role
-    } else if (creatorRole === UserRole.ADMIN || creatorRole === UserRole.HR_OFFICER) {
-        // Admin and HR can ONLY create EMPLOYEE
-        if (targetRole !== UserRole.EMPLOYEE) {
+    } else if (creatorRole === UserRole.ADMIN) {
+        // Admin can create EMPLOYEE and HR_OFFICER
+        if (targetRole !== UserRole.EMPLOYEE && targetRole !== UserRole.HR_OFFICER) {
+            throw new Error(`As an ${creatorRole}, you only have permission to register accounts with the EMPLOYEE or HR_OFFICER role.`);
+        }
+    } else if (creatorRole === UserRole.HR_OFFICER) {
+        // HR Officer can ONLY create EMPLOYEE, but Head HR can create VICE_PRESIDENT (AVP)
+        const isHeadHrCreatingAvp = creatorContext.isHeadHR && targetRole === 'VICE_PRESIDENT';
+        if (targetRole !== UserRole.EMPLOYEE && !isHeadHrCreatingAvp) {
             throw new Error(`As an ${creatorRole}, you only have permission to register accounts with the EMPLOYEE role.`);
         }
     } else {
@@ -165,21 +186,41 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
         const mustChangePassword = !password; // True if system-generated
         const hashedPassword = await hashPassword(finalRawPassword);
 
+        let finalRole = (role as any) || UserRole.EMPLOYEE;
+        let isHeadHR = false;
+        let finalScope = 'CAMPUS';
+        let finalCampusId: number | null = assignedCampusId;
+        let finalSpecialPrivileges: any[] = [];
+
+        if (role === 'HEAD_HR') {
+            finalRole = UserRole.HR_OFFICER;
+            isHeadHR = true;
+            finalScope = 'UNIVERSITY';
+            finalCampusId = null;
+        } else if (role === 'VICE_PRESIDENT') {
+            finalRole = UserRole.EMPLOYEE;
+            finalScope = 'UNIVERSITY';
+            finalCampusId = null;
+            finalSpecialPrivileges = ['VICE_PRESIDENT'];
+        }
+
         const newUser = await tx.user.create({
             data: {
                 email,
                 passwordHash: hashedPassword,
                 mustChangePassword,
-                role: (role as any) || UserRole.EMPLOYEE,
-                scope: 'CAMPUS',
-                campusId: assignedCampusId,
+                role: finalRole,
+                isHeadHR,
+                scope: finalScope as UserScope,
+                campusId: finalCampusId,
                 employeeId: finalGeneratedEmployeeId,
+                specialPrivileges: finalSpecialPrivileges,
             }
         });
 
         const newEmployee = await tx.employee.create({
             data: {
-                campusId: assignedCampusId,
+                campusId: finalCampusId,
                 userId: newUser.id,
                 employeeId: finalGeneratedEmployeeId,
                 name,
@@ -216,10 +257,10 @@ export const register = async (data: any, creatorContext: TokenPayload): Promise
         specialPrivileges: result.newUser.specialPrivileges
     });
 
-    const campus = await prisma.campus.findUnique({
+    const campus = assignedCampusId ? await prisma.campus.findUnique({
         where: { id: assignedCampusId },
         select: { id: true, code: true, name: true, description: true, isActive: true, timezone: true }
-    });
+    }) : null;
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { passwordHash, ...userWithoutPassword } = result.newUser;

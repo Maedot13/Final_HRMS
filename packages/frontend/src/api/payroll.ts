@@ -44,5 +44,9 @@ export const payrollApi = {
     downloadReport: (reportId: number) => 
         apiClient.get(`/payroll/reports/${reportId}/download`, {
             responseType: 'blob'
-        })
+        }),
+
+    // Get finance leave data
+    getFinanceLeaveData: () =>
+        apiClient.get('/finance/leave-data'),
 };

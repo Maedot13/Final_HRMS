@@ -1,13 +1,24 @@
 import { useState } from 'react';
 import { toast } from 'react-toastify';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select, type SelectOption } from '../../components/ui/Select';
 import { FormField } from '../../components/shared/FormField';
 import { employeesApi } from '../../api/employees';
-import { FiCheckCircle, FiCopy, FiUser } from 'react-icons/fi';
+import { useAuthStore } from '../../store/useAuthStore';
+import { FiCheckCircle, FiCopy, FiUser, FiShield } from 'react-icons/fi';
+import { campusApi } from '../../api/campuses';
+
+const SUPER_ADMIN_ROLE_OPTIONS: SelectOption[] = [
+    { value: 'ADMIN', label: 'Admin' },
+    { value: 'HEAD_HR', label: 'Head HR' },
+];
+
+const ADMIN_ROLE_OPTIONS: SelectOption[] = [
+    { value: 'HR_OFFICER', label: 'HR Officer' },
+];
 
 export interface CreateEmployeeModalProps {
     isOpen: boolean;
@@ -27,12 +38,28 @@ export function CreateEmployeeModal({
     departments,
 }: CreateEmployeeModalProps) {
     const queryClient = useQueryClient();
+    const currentUser = useAuthStore((state) => state.user);
+    const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
+    const isAdmin = currentUser?.role === 'ADMIN';
 
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
+    const [selectedRole, setSelectedRole] = useState<string>(isSuperAdmin ? 'ADMIN' : isAdmin ? 'HR_OFFICER' : 'EMPLOYEE');
     const [departmentId, setDepartmentId] = useState<string>('');
     const [generatedCredentials, setGeneratedCredentials] = useState<GeneratedCredentials | null>(null);
     const [copied, setCopied] = useState<string | null>(null);
+    const [campusId, setCampusId] = useState<string>('');
+
+    const { data: campusesRes } = useQuery({
+        queryKey: ['campuses'],
+        queryFn: () => campusApi.list(),
+        enabled: isSuperAdmin && selectedRole === 'ADMIN',
+    });
+    const campuses = campusesRes?.data || [];
+    const campusOptions: SelectOption[] = [
+        { value: '', label: 'Select a campus...' },
+        ...campuses.map(c => ({ value: String(c.id), label: c.name }))
+    ];
 
     const safeDepartments = Array.isArray(departments) ? departments : [];
 
@@ -42,10 +69,11 @@ export function CreateEmployeeModal({
             return employeesApi.create({
                 name,
                 email,
-                role: 'EMPLOYEE',
+                role: (isSuperAdmin || isAdmin) ? selectedRole : 'EMPLOYEE',
                 departmentId: departmentId ? Number(departmentId) : undefined,
                 department: selectedDept ? selectedDept.name : undefined,
-            });
+                campusId: (isSuperAdmin && selectedRole === 'ADMIN' && campusId) ? Number(campusId) : undefined,
+            } as any);
         },
         onSuccess: (res) => {
             queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -67,7 +95,9 @@ export function CreateEmployeeModal({
     const handleClose = () => {
         setName('');
         setEmail('');
+        setSelectedRole(isSuperAdmin ? 'ADMIN' : isAdmin ? 'HR_OFFICER' : 'EMPLOYEE');
         setDepartmentId('');
+        setCampusId('');
         setGeneratedCredentials(null);
         setCopied(null);
         onClose();
@@ -77,6 +107,10 @@ export function CreateEmployeeModal({
         e.preventDefault();
         if (!name.trim() || !email.trim()) {
             toast.error('Name and email are required to create an employee');
+            return;
+        }
+        if (isSuperAdmin && selectedRole === 'ADMIN' && !campusId) {
+            toast.error('Campus is required for Admin role');
             return;
         }
         createMutation.mutate();
@@ -152,7 +186,7 @@ export function CreateEmployeeModal({
 
     // ── Creation form ─────────────────────────────────────────────────────────
     return (
-        <Modal isOpen={isOpen} onClose={handleClose} title="Add New Employee" size="md">
+        <Modal isOpen={isOpen} onClose={handleClose} title={isSuperAdmin ? 'Create Admin / Head HR Account' : isAdmin ? 'Add New Employee / HR Officer' : 'Add New Employee'} size="md">
             <form onSubmit={handleSubmit} className="space-y-5" noValidate>
 
                 {/* Identity */}
@@ -187,24 +221,63 @@ export function CreateEmployeeModal({
                     </FormField>
                 </div>
 
-                {/* Optional placement */}
-                <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-1">
-                    <div className="flex items-center gap-2 mb-3">
-                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                            Department — Optional
-                        </span>
-                        <span className="text-xs text-gray-400">(can be assigned later)</span>
-                    </div>
+                {/* Role selector — for SUPER_ADMIN and ADMIN */}
+                {(isSuperAdmin || isAdmin) && (
+                    <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-1">
+                        <div className="flex items-center gap-2 mb-3">
+                            <FiShield size={14} className="text-primary" />
+                            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                Account Role — Required
+                            </span>
+                        </div>
+                        <FormField label="Role" htmlFor="emp-role">
+                            <Select
+                                id="emp-role"
+                                options={isSuperAdmin ? SUPER_ADMIN_ROLE_OPTIONS : ADMIN_ROLE_OPTIONS}
+                                value={selectedRole}
+                                onChange={(e) => {
+                                    setSelectedRole(e.target.value);
+                                    if (e.target.value !== 'ADMIN') setCampusId('');
+                                }}
+                            />
+                        </FormField>
 
-                    <FormField label="Department" htmlFor="emp-dept">
-                        <Select
-                            id="emp-dept"
-                            options={deptOptions}
-                            value={departmentId}
-                            onChange={(e) => setDepartmentId(e.target.value)}
-                        />
-                    </FormField>
-                </div>
+                        {isSuperAdmin && selectedRole === 'ADMIN' && (
+                            <div className="pt-2">
+                                <FormField label="Campus" htmlFor="emp-campus" required>
+                                    <Select
+                                        id="emp-campus"
+                                        options={campusOptions}
+                                        value={campusId}
+                                        onChange={(e) => setCampusId(e.target.value)}
+                                        required
+                                    />
+                                </FormField>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Optional placement — only for HR Officer and below, not for Campus Admin */}
+                {!isSuperAdmin && !isAdmin && (
+                    <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-1">
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                Department — Optional
+                            </span>
+                            <span className="text-xs text-gray-400">(can be assigned later)</span>
+                        </div>
+
+                        <FormField label="Department" htmlFor="emp-dept">
+                            <Select
+                                id="emp-dept"
+                                options={deptOptions}
+                                value={departmentId}
+                                onChange={(e) => setDepartmentId(e.target.value)}
+                            />
+                        </FormField>
+                    </div>
+                )}
 
                 <p className="text-xs text-gray-400 leading-relaxed">
                     A system-generated Employee ID and temporary password will be created automatically.

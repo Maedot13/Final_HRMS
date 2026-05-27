@@ -8,6 +8,7 @@ import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { useAuthStore } from '../../store/useAuthStore';
 import { FiCheck, FiX, FiActivity, FiEdit3, FiAward } from 'react-icons/fi';
+import { facultyApi } from '../../api/faculties';
 
 interface JobApplicationsManagerModalProps {
     isOpen: boolean;
@@ -20,6 +21,8 @@ export function JobApplicationsManagerModal({ isOpen, onClose, jobId, jobTitle }
     const queryClient = useQueryClient();
     const user = useAuthStore(state => state.user);
     const [evaluatingAppId, setEvaluatingAppId] = useState<number | null>(null);
+    const [passingAppId, setPassingAppId] = useState<number | null>(null);
+    const [selectedFacultyId, setSelectedFacultyId] = useState<string>('');
     const [reviewComment, setReviewComment] = useState('');
     
     // Evaluation state
@@ -37,9 +40,19 @@ export function JobApplicationsManagerModal({ isOpen, onClose, jobId, jobTitle }
         enabled: !!jobId && isOpen,
     });
 
+    const { data: faculties = [] } = useQuery({
+        queryKey: ['faculties', 'campus'],
+        queryFn: () => facultyApi.listByCampus(),
+        enabled: !!isOpen,
+    });
+
     const statusMutation = useMutation({
-        mutationFn: (data: { appId: number; status: string }) => 
-            recruitmentApi.reviewApplication(data.appId, { status: data.status, reviewComment: reviewComment || undefined }),
+        mutationFn: (data: { appId: number; status: string; assignedFacultyId?: number }) => 
+            recruitmentApi.reviewApplication(data.appId, { 
+                status: data.status, 
+                reviewComment: reviewComment || undefined,
+                assignedFacultyId: data.assignedFacultyId 
+            }),
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['jobApplications', jobId] });
             if (variables.status === 'HIRED') {
@@ -49,6 +62,8 @@ export function JobApplicationsManagerModal({ isOpen, onClose, jobId, jobTitle }
                 toast.success(`Application marked as ${variables.status}`);
             }
             setReviewComment('');
+            setPassingAppId(null);
+            setSelectedFacultyId('');
         },
         onError: () => toast.error('Failed to update application status')
     });
@@ -82,9 +97,10 @@ export function JobApplicationsManagerModal({ isOpen, onClose, jobId, jobTitle }
     const isHR = user?.role === 'HR_OFFICER' || user?.role === 'ADMIN';
     const isCommittee = user?.role === 'RECRUITMENT_COMMITTEE' || user?.role === 'ADMIN';
 
-    // Filter applications: Committee should NOT see PENDING or REJECTED applications
+    // Backend already filters by faculty for RECRUITMENT_COMMITTEE.
+    // Frontend just hides PENDING/REJECTED from committee view.
     const visibleApplications = applications.filter((app: any) => {
-        if (isHR) return true; // HR sees everything
+        if (isHR) return true;
         if (isCommittee) {
             return ['ACCEPTED', 'EVALUATED', 'RECOMMENDED', 'NOT_SELECTED', 'HIRED'].includes(app.status);
         }
@@ -181,12 +197,12 @@ export function JobApplicationsManagerModal({ isOpen, onClose, jobId, jobTitle }
 
                                     <div className="flex gap-2">
                                         {/* STEP 3: HR SCREENING */}
-                                        {isHR && app.status === 'PENDING' && (
+                                        {isHR && app.status === 'PENDING' && passingAppId !== app.id && (
                                             <>
                                                 <Button size="sm" variant="danger" className="flex items-center gap-1.5" onClick={() => handleStatusUpdate(app.id, 'REJECTED')} isLoading={statusMutation.isPending}>
                                                     <FiX className="w-4 h-4" /> Reject
                                                 </Button>
-                                                <Button size="sm" variant="primary" className="flex items-center gap-1.5" onClick={() => handleStatusUpdate(app.id, 'ACCEPTED')} isLoading={statusMutation.isPending}>
+                                                <Button size="sm" variant="primary" className="flex items-center gap-1.5" onClick={() => setPassingAppId(app.id)}>
                                                     <FiCheck className="w-4 h-4" /> Pass Screening
                                                 </Button>
                                             </>
@@ -212,6 +228,46 @@ export function JobApplicationsManagerModal({ isOpen, onClose, jobId, jobTitle }
                                         )}
                                     </div>
                                 </div>
+
+                                {/* PASSING FORM (INLINE) */}
+                                {passingAppId === app.id && (
+                                    <div className="mt-6 p-4 border-2 border-primary/20 bg-primary/5 rounded-lg space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <h5 className="font-bold text-primary flex items-center gap-2">
+                                            <FiCheck /> Assign to Recruitment Committee
+                                        </h5>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Select Faculty</label>
+                                            <select 
+                                                className="w-full border rounded-md px-3 py-2 text-sm"
+                                                value={selectedFacultyId}
+                                                onChange={e => setSelectedFacultyId(e.target.value)}
+                                            >
+                                                <option value="">-- Choose a faculty --</option>
+                                                {faculties.map((f: any) => (
+                                                    <option key={f.id} value={f.id}>{f.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="flex justify-end gap-2 pt-2">
+                                            <Button size="sm" variant="ghost" onClick={() => setPassingAppId(null)}>Cancel</Button>
+                                            <Button 
+                                                size="sm" 
+                                                variant="primary" 
+                                                onClick={() => {
+                                                    if (!selectedFacultyId) {
+                                                        toast.error('Please select a faculty first');
+                                                        return;
+                                                    }
+                                                    statusMutation.mutate({ appId: app.id, status: 'ACCEPTED', assignedFacultyId: parseInt(selectedFacultyId) });
+                                                }} 
+                                                isLoading={statusMutation.isPending}
+                                                disabled={!selectedFacultyId}
+                                            >
+                                                Confirm Pass
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* EVALUATION FORM (INLINE) */}
                                 {evaluatingAppId === app.id && (

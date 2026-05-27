@@ -6,9 +6,13 @@ import { createDepartmentSchema, updateDepartmentSchema } from '../schemas/depar
 export const getDepartments = async (req: Request, res: Response) => {
     try {
         const campusId = req.user!.campusId;
-        if (!campusId) return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'No campus context', null, req);
+        const scope = req.user!.scope;
 
-        const departments = await departmentService.getDepartments(campusId);
+        if (!campusId && scope !== 'UNIVERSITY') {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'No campus context', null, req);
+        }
+
+        const departments = await departmentService.getDepartments(campusId || undefined);
         sendSuccess(res, departments);
     } catch (error: any) {
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);

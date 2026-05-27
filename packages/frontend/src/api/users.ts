@@ -9,8 +9,8 @@ export const usersApi = {
 
     getById: (id: number) => apiClient.get<UserDetail>(`/users/${id}`),
 
-    updateRole: (id: number, role: string) =>
-        apiClient.patch<UserDetail>(`/users/${id}/role`, { role }),
+    updateRole: (id: number, role: string, facultyOpts?: { facultyId?: number; newFacultyName?: string }) =>
+        apiClient.patch<UserDetail>(`/users/${id}/role`, { role, ...facultyOpts }),
 
     updateStatus: (id: number, isActive: boolean) =>
         apiClient.patch<UserDetail>(`/users/${id}/status`, { isActive }),

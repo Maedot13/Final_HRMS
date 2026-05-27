@@ -17,6 +17,16 @@ const schema = z.object({
     grossSalary: z.string().optional(),
     salaryType: z.string().optional(),
     payGrade: z.string().optional(),
+}).superRefine((data, ctx) => {
+    if (data.contractStartDate && data.contractEndDate) {
+        if (new Date(data.contractEndDate) <= new Date(data.contractStartDate)) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Contract End Date must be greater than Contract Start Date",
+                path: ["contractEndDate"]
+            });
+        }
+    }
 });
 
 type FormValues = z.infer<typeof schema>;

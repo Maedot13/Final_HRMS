@@ -373,14 +373,7 @@ export const getLeaveBalances = async (req: Request, res: Response) => {
         }
 
         const balance = await leaveService.getLeaveBalances(employeeId, year);
-        return sendSuccess(res, balance || {
-            annualBalance: 0,
-            sickBalance: 0,
-            maternityBalance: 0,
-            paternityBalance: 0,
-            personalBalance: 0,
-            year,
-        });
+        return sendSuccess(res, balance);
     } catch (error: any) {
         return sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
@@ -391,14 +384,7 @@ export const getMyLeaveBalance = async (req: Request, res: Response) => {
         const employee = req.employee!;
         const year = new Date().getFullYear();
         const balance = await leaveService.getLeaveBalances(employee.id, year);
-        return sendSuccess(res, balance || {
-            annualBalance: 0,
-            sickBalance: 0,
-            maternityBalance: 0,
-            paternityBalance: 0,
-            personalBalance: 0,
-            year,
-        });
+        return sendSuccess(res, balance);
     } catch (error: any) {
         return sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }

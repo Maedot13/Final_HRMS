@@ -32,7 +32,10 @@ import auditRoutes from './routes/audit.routes';
 import privilegeRoutes from './routes/privilege.routes';
 import campusRoutes from './routes/campus.routes';
 import departmentRoutes from './routes/department.routes';
+import collegeRoutes from './routes/college.routes';
+import facultyRoutes from './routes/faculty.routes';
 import appraisalRoutes from './routes/appraisal.routes';
+import financeRoutes from './routes/finance.routes';
 // import attendanceRoutes from './routes/attendance.routes';
 
 // Workers
@@ -157,8 +160,11 @@ app.use('/api/v1/audit-logs', authenticate, blockIfPasswordChangeRequired, audit
 app.use('/api/v1/activity-logs', authenticate, blockIfPasswordChangeRequired, auditRoutes); // alias based on spec
 app.use('/api/v1/privileges', authenticate, blockIfPasswordChangeRequired, privilegeRoutes);
 app.use('/api/v1/campuses', authenticate, blockIfPasswordChangeRequired, campusRoutes);
+app.use('/api/v1/colleges', authenticate, blockIfPasswordChangeRequired, collegeRoutes);
+app.use('/api/v1/faculties', authenticate, blockIfPasswordChangeRequired, facultyRoutes);
 app.use('/api/v1/departments', authenticate, blockIfPasswordChangeRequired, departmentRoutes);
 app.use('/api/v1/evaluations', authenticate, blockIfPasswordChangeRequired, appraisalRoutes);
+app.use('/api/v1/finance', authenticate, blockIfPasswordChangeRequired, financeRoutes);
 // app.use('/api/v1/attendance', authenticate, blockIfPasswordChangeRequired, attendanceRoutes);
 
 // Initialize Event Listeners
@@ -176,6 +182,23 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     // Handle AppError (Trusted errors)
     if (err instanceof AppError) {
         return sendError(res, err.statusCode, err.code, err.message, err.details, req);
+    }
+
+    // Prisma Connection/Schema Errors
+    if (
+        err.name === 'PrismaClientInitializationError' || 
+        err.code === 'P1001' || 
+        err.message?.includes('not exist in the current database') ||
+        err.message?.includes('ETIMEDOUT')
+    ) {
+        return sendError(
+            res,
+            503,
+            ErrorCode.INTERNAL_ERROR,
+            'System maintenance: The database is temporarily unreachable or undergoing updates. Please try again later.',
+            null,
+            req
+        );
     }
 
     // Prisma Unique Constraint Error

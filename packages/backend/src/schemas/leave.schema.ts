@@ -24,9 +24,17 @@ export const createLeaveRequestSchema = z
         (data) => {
             const start = new Date(data.startDate);
             const end = new Date(data.endDate);
-            return end >= start;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            start.setHours(0, 0, 0, 0);
+            end.setHours(0, 0, 0, 0);
+
+            if (start < today) return false;
+            if (end < today) return false;
+            if (end <= start) return false;
+            return true;
         },
-        { message: 'End date must be on or after start date' }
+        { message: 'Start date must be today or a future date, and end date must be after start date' }
     );
 
 export const deptHeadReviewSchema = z.object({

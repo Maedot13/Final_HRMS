@@ -16,6 +16,7 @@ export interface User {
     campus?: { id: number; name: string };
     clearanceUnit?: { id: number; name: string; fullName?: string | null };
     employee?: Employee;
+    recruitmentFacultyId?: number | null;
 }
 
 export interface Employee {
@@ -95,6 +96,7 @@ export interface UserListItem {
     email: string;
     role: string;
     isActive: boolean;
+    isHeadHR?: boolean;
     mustChangePassword?: boolean;
     campusId?: number | null;
     employee?: {
@@ -137,7 +139,12 @@ export interface EmployeeDetail {
     taxInformation?: Record<string, unknown> | null;
     supervisorId?: number | null;
     user?: { role: string; isActive: boolean; createdAt?: string };
-    leaveBalances?: unknown[];
+    leaveBalances?: { leaveType: string; balance: number; used: number }[];
+    isMarried?: boolean;
+    academicRank?: string | null;
+    sabbaticalEligible?: boolean;
+    researchLeaveEligible?: boolean;
+    studyLeaveEligible?: boolean;
 }
 
 export interface ContactInfo {
@@ -162,4 +169,11 @@ export interface EmployeeUpdatePayload {
     employmentType?: string;
     payGrade?: string;
     supervisorId?: number;
+    gender?: 'MALE' | 'FEMALE';
+    staffType?: 'ACADEMIC' | 'REGULAR';
+    isMarried?: boolean;
+    academicRank?: string;
+    sabbaticalEligible?: boolean;
+    researchLeaveEligible?: boolean;
+    studyLeaveEligible?: boolean;
 }

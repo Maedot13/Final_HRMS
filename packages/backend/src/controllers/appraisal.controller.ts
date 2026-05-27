@@ -252,6 +252,18 @@ export const approveEvaluation = async (req: Request, res: Response) => {
         const hrId = req.user?.userId;
         const { id } = req.params;
 
+        const evaluation = await prisma.performanceEvaluation.findUnique({
+            where: { id: parseInt(id) },
+            include: { employee: { select: { campusId: true, userId: true, name: true } } }
+        });
+
+        if (!evaluation) {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, 'Evaluation not found');
+        }
+
+        // Campus isolation: HR can only approve evaluations for employees in their campus
+        assertSameCampus(req, evaluation.employee.campusId);
+
         const updated = await prisma.performanceEvaluation.update({
             where: { id: parseInt(id) },
             data: {
@@ -271,8 +283,22 @@ export const approveEvaluation = async (req: Request, res: Response) => {
             ...meta
         });
 
+        // Notify the evaluated employee so they can see the final result
+        await createNotification({
+            userId: evaluation.employee.userId,
+            type: 'PERFORMANCE_APPRAISAL',
+            title: 'Performance Evaluation Approved',
+            message: `Your performance evaluation for period "${updated.period}" has been reviewed and approved by Campus HR. Efficiency: ${updated.efficiencyScore}%, Work Output: ${updated.workOutputScore}%.`,
+            relatedId: updated.id,
+            relatedType: 'PerformanceEvaluation',
+            campusId: evaluation.employee.campusId
+        });
+
         sendSuccess(res, updated);
     } catch (error: any) {
+        if (error.message === 'Cross-campus access denied' || error.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, error.message);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message);
     }
 };
@@ -282,6 +308,18 @@ export const rejectEvaluation = async (req: Request, res: Response) => {
         const hrId = req.user?.userId;
         const { id } = req.params;
         const { reason } = req.body;
+
+        const evaluation = await prisma.performanceEvaluation.findUnique({
+            where: { id: parseInt(id) },
+            include: { employee: { select: { campusId: true, userId: true, name: true } } }
+        });
+
+        if (!evaluation) {
+            return sendError(res, 404, ErrorCode.NOT_FOUND, 'Evaluation not found');
+        }
+
+        // Campus isolation
+        assertSameCampus(req, evaluation.employee.campusId);
 
         const updated = await prisma.performanceEvaluation.update({
             where: { id: parseInt(id) },
@@ -301,17 +339,38 @@ export const rejectEvaluation = async (req: Request, res: Response) => {
             ...meta
         });
 
+        // Notify the Dept Head who submitted the evaluation
+        await createNotification({
+            userId: evaluation.employee.userId,
+            type: 'PERFORMANCE_APPRAISAL',
+            title: 'Performance Evaluation Returned',
+            message: `Your performance evaluation for period "${updated.period}" was not approved. Reason: ${reason || 'No reason provided.'}`,
+            relatedId: updated.id,
+            relatedType: 'PerformanceEvaluation',
+            campusId: evaluation.employee.campusId
+        });
+
         sendSuccess(res, updated);
     } catch (error: any) {
+        if (error.message === 'Cross-campus access denied' || error.message === 'Missing campus context for this user') {
+            return sendError(res, 403, ErrorCode.FORBIDDEN, error.message);
+        }
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message);
     }
 };
 
 export const getPendingEvaluations = async (req: Request, res: Response) => {
     try {
+        // Campus scoping: HR Officer should only see evaluations for employees in their campus
+        const campusCtx = getCampusScope(req);
+        const campusId = getCampusIdFilter(campusCtx);
+
         const pending = await prisma.performanceEvaluation.findMany({
-            where: { status: 'PENDING_HR' },
-            include: { employee: { select: { name: true, employeeId: true } } },
+            where: {
+                status: 'PENDING_HR',
+                ...(campusId ? { employee: { campusId } } : {}),
+            },
+            include: { employee: { select: { name: true, employeeId: true, campusId: true } } },
             orderBy: { createdAt: 'desc' }
         });
 

@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 
-export async function generateNextEmployeeId(campusId: number, tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">): Promise<string> {
+export async function generateNextEmployeeId(campusId: number | null, tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">): Promise<string> {
     // Obtain a transaction-level advisory lock to serialize ID generation globally
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(1001)`;
 

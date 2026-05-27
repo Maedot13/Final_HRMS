@@ -135,10 +135,10 @@ export function LeaveRequestModal({ isOpen, onClose }: LeaveRequestModalProps) {
     const [file, setFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Calculate years of service
+    // Today's date string for min attribute on date inputs
+    const todayStr = new Date().toISOString().slice(0, 10);
+
     const employee = user?.employee;
-    const hireDate = employee?.hireDate ? new Date(employee.hireDate) : new Date();
-    const yearsOfService = (Date.now() - hireDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
 
     const isAcademic = (position: string = '') => {
         const pos = position.toLowerCase();
@@ -154,7 +154,7 @@ export function LeaveRequestModal({ isOpen, onClose }: LeaveRequestModalProps) {
         
         switch (type) {
             case 'SABBATICAL':
-                return isAcademicStaff && yearsOfService >= 6;
+                return !!(employee as any).sabbaticalEligible;
             case 'RESEARCH':
             case 'STUDY':
                 return isAcademicStaff;
@@ -195,6 +195,8 @@ export function LeaveRequestModal({ isOpen, onClose }: LeaveRequestModalProps) {
         },
     });
 
+    const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+
     const mutation = useMutation({
         mutationFn: (values: FormValues) => {
             if (file) {
@@ -204,29 +206,49 @@ export function LeaveRequestModal({ isOpen, onClose }: LeaveRequestModalProps) {
                 fd.append('endDate', values.endDate);
                 fd.append('reason', values.reason);
                 fd.append('attachment', file);
-                return leaveApi.createWithFile(fd);
+                return leaveApi.createWithFile(fd, (progressEvent) => {
+                    const total = progressEvent.total || 0;
+                    const current = progressEvent.loaded || 0;
+                    if (total > 0) {
+                        const pct = Math.round((current * 100) / total);
+                        setUploadProgress(pct);
+                    }
+                });
             }
             return leaveApi.create(values);
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['leaveRequests'] });
-            toast.success('Leave request submitted. Your department head will review it.');
+            toast.success('Leave request and supporting document submitted successfully.');
             handleClose();
         },
         onError: (error: any) => {
+            setUploadProgress(null);
             setApiError(
                 error.response?.data?.message || 'Failed to submit leave request'
             );
+            toast.error(error.response?.data?.message || 'Failed to upload supporting document.');
         },
     });
 
     const onSubmit = (data: FormValues) => {
         setApiError(null);
-        
+
         const sDate = new Date(data.startDate);
         const eDate = new Date(data.endDate);
-        if (eDate < sDate) {
-            setApiError('End date must be after start date');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (sDate < today) {
+            setApiError('Start date cannot be in the past. Please select today or a future date.');
+            return;
+        }
+        if (eDate < today) {
+            setApiError('End date cannot be in the past.');
+            return;
+        }
+        if (eDate <= sDate) {
+            setApiError('End date must be after start date.');
             return;
         }
 
@@ -255,6 +277,7 @@ export function LeaveRequestModal({ isOpen, onClose }: LeaveRequestModalProps) {
 
         if (config.requiresDoc && !file) {
             setApiError(`A supporting document is required for ${config.label}. Please attach a file.`);
+            toast.error(`Please upload a supporting document for ${config.label}.`);
             return;
         }
         mutation.mutate(data);
@@ -263,12 +286,14 @@ export function LeaveRequestModal({ isOpen, onClose }: LeaveRequestModalProps) {
     const handleClose = () => {
         reset();
         setFile(null);
+        setUploadProgress(null);
         setApiError(null);
         onClose();
     };
 
     const removeFile = () => {
         setFile(null);
+        setUploadProgress(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
@@ -336,12 +361,12 @@ export function LeaveRequestModal({ isOpen, onClose }: LeaveRequestModalProps) {
                     )}
                     {balanceData && ['ANNUAL', 'SICK', 'PERSONAL'].includes(selectedType) && (
                         <div>
-                            <span className="font-medium">Available balance: </span> 
-                            {balanceData[{
-                                ANNUAL: 'annualBalance',
-                                SICK: 'sickBalance',
-                                PERSONAL: 'personalBalance'
-                            }[selectedType as string] as keyof typeof balanceData] || 0} days
+                             <span className="font-medium">Available balance: </span> 
+                             {balanceData[{
+                                 ANNUAL: 'annualBalance',
+                                 SICK: 'sickBalance',
+                                 PERSONAL: 'personalBalance'
+                             }[selectedType as string] as keyof typeof balanceData] || 0} days
                         </div>
                     )}
                     <div className="flex items-center gap-1">
@@ -368,6 +393,7 @@ export function LeaveRequestModal({ isOpen, onClose }: LeaveRequestModalProps) {
                                 <Input
                                     {...field}
                                     type="date"
+                                    min={todayStr}
                                     error={errors.startDate?.message}
                                     className="w-full"
                                 />
@@ -380,14 +406,22 @@ export function LeaveRequestModal({ isOpen, onClose }: LeaveRequestModalProps) {
                             name="endDate"
                             control={control}
                             rules={{ required: 'End date is required' }}
-                            render={({ field }) => (
-                                <Input
-                                    {...field}
-                                    type="date"
-                                    error={errors.endDate?.message}
-                                    className="w-full"
-                                />
-                            )}
+                            render={({ field }) => {
+                                // End date min = day after the selected start date
+                                const startVal = watch('startDate');
+                                const endMin = startVal
+                                    ? new Date(new Date(startVal).getTime() + 86400000).toISOString().slice(0, 10)
+                                    : todayStr;
+                                return (
+                                    <Input
+                                        {...field}
+                                        type="date"
+                                        min={endMin}
+                                        error={errors.endDate?.message}
+                                        className="w-full"
+                                    />
+                                );
+                            }}
                         />
                     </div>
                 </div>
@@ -434,7 +468,29 @@ export function LeaveRequestModal({ isOpen, onClose }: LeaveRequestModalProps) {
                                 type="file"
                                 className="hidden"
                                 accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-                                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                                onChange={(e) => {
+                                    const selectedFile = e.target.files?.[0];
+                                    if (!selectedFile) return;
+
+                                    // Validate file size (5MB limit)
+                                    if (selectedFile.size > 5 * 1024 * 1024) {
+                                        toast.error('File size exceeds the 5MB limit.');
+                                        if (fileInputRef.current) fileInputRef.current.value = '';
+                                        return;
+                                    }
+
+                                    // Validate file type
+                                    const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx'];
+                                    const fileExt = selectedFile.name.substring(selectedFile.name.lastIndexOf('.')).toLowerCase();
+                                    if (!allowedExtensions.includes(fileExt)) {
+                                        toast.error('Invalid file type. Only PDF, images, and Word documents are allowed.');
+                                        if (fileInputRef.current) fileInputRef.current.value = '';
+                                        return;
+                                    }
+
+                                    setFile(selectedFile);
+                                    toast.success('Document validated and attached.');
+                                }}
                             />
                             <FiUpload className="w-4 h-4 text-gray-400" />
                             <span className="text-sm text-gray-500">
@@ -442,21 +498,33 @@ export function LeaveRequestModal({ isOpen, onClose }: LeaveRequestModalProps) {
                             </span>
                         </label>
                     ) : (
-                        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
-                            <div className="flex items-center gap-2 min-w-0">
-                                <FiUpload className="w-4 h-4 text-green-600 shrink-0" />
-                                <span className="text-sm text-green-800 truncate">{file.name}</span>
-                                <span className="text-xs text-green-600 shrink-0">
-                                    ({(file.size / 1024).toFixed(0)} KB)
-                                </span>
+                        <div className="flex flex-col gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <FiUpload className="w-4 h-4 text-green-600 shrink-0" />
+                                    <span className="text-sm text-green-800 truncate">{file.name}</span>
+                                    <span className="text-xs text-green-600 shrink-0">
+                                        ({(file.size / 1024).toFixed(0)} KB)
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={removeFile}
+                                    className="text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                                    disabled={mutation.isPending}
+                                >
+                                    <FiX className="w-4 h-4" />
+                                </button>
                             </div>
-                            <button
-                                type="button"
-                                onClick={removeFile}
-                                className="text-gray-400 hover:text-red-500 transition-colors shrink-0"
-                            >
-                                <FiX className="w-4 h-4" />
-                            </button>
+                            {uploadProgress !== null && (
+                                <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                                    <div 
+                                        className="bg-green-600 h-1.5 rounded-full transition-all duration-300" 
+                                        style={{ width: `${uploadProgress}%` }}
+                                    ></div>
+                                    <p className="text-[10px] text-gray-500 mt-1 text-right">Uploading: {uploadProgress}%</p>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

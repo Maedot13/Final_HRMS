@@ -93,20 +93,39 @@ async function main() {
 
   for (const acc of TEST_ACCOUNTS) {
     const existingUser = await prisma.user.findUnique({
-      where: { employeeId: acc.employeeId },
+      where: { email: acc.email },
       include: { employee: true },
     });
 
     if (existingUser) {
-      await prisma.employee.update({
-        where: { id: existingUser.employee!.id },
-        data: {
-          serviceYears: acc.serviceYears,
-          hireDate: new Date(acc.hireDate),
-          grossSalary: acc.grossSalary,
-          campusId: campus.id,
-        },
-      });
+      if (existingUser.employee) {
+        await prisma.employee.update({
+          where: { id: existingUser.employee.id },
+          data: {
+            serviceYears: acc.serviceYears,
+            hireDate: new Date(acc.hireDate),
+            grossSalary: acc.grossSalary,
+            campusId: campus.id,
+            employeeId: acc.employeeId,
+          },
+        });
+      } else {
+        await prisma.employee.create({
+          data: {
+            userId: existingUser.id,
+            employeeId: acc.employeeId,
+            name: acc.name,
+            deptLegacy: acc.department,
+            position: acc.position,
+            hireDate: new Date(acc.hireDate),
+            serviceYears: acc.serviceYears,
+            grossSalary: acc.grossSalary,
+            salaryType: SalaryType.MONTHLY,
+            contactInfo: {},
+            campusId: campus.id,
+          },
+        });
+      }
       await prisma.user.update({
         where: { id: existingUser.id },
         data: {
@@ -114,6 +133,7 @@ async function main() {
           role: acc.role,
           campusId: campus.id,
           scope: 'CAMPUS',
+          employeeId: acc.employeeId,
         },
       });
       console.log(`   Updated: ${acc.employeeId} (${acc.name})`);
@@ -175,34 +195,45 @@ async function main() {
   }
   console.log(`   Leave balances upserted for year ${year}`);
 
-  // Create a job posting for recruitment testing
-  const hrUser = await prisma.user.findFirst({
-    where: { employeeId: 'EMP_HR_TEST' },
-  });
-  if (hrUser) {
-    const existing = await prisma.jobPosting.findFirst({
-      where: { campusId: campus.id, title: 'Senior Software Engineer' },
+  // Create a job posting for recruitment testing (best-effort — skipped if schema mismatch)
+  try {
+    const hrUser = await prisma.user.findFirst({
+      where: { employeeId: 'EMP_HR_TEST' },
     });
-    if (!existing) {
-      const deadline = new Date();
-      deadline.setMonth(deadline.getMonth() + 2);
-      await prisma.jobPosting.create({
-        data: {
-          title: 'Senior Software Engineer',
-          description: 'We are looking for an experienced software engineer to join our IT department.',
-          requirements: '5+ years experience, BSc in Computer Science or related field',
-          deptLegacy: 'IT',
-          position: 'Senior Software Engineer',
-          deadline,
-          status: 'OPEN',
-          createdBy: hrUser.id,
-          campusId: campus.id,
-        },
+    if (hrUser) {
+      const existing = await prisma.jobPosting.findFirst({
+        where: { campusId: campus.id, title: 'Senior Software Engineer' },
       });
-      console.log('   Job posting created for recruitment testing');
-    } else {
-      console.log('   Job posting already exists for recruitment testing');
+      if (!existing) {
+        const deadline = new Date();
+        deadline.setMonth(deadline.getMonth() + 2);
+        
+        const dept = await prisma.department.findFirst({ where: { campusId: campus.id } });
+        
+        if (dept) {
+          await prisma.jobPosting.create({
+            data: {
+              title: 'Senior Software Engineer',
+              description: 'We are looking for an experienced software engineer to join our IT department.',
+              requirements: '5+ years experience, BSc in Computer Science or related field',
+              departmentId: dept.id,
+              position: 'Senior Software Engineer',
+              deadline,
+              status: 'OPEN',
+              createdBy: hrUser.id,
+              campusId: campus.id,
+            },
+          });
+          console.log('   Job posting created for recruitment testing');
+        } else {
+          console.log('   Skipped job posting creation: No department found.');
+        }
+      } else {
+        console.log('   Job posting already exists for recruitment testing');
+      }
     }
+  } catch (jobErr: any) {
+    console.warn(`   ⚠️  Job posting seed skipped (schema mismatch or DB error): ${jobErr.message}`);
   }
 
   console.log('\n✅ Development seed complete.\n');

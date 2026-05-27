@@ -399,14 +399,16 @@ export const createClearanceUnit = async (req: Request, res: Response) => {
 export const updateClearanceUnit = async (req: Request, res: Response) => {
     try {
         const id = parseInt(req.params.unitId);
-        const { name, fullName, description, isActive, priorityOrder } = req.body;
+        const { name, fullName, description, isActive, priorityOrder, loginId, loginPassword } = req.body;
         
         const unit = await clearanceService.updateClearanceUnit(id, { 
             name, 
             fullName, 
             description, 
             isActive, 
-            priorityOrder: priorityOrder !== undefined ? parseInt(priorityOrder) : undefined 
+            priorityOrder: priorityOrder !== undefined ? parseInt(priorityOrder) : undefined,
+            loginId,
+            loginPassword
         });
         sendSuccess(res, unit);
     } catch (error: any) {

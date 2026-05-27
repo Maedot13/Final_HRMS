@@ -25,6 +25,7 @@ model Campus {
   auditLogs               AuditLog[]
   clearanceRequests       ClearanceRequest[]
   clearanceUnits          ClearanceUnit[]
+  colleges                College[]
   departments             Department[]
   employees               Employee[]
   jobPostings             JobPosting[]
@@ -39,98 +40,110 @@ model Campus {
 }
 
 model User {
-  id                 Int                 @id @default(autoincrement())
-  passwordHash       String
-  role               UserRole
-  employeeId         String              @unique
-  isActive           Boolean             @default(true)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  email              String              @unique
-  scope              UserScope           @default(CAMPUS)
-  campusId           Int?
-  mustChangePassword Boolean             @default(false)
-  isHeadHR           Boolean             @default(false)
-  specialPrivileges  SpecialPrivilege[]  @default([])
-  clearanceUnitId    Int?
-  clearanceUnit      ClearanceUnit?      @relation(fields: [clearanceUnitId], references: [id])
-  employee           Employee?
-  jobPostings        JobPosting[]        @relation("JobCreator")
-  notifications      Notification[]
-  refreshTokens      RefreshToken[]
-  campus             Campus?             @relation(fields: [campusId], references: [id], onDelete: Restrict)
-  clearanceApprovals ClearanceApproval[]
-  payrollReports     PayrollReport[]
+  id                   Int                 @id @default(autoincrement())
+  passwordHash         String
+  role                 UserRole
+  employeeId           String              @unique
+  isActive             Boolean             @default(true)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  email                String              @unique
+  scope                UserScope           @default(CAMPUS)
+  campusId             Int?
+  mustChangePassword   Boolean             @default(false)
+  isHeadHR             Boolean             @default(false)
+  specialPrivileges    SpecialPrivilege[]  @default([])
+  clearanceUnitId      Int?
+  recruitmentFacultyId Int?
+  clearanceUnit        ClearanceUnit?      @relation(fields: [clearanceUnitId], references: [id])
+  recruitmentFaculty   Faculty?            @relation("CommitteeFaculty", fields: [recruitmentFacultyId], references: [id])
+  employee             Employee?
+  jobPostings          JobPosting[]        @relation("JobCreator")
+  notifications        Notification[]
+  refreshTokens        RefreshToken[]
+  campus               Campus?             @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  clearanceApprovals   ClearanceApproval[]
+  payrollReports       PayrollReport[]
+  leaveDocuments       LeaveDocument[]
 
   @@index([campusId])
   @@index([clearanceUnitId])
+  @@index([recruitmentFacultyId])
 }
 
 model Employee {
-  id                 Int                 @id @default(autoincrement())
-  userId             Int                 @unique
-  employeeId         String              @unique
-  name               String
-  deptLegacy         String              @map("department")
-  position           String
-  gender             Gender              @default(MALE)
-  staffType          StaffType           @default(REGULAR)
-  hireDate           DateTime
-  serviceYears       Int                 @default(0)
-  contactInfo        Json
-  grossSalary        Float               @default(0)
-  salaryType         SalaryType          @default(MONTHLY)
-  campusId           Int?
-  departmentId       Int?
-  clearanceRequests  ClearanceRequest[]
-  headOf             Department?         @relation("DeptHead")
-  campus             Campus?             @relation(fields: [campusId], references: [id], onDelete: Restrict)
-  department         Department?         @relation(fields: [departmentId], references: [id])
-  user               User                @relation(fields: [userId], references: [id])
-  supervisorId       Int?
-  supervisor         Employee?           @relation("EmployeeSupervisor", fields: [supervisorId], references: [id])
-  subordinates       Employee[]          @relation("EmployeeSupervisor")
-  officeLocation     String?
-  employmentStatus   EmploymentStatus    @default(ACTIVE)
-  contractStartDate  DateTime?
-  contractEndDate    DateTime?
-  employmentType     EmploymentType      @default(PERMANENT)
-  payGrade           String?
-  taxInformation     Json?
-  jobApplications    JobApplication[]
-  leaveBalances      LeaveBalance[]
-  leaveRequests      LeaveRequest[]
-  payrollTransfers   PayrollTransfer[]
-  sabbaticalRequests SabbaticalRequest[]
+  id                     Int                     @id @default(autoincrement())
+  userId                 Int                     @unique
+  employeeId             String                  @unique
+  name                   String
+  deptLegacy             String                  @map("department")
+  position               String
+  gender                 Gender                  @default(MALE)
+  staffType              StaffType               @default(REGULAR)
+  hireDate               DateTime
+  serviceYears           Int                     @default(0)
+  contactInfo            Json
+  grossSalary            Float                   @default(0)
+  salaryType             SalaryType              @default(MONTHLY)
+  campusId               Int?
+  departmentId           Int?
+  clearanceRequests      ClearanceRequest[]
+  headOf                 Department?             @relation("DeptHead")
+  deanOfCollege          College?                @relation("CollegeDean")
+  deanOfFaculty          Faculty?                @relation("FacultyDean")
+  campus                 Campus?                 @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  department             Department?             @relation(fields: [departmentId], references: [id])
+  user                   User                    @relation(fields: [userId], references: [id])
+  supervisorId           Int?
+  supervisor             Employee?               @relation("EmployeeSupervisor", fields: [supervisorId], references: [id])
+  subordinates           Employee[]              @relation("EmployeeSupervisor")
+  officeLocation         String?
+  employmentStatus       EmploymentStatus        @default(ACTIVE)
+  contractStartDate      DateTime?
+  contractEndDate        DateTime?
+  employmentType         EmploymentType          @default(PERMANENT)
+  payGrade               String?
+  taxInformation         Json?
+  jobApplications        JobApplication[]
+  leaveBalances          LeaveBalance[]
+  leaveRequests          LeaveRequest[]
+  payrollTransfers       PayrollTransfer[]
+  sabbaticalRequests     SabbaticalRequest[]
   performanceEvaluations PerformanceEvaluation[]
-  attendance         Attendance[]
+  attendance             Attendance[]
+
+  isMarried             Boolean @default(false)
+  academicRank          String?
+  sabbaticalEligible    Boolean @default(false)
+  researchLeaveEligible Boolean @default(false)
+  studyLeaveEligible    Boolean @default(false)
 
   @@index([campusId])
 }
 
 model PerformanceEvaluation {
-  id               Int      @id @default(autoincrement())
-  employeeId       Int
-  employee         Employee @relation(fields: [employeeId], references: [id])
-  deptHeadId       Int      // User ID of the Dept Head
-  hrApprovedById   Int?     // User ID of HR Officer
-  status           EvaluationStatus @default(PENDING_HR)
-  period           String   
-  
+  id             Int              @id @default(autoincrement())
+  employeeId     Int
+  employee       Employee         @relation(fields: [employeeId], references: [id])
+  deptHeadId     Int // User ID of the Dept Head
+  hrApprovedById Int? // User ID of HR Officer
+  status         EvaluationStatus @default(PENDING_HR)
+  period         String
+
   // BDU Detailed Criteria
-  qualityScore     Float    // Work Quality & Efficiency (0-100)
-  punctualityScore Float    // Punctuality & Discipline (0-100)
-  knowledgeScore   Float    // Job Knowledge & Skills (0-100)
-  teamworkScore    Float    // Teamwork & Professionalism (0-100)
-  
-  efficiencyScore  Float    // Aggregate weighted score
-  workOutputScore  Float    // Separate output assessment
-  
-  comments         String?
-  rejectionReason  String?
-  hrApprovedAt     DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  qualityScore     Float // Work Quality & Efficiency (0-100)
+  punctualityScore Float // Punctuality & Discipline (0-100)
+  knowledgeScore   Float // Job Knowledge & Skills (0-100)
+  teamworkScore    Float // Teamwork & Professionalism (0-100)
+
+  efficiencyScore Float // Aggregate weighted score
+  workOutputScore Float // Separate output assessment
+
+  comments        String?
+  rejectionReason String?
+  hrApprovedAt    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([employeeId])
   @@index([deptHeadId])
@@ -166,7 +179,8 @@ model LeaveRequest {
   campusId           Int?
   campus             Campus?         @relation(fields: [campusId], references: [id], onDelete: Restrict)
   employee           Employee        @relation(fields: [employeeId], references: [id])
-  approvals       LeaveApproval[]
+  approvals          LeaveApproval[]
+  leaveDocument      LeaveDocument?
 
   @@index([campusId])
   @@index([employeeId, status])
@@ -272,15 +286,15 @@ model ClearanceCheck {
 }
 
 model Attendance {
-  id         Int      @id @default(autoincrement())
+  id         Int              @id @default(autoincrement())
   employeeId Int
-  date       DateTime @default(now())
-  clockIn    DateTime @default(now())
+  date       DateTime         @default(now())
+  clockIn    DateTime         @default(now())
   clockOut   DateTime?
   status     AttendanceStatus @default(PRESENT)
   campusId   Int?
-  employee   Employee @relation(fields: [employeeId], references: [id])
-  campus     Campus?  @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  employee   Employee         @relation(fields: [employeeId], references: [id])
+  campus     Campus?          @relation(fields: [campusId], references: [id], onDelete: Restrict)
 
   @@unique([employeeId, date])
   @@index([campusId, date])
@@ -376,8 +390,11 @@ model JobApplication {
   updatedAt         DateTime          @updatedAt
   employee          Employee          @relation(fields: [employeeId], references: [id])
   jobPosting        JobPosting        @relation(fields: [jobPostingId], references: [id])
+  assignedFacultyId Int?
+  assignedFaculty   Faculty?          @relation(fields: [assignedFacultyId], references: [id])
 
   @@unique([jobPostingId, employeeId])
+  @@index([assignedFacultyId])
 }
 
 model Notification {
@@ -436,17 +453,54 @@ model AuditLog {
 model Department {
   id             Int          @id @default(autoincrement())
   campusId       Int
+  facultyId      Int?
   name           String
   headEmployeeId Int?         @unique
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   campus         Campus       @relation(fields: [campusId], references: [id])
+  faculty        Faculty?     @relation(fields: [facultyId], references: [id])
   head           Employee?    @relation("DeptHead", fields: [headEmployeeId], references: [id])
   employees      Employee[]
   jobPostings    JobPosting[]
 
   @@unique([campusId, name])
   @@index([campusId])
+  @@index([facultyId])
+}
+
+model College {
+  id             Int       @id @default(autoincrement())
+  campusId       Int
+  name           String
+  description    String?
+  deanEmployeeId Int?      @unique
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  campus         Campus    @relation(fields: [campusId], references: [id])
+  dean           Employee? @relation("CollegeDean", fields: [deanEmployeeId], references: [id])
+  faculties      Faculty[]
+
+  @@unique([campusId, name])
+  @@index([campusId])
+}
+
+model Faculty {
+  id               Int    @id @default(autoincrement())
+  collegeId        Int
+  name             String
+  description      String?
+  deanEmployeeId   Int?         @unique
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  college          College      @relation(fields: [collegeId], references: [id])
+  dean             Employee?    @relation("FacultyDean", fields: [deanEmployeeId], references: [id])
+  departments      Department[]
+  committeeMembers User[]       @relation("CommitteeFaculty")
+  jobApplications  JobApplication[]
+
+  @@unique([collegeId, name])
+  @@index([collegeId])
 }
 
 enum UserScope {
@@ -608,4 +662,21 @@ model PayrollReport {
 
   @@index([campusId])
   @@index([month, year])
+}
+
+model LeaveDocument {
+  id             Int       @id @default(autoincrement())
+  userId         Int
+  leaveRequestId Int       @unique
+  leaveType      LeaveType
+  fileUrl        String // File reference / Cloudinary URL
+  fileName       String
+  fileType       String
+  publicId       String? // Cloudinary public ID for deletion/management
+  createdAt      DateTime  @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

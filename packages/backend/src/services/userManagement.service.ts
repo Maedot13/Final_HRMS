@@ -6,25 +6,58 @@ import crypto from 'crypto';
 import * as emailService from './email.service';
 import { logger } from '../utils/logger';
 
+/**
+ * Finds a faculty by name (case-insensitive) across all colleges in the given campus.
+ * If not found, auto-creates it under the first available college (creating a
+ * 'General' college first if the campus has no colleges yet).
+ */
+async function findOrCreateFacultyByName(name: string, campusId: number) {
+    // Try to find by name in any college belonging to this campus
+    const existing = await prisma.faculty.findFirst({
+        where: { name: { equals: name, mode: 'insensitive' }, college: { campusId } },
+    });
+    if (existing) return existing;
+
+    // Find or create a default college to attach the new faculty to
+    let college = await prisma.college.findFirst({ where: { campusId } });
+    if (!college) {
+        college = await prisma.college.create({
+            data: { campusId, name: 'General' },
+        });
+    }
+
+    // Create the new faculty
+    return prisma.faculty.create({
+        data: { collegeId: college.id, name },
+    });
+}
+
 export const getAllUsers = async (
     campusId?: number, 
     page = 1, 
     limit = 50,
-    filters?: { search?: string; role?: string; status?: string; department?: string }
+    filters?: { search?: string; role?: string; status?: string; department?: string; requesterRole?: string; isHeadHR?: boolean }
 ) => {
     const where: any = {};
+    const andConditions: any[] = [];
     if (campusId != null) where.campusId = campusId;
 
     if (filters) {
         if (filters.search) {
-            where.OR = [
-                { email: { contains: filters.search, mode: 'insensitive' } },
-                { employeeId: { contains: filters.search, mode: 'insensitive' } },
-                { employee: { name: { contains: filters.search, mode: 'insensitive' } } }
-            ];
+            andConditions.push({
+                OR: [
+                    { email: { contains: filters.search, mode: 'insensitive' } },
+                    { employeeId: { contains: filters.search, mode: 'insensitive' } },
+                    { employee: { name: { contains: filters.search, mode: 'insensitive' } } }
+                ]
+            });
         }
         if (filters.role) {
-            where.role = filters.role;
+            if (filters.role === 'HEAD_HR') {
+                where.isHeadHR = true;
+            } else {
+                where.role = filters.role;
+            }
         }
         if (filters.status) {
             where.isActive = filters.status === 'active';
@@ -35,6 +68,27 @@ export const getAllUsers = async (
                 departmentId: parseInt(filters.department)
             };
         }
+        if (filters.requesterRole === 'SUPER_ADMIN') {
+            andConditions.push({
+                OR: [
+                    { role: 'SUPER_ADMIN' },
+                    { role: 'ADMIN' },
+                    { isHeadHR: true }
+                ]
+            });
+        } else if (filters.requesterRole === 'HR_OFFICER' && !filters.isHeadHR) {
+            andConditions.push({
+                role: {
+                    notIn: ['ADMIN', 'SUPER_ADMIN', 'CLEARANCE_BODY', 'RECRUITMENT_COMMITTEE']
+                }
+            });
+            andConditions.push({
+                isHeadHR: false
+            });
+        }
+    }
+    if (andConditions.length > 0) {
+        where.AND = andConditions;
     }
     const [users, total] = await Promise.all([
         prisma.user.findMany({
@@ -42,6 +96,7 @@ export const getAllUsers = async (
             include: {
                 employee: {
                     select: {
+                        id: true,
                         name: true,
                         department: true,
                         position: true
@@ -74,7 +129,11 @@ export const getUserById = async (id: number) => {
     });
 };
 
-export const updateUserRole = async (id: number, role: UserRole) => {
+export const updateUserRole = async (
+    id: number,
+    role: UserRole | 'HEAD_HR',
+    facultyOpts?: { facultyId?: number; newFacultyName?: string; campusId?: number }
+) => {
     // If demoting an admin, ensure they aren't the last one
     if (role !== UserRole.ADMIN) {
         const user = await prisma.user.findUnique({ where: { id } });
@@ -88,9 +147,39 @@ export const updateUserRole = async (id: number, role: UserRole) => {
         }
     }
 
+    // Resolve recruitment faculty if promoting to RECRUITMENT_COMMITTEE
+    let recruitmentFacultyId: number | null | undefined;
+    if (role === UserRole.RECRUITMENT_COMMITTEE && facultyOpts) {
+        if (facultyOpts.facultyId) {
+            recruitmentFacultyId = facultyOpts.facultyId;
+        } else if (facultyOpts.newFacultyName && facultyOpts.campusId) {
+            const faculty = await findOrCreateFacultyByName(
+                facultyOpts.newFacultyName.trim(),
+                facultyOpts.campusId
+            );
+            recruitmentFacultyId = faculty.id;
+        }
+    } else if (role !== UserRole.RECRUITMENT_COMMITTEE) {
+        // Clear the faculty link if demoting away from committee
+        recruitmentFacultyId = null;
+    }
+
+    if (role === 'HEAD_HR') {
+        return prisma.user.update({
+            where: { id },
+            data: { role: UserRole.HR_OFFICER, isHeadHR: true, recruitmentFacultyId: null },
+        });
+    }
+
+    const updateData: Record<string, unknown> = { role: role as UserRole, isHeadHR: false };
+    if (recruitmentFacultyId !== undefined) {
+        updateData.recruitmentFacultyId = recruitmentFacultyId;
+    }
+
     return prisma.user.update({
         where: { id },
-        data: { role }
+        data: updateData,
+        include: { recruitmentFaculty: { select: { id: true, name: true } } },
     });
 };
 

@@ -10,8 +10,8 @@ export const createSabbaticalSchema = z.object({
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
-    // End date must be >= start date
-    if (end < start) return false;
+    // End date must be strictly after start date
+    if (end <= start) return false;
 
     // Start date must not be in the past
     if (start < now) return false;

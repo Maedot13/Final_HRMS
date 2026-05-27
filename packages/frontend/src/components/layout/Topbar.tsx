@@ -6,6 +6,7 @@ import apiClient from '../../api/client';
 import { notificationsApi, type Notification } from '../../api/notifications';
 import { FiBell, FiCheck, FiCheckCircle, FiInfo, FiAlertCircle, FiX } from 'react-icons/fi';
 import { formatDistanceToNow } from 'date-fns';
+import { getShortRoleLabel } from '../../utils/roleUtils';
 
 function NotificationIcon({ type }: { type: string }) {
     const t = type?.toUpperCase() ?? '';
@@ -179,9 +180,7 @@ export function Topbar() {
             <div className="flex items-center gap-3">
                 {user && (
                     <span className="text-xs font-semibold text-primary uppercase tracking-wide px-2 py-0.5 bg-primary/10 rounded">
-                        {user.role === 'ADMIN' 
-                            ? (user.scope === 'UNIVERSITY' ? 'Super Admin' : 'Campus Admin')
-                            : user.role.replace('_', ' ')}
+                        {getShortRoleLabel(user)}
                     </span>
                 )}
 

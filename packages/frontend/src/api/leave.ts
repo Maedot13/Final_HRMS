@@ -77,9 +77,16 @@ export const leaveApi = {
         apiClient.get(`/leave/balances/${employeeId}`),
 
     // File upload submit (uses FormData)
-    createWithFile: (formData: FormData) =>
+    // NOTE: Do NOT set Content-Type manually — axios must auto-generate
+    // 'multipart/form-data; boundary=xxxxx' so Multer can parse the file.
+    createWithFile: (formData: FormData, onUploadProgress?: (progressEvent: any) => void) =>
         apiClient.post('/leave/apply', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
+            headers: {
+                // Explicitly delete any default Content-Type so axios infers the
+                // correct multipart boundary from the FormData object.
+                'Content-Type': undefined,
+            },
+            onUploadProgress,
         }),
 
     // Withdraw (future)

@@ -11,6 +11,8 @@ import {
 } from '../schemas/recruitment.schema';
 import { sendError, sendSuccess, ErrorCode } from '../utils/errorHandler';
 import { getCampusScope, getCampusIdFilter } from '../lib/campusScope';
+import { UserRole } from '@hrms/types';
+import { prisma } from '../lib/prisma';
 
 export const createJobPosting = async (req: Request, res: Response) => {
     try {
@@ -36,9 +38,16 @@ export const getJobPostings = async (req: Request, res: Response) => {
         const campusCtx = getCampusScope(req);
         const campusIdFilter = getCampusIdFilter(campusCtx);
 
+        let facultyId: number | undefined;
+        if (req.user?.role === UserRole.RECRUITMENT_COMMITTEE) {
+            const u = await prisma.user.findUnique({ where: { id: req.user.userId }, select: { recruitmentFacultyId: true } });
+            facultyId = u?.recruitmentFacultyId || -1;
+        }
+
         const postings = await recruitmentService.getJobPostings({
             status: status as any,
-            departmentId: department ? parseInt(department as string) : undefined
+            departmentId: department ? parseInt(department as string) : undefined,
+            facultyId
         }, campusIdFilter);
         sendSuccess(res, postings);
     } catch (error: any) {
@@ -140,7 +149,15 @@ export const applyForJob = async (req: Request, res: Response) => {
 export const getApplicationsForJob = async (req: Request, res: Response) => {
     try {
         const id = parseInt(req.params.id);
-        const applications = await recruitmentService.getApplicationsForJob(id);
+
+        let facultyId: number | undefined;
+        if (req.user?.role === UserRole.RECRUITMENT_COMMITTEE) {
+            const u = await prisma.user.findUnique({ where: { id: req.user.userId }, select: { recruitmentFacultyId: true } });
+            // Use -1 (no match) if no faculty assigned, to prevent seeing all apps
+            facultyId = u?.recruitmentFacultyId ?? -1;
+        }
+
+        const applications = await recruitmentService.getApplicationsForJob(id, facultyId);
         sendSuccess(res, applications);
     } catch (error: any) {
         sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
@@ -161,7 +178,8 @@ export const updateApplicationStatus = async (req: Request, res: Response) => {
         });
         sendSuccess(res, application);
     } catch (error: any) {
-        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+        const statusCode = error.message.includes('not found') ? 404 : 400;
+        sendError(res, statusCode, ErrorCode.BAD_REQUEST, error.message, null, req);
     }
 };
 

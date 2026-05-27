@@ -33,10 +33,10 @@ export function RequireAuth({ children }: RequireAuthProps) {
             navigate('/super/users', { replace: true });
         }
 
-        // CLEARANCE_BODY: lock out of shared campus pages
+        // CLEARANCE_BODY: lock out of shared campus pages like contacts/departments
         if (
             user?.role === 'CLEARANCE_BODY' &&
-            (location.pathname === '/' || location.pathname === '/contacts' || location.pathname === '/departments')
+            (location.pathname === '/contacts' || location.pathname === '/departments')
         ) {
             navigate('/clearance-body', { replace: true });
         }
@@ -46,7 +46,7 @@ export function RequireAuth({ children }: RequireAuthProps) {
         return null; // Or a loading spinner
     }
 
-    if (user?.role === 'CLEARANCE_BODY' && (location.pathname === '/' || location.pathname === '/contacts' || location.pathname === '/departments')) {
+    if (user?.role === 'CLEARANCE_BODY' && (location.pathname === '/contacts' || location.pathname === '/departments')) {
         return null;
     }
 
@@ -83,14 +83,18 @@ export function RequireNoAuth({ children }: RequireNoAuthProps) {
 interface RequireRoleProps {
     children: ReactNode;
     allowedRoles: UserRole[];
+    allowHeadHR?: boolean;
 }
 
-export function RequireRole({ children, allowedRoles }: RequireRoleProps) {
+export function RequireRole({ children, allowedRoles, allowHeadHR }: RequireRoleProps) {
     const user = useAuthStore((state) => state.user);
     const navigate = useNavigate();
     const location = useLocation();
 
-    const isAllowed = user ? (allowedRoles.includes(user.role as UserRole) || (user.isHeadHR && allowedRoles.includes('HR_OFFICER'))) : false;
+    const isAllowed = user ? (
+        allowedRoles.includes(user.role as UserRole) || 
+        (user.isHeadHR && user.role !== 'SUPER_ADMIN' && (allowedRoles.includes('HR_OFFICER') || allowHeadHR))
+    ) : false;
 
     useEffect(() => {
         if (user && !isAllowed) {

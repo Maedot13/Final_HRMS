@@ -57,6 +57,8 @@ export default function ClearanceBodiesPage() {
         }
     });
 
+
+
     const closeModal = () => {
         setIsModalOpen(false);
         setEditingUnit(null);
@@ -117,7 +119,15 @@ export default function ClearanceBodiesPage() {
                         size="sm"
                         onClick={() => {
                             setEditingUnit(r);
-                            setFormData({ name: r.name, fullName: (r as any).fullName || '', description: r.description || '', priorityOrder: (r as any).priorityOrder || 0, loginId: '', loginPassword: '' });
+                            const loginId = (r as any).users && (r as any).users.length > 0 ? (r as any).users[0].employeeId : '';
+                            setFormData({ 
+                                name: r.name, 
+                                fullName: (r as any).fullName || '', 
+                                description: r.description || '', 
+                                priorityOrder: (r as any).priorityOrder || 0, 
+                                loginId, 
+                                loginPassword: '' 
+                            });
                             setIsModalOpen(true);
                         }}
                     >
@@ -208,19 +218,21 @@ export default function ClearanceBodiesPage() {
                         />
                     </div>
 
-                    {!editingUnit && (
-                        <div className="p-3 bg-gray-50 border rounded-md space-y-4">
-                            <h4 className="text-sm font-semibold text-gray-800">Clearance Body Account</h4>
-                            <p className="text-xs text-gray-500">Accounts are strictly required so that bodies can log into the dashboard securely.</p>
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-gray-700">Login ID / Username</label>
-                                <Input 
-                                    required
-                                    placeholder="e.g. IT-01"
-                                    value={formData.loginId}
-                                    onChange={(e: any) => setFormData(p => ({ ...p, loginId: e.target.value }))}
-                                />
-                            </div>
+                    <div className="p-3 bg-gray-50 border rounded-md space-y-4">
+                        <h4 className="text-sm font-semibold text-gray-800">Clearance Body Account</h4>
+                        <p className="text-xs text-gray-500">
+                            {editingUnit ? "Update the login ID/Username for this clearance body." : "Accounts are strictly required so that bodies can log into the dashboard securely."}
+                        </p>
+                        <div className="space-y-1">
+                            <label className="text-xs font-medium text-gray-700">Login ID / Username</label>
+                            <Input 
+                                required
+                                placeholder="e.g. IT-01"
+                                value={formData.loginId}
+                                onChange={(e: any) => setFormData(p => ({ ...p, loginId: e.target.value }))}
+                            />
+                        </div>
+                        {!editingUnit && (
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-gray-700">Login Password</label>
                                 <Input 
@@ -231,8 +243,8 @@ export default function ClearanceBodiesPage() {
                                     onChange={(e: any) => setFormData(p => ({ ...p, loginPassword: e.target.value }))}
                                 />
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
 
                     <div className="pt-4 flex justify-end gap-2">
                         <Button type="button" variant="ghost" onClick={closeModal}>Cancel</Button>

@@ -21,7 +21,9 @@ export const getAllUsers = async (req: Request, res: Response) => {
             search: req.query.search as string | undefined,
             role: req.query.role as string | undefined,
             status: req.query.status as string | undefined,
-            department: req.query.department as string | undefined
+            department: req.query.department as string | undefined,
+            requesterRole: req.user?.role,
+            isHeadHR: req.user?.isHeadHR
         };
 
         const users = await userManagementService.getAllUsers(campusId, page, limit, filters);
@@ -42,6 +44,15 @@ export const getUserById = async (req: Request, res: Response) => {
             return sendError(res, 404, ErrorCode.NOT_FOUND, 'User not found', null, req);
         }
         assertSameCampus(req, user.campusId);
+
+        // Block SUPER_ADMIN from viewing disallowed roles
+        if (req.user!.role === 'SUPER_ADMIN') {
+            const isAllowedRole = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.isHeadHR;
+            if (!isAllowedRole) {
+                return sendError(res, 403, ErrorCode.FORBIDDEN, 'Forbidden', null, req);
+            }
+        }
+
         sendSuccess(res, user);
     } catch (error: any) {
         if (error?.message === 'Cross-campus access denied' || error?.message === 'Missing campus context for this user') {
@@ -72,7 +83,11 @@ export const updateUserRole = async (req: Request, res: Response) => {
             return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Invalid input', validation.error.format(), req);
         }
 
-        const user = await userManagementService.updateUserRole(id, validation.data.role);
+        const user = await userManagementService.updateUserRole(id, validation.data.role, {
+            facultyId: validation.data.facultyId,
+            newFacultyName: validation.data.newFacultyName,
+            campusId: req.user?.campusId ?? undefined,
+        });
 
         // Audit log
         await auditUserUpdate(

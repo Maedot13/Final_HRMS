@@ -19,13 +19,13 @@ router.use(authenticate);
 // Employee view own appraisals
 router.get(
     '/my',
-    authorize([UserRole.EMPLOYEE, UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD]),
+    authorize([UserRole.EMPLOYEE, UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.CLEARANCE_BODY]),
     appraisalController.getMyAppraisals
 );
 
 router.get(
     '/automated-metrics',
-    authorize([UserRole.EMPLOYEE, UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD]),
+    authorize([UserRole.EMPLOYEE, UserRole.ADMIN, UserRole.HR_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.CLEARANCE_BODY]),
     appraisalController.getAutomatedMetrics
 );
 

@@ -23,16 +23,7 @@ const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     { id: 'leave', label: 'Leave Balance', icon: <FiCalendar size={15} /> },
 ];
 
-const roleLabels: Record<string, string> = {
-    SUPER_ADMIN: 'Super Admin',
-    ADMIN: 'Admin',
-    HR_OFFICER: 'HR Officer',
-    DEPARTMENT_HEAD: 'Department Head',
-    FINANCE_OFFICER: 'Finance Officer',
-    RECRUITMENT_COMMITTEE: 'Recruitment Committee',
-    CLEARANCE_BODY: 'Clearance Body',
-    EMPLOYEE: 'Employee',
-};
+import { getRoleLabel } from '../utils/roleUtils';
 
 function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
     return (
@@ -122,33 +113,7 @@ export default function ProfilePage() {
         return true;
     });
 
-    // ── Clearance Body Profile ────────────────────────────────────────────────
-    if (user?.role === 'CLEARANCE_BODY') {
-        const displayName = user.clearanceUnit?.fullName || user.clearanceUnit?.name || 'Unknown Unit';
-        return (
-            <div className="max-w-2xl mx-auto space-y-6">
-                <div className="rounded-2xl bg-gradient-to-br from-primary to-primary/70 p-8 text-white text-center shadow-lg">
-                    <div className="mx-auto h-20 w-20 bg-white/20 rounded-full flex items-center justify-center mb-4 text-3xl font-bold">
-                        {displayName[0] || 'C'}
-                    </div>
-                    <h1 className="text-2xl font-bold">{displayName}</h1>
-                    <p className="mt-1 text-white/70 text-sm">Clearance Body Account</p>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                    {[
-                        { label: 'Login ID', value: user.employeeId || '—' },
-                        { label: 'Campus', value: user.campus?.name || 'Global' },
-                        { label: 'Status', value: user.isActive ? 'Active' : 'Inactive' },
-                    ].map((item) => (
-                        <div key={item.label} className="rounded-xl bg-white border border-gray-100 shadow-sm p-4 text-center">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">{item.label}</p>
-                            <p className="mt-1 text-base font-semibold text-gray-800">{item.value}</p>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        );
-    }
+
 
     // ── No Employee Linked ────────────────────────────────────────────────────
     if (!employeeId) {
@@ -218,7 +183,7 @@ export default function ProfilePage() {
                             {user?.role && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
                                     <FiShield size={11} />
-                                    {roleLabels[user.role] ?? user.role}
+                                    {getRoleLabel(user)}
                                 </span>
                             )}
                         </div>
@@ -389,7 +354,7 @@ export default function ProfilePage() {
                         <InfoRow icon={<FiCalendar size={14} />} label="Hire Date" value={hireDate ? format(hireDate, 'MMMM d, yyyy') : undefined} />
                         <InfoRow icon={<FiClock size={14} />} label="Service Years" value={yearsOfService !== null ? `${yearsOfService} years` : undefined} />
                         <InfoRow icon={<FiHome size={14} />} label="Office Location" value={employee.officeLocation} />
-                        <InfoRow icon={<FiShield size={14} />} label="Role" value={user?.role ? (roleLabels[user.role] ?? user.role) : undefined} />
+                        <InfoRow icon={<FiShield size={14} />} label="Role" value={user ? getRoleLabel(user) : undefined} />
                     </div>
                 </div>
             )}

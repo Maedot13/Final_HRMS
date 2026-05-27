@@ -55,7 +55,7 @@ export function JobApplicationModal({ isOpen, onClose, jobId, jobTitle }: JobApp
                 <div className="bg-gray-50 border rounded-md p-3 mb-4 text-sm">
                     <h4 className="font-semibold text-gray-700 mb-2">Auto-Filled Employee Information</h4>
                     <div className="grid grid-cols-2 gap-2 text-gray-600">
-                        <div><span className="font-medium">Name:</span> {user?.name || 'N/A'}</div>
+                        <div><span className="font-medium">Name:</span> {user?.employee?.name || user?.employee?.firstName || 'N/A'}</div>
                         <div><span className="font-medium">ID:</span> {user?.employeeId || 'N/A'}</div>
                     </div>
                 </div>

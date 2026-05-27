@@ -21,7 +21,7 @@ export const registerSchema = z.object({
     employeeId: z.string().optional(),
     department: z.string().min(1, 'Department name is required').optional(),
     departmentId: z.number().int().positive().optional(),
-    role: z.nativeEnum(UserRole).optional(),
+    role: z.union([z.nativeEnum(UserRole), z.literal('HEAD_HR'), z.literal('VICE_PRESIDENT')]).optional(),
     campusId: z.number().int().positive().optional()
 });
 

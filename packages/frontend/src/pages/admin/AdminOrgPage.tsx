@@ -4,32 +4,27 @@ import { Card, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { DataTable, type Column } from '../../components/shared/DataTable';
 import { departmentApi } from '../../api/departments';
-import { usersApi } from '../../api/users';
+
 import { toast } from 'react-toastify';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 
-// Basic admin org page to manage departments within the campus
-export default function AdminOrgPage() {
+import { CollegesTab } from './org/CollegesTab';
+import { FacultiesTab } from './org/FacultiesTab';
+
+function DepartmentsTab() {
     const queryClient = useQueryClient();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingDept, setEditingDept] = useState<any>(null);
-    const [formData, setFormData] = useState({ name: '', headEmployeeId: '' });
+    const [formData, setFormData] = useState({ name: '', headEmployeeId: '', facultyId: '' });
+
+
 
     const { data: departments = [], isLoading: isDeptsLoading } = useQuery({
         queryKey: ['departments'],
         queryFn: async () => {
             const res = await departmentApi.list();
             return Array.isArray(res.data) ? res.data : [];
-        },
-    });
-
-    const { data: employees = [] } = useQuery({
-        queryKey: ['employeesListForDept'],
-        queryFn: async () => {
-            // Using users API to list available users
-            const res = await usersApi.listPaginated({ limit: 500 });
-            return res.data?.data || [];
         },
     });
 
@@ -58,41 +53,31 @@ export default function AdminOrgPage() {
     });
 
     const assignHeadMutation = useMutation({
-        mutationFn: ({ id, headEmployeeId }: { id: number, headEmployeeId: string }) => 
-            departmentApi.assignHead(id, headEmployeeId),
+        mutationFn: ({ id, employeeId }: { id: number, employeeId: string }) => departmentApi.assignHead(id, employeeId),
         onSuccess: () => {
-            toast.success('Department head assigned');
+            toast.success('Department Head assigned');
             queryClient.invalidateQueries({ queryKey: ['departments'] });
-            closeModal();
         },
-        onError: (err: any) => {
-            toast.error(err.response?.data?.message || 'Failed to assign department head');
-        }
+        onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to assign head')
     });
 
     const closeModal = () => {
         setIsModalOpen(false);
         setEditingDept(null);
-        setFormData({ name: '', headEmployeeId: '' });
+        setFormData({ name: '', headEmployeeId: '', facultyId: '' });
     };
 
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
         
         if (editingDept) {
-            // Parallel update name and head if changed
             if (formData.name && formData.name !== editingDept.name) {
                 updateMutation.mutate({ id: editingDept.id, data: { name: formData.name } });
-            }
-            if (formData.headEmployeeId && formData.headEmployeeId !== String(editingDept.headEmployeeId)) {
-                assignHeadMutation.mutate({ id: editingDept.id, headEmployeeId: formData.headEmployeeId });
-            }
-            if (!updateMutation.isPending && !assignHeadMutation.isPending) {
-                closeModal();
             }
         } else {
             createMutation.mutate({ 
                 name: formData.name
+                // facultyId: formData.facultyId ? parseInt(formData.facultyId) : undefined
             });
         }
     };
@@ -108,15 +93,7 @@ export default function AdminOrgPage() {
             header: 'Department Head',
             render: (r) => r.headEmployee ? `${r.headEmployee.name} (${r.headEmployee.employeeId})` : <span className="text-gray-400">Not assigned</span>,
         },
-        {
-            key: 'status',
-            header: 'Status',
-            render: (r) => (
-                <span className={`px-2 py-1 text-xs rounded-full ${r.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    {r.isActive ? 'Active' : 'Inactive'}
-                </span>
-            ),
-        },
+
         {
             key: 'actions',
             header: 'Actions',
@@ -129,12 +106,25 @@ export default function AdminOrgPage() {
                             setEditingDept(r);
                             setFormData({ 
                                 name: r.name, 
-                                headEmployeeId: r.headEmployeeId ? String(r.headEmployeeId) : '' 
+                                headEmployeeId: r.headEmployeeId ? String(r.headEmployeeId) : '',
+                                facultyId: r.facultyId ? String(r.facultyId) : ''
                             });
                             setIsModalOpen(true);
                         }}
                     >
                         Edit
+                    </Button>
+                    <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => {
+                            const empId = prompt("Enter Head Employee ID to assign (e.g. BDU00001):");
+                            if (empId) {
+                                assignHeadMutation.mutate({ id: r.id, employeeId: empId });
+                            }
+                        }}
+                    >
+                        Assign Head
                     </Button>
                 </div>
             ),
@@ -145,7 +135,7 @@ export default function AdminOrgPage() {
         <div className="space-y-4">
             <Card>
                 <CardHeader
-                    title="Organization Structure"
+                    title="Departments"
                     subtitle="Manage departments and assign department heads"
                     action={
                         <Button variant="primary" onClick={() => setIsModalOpen(true)}>
@@ -179,39 +169,57 @@ export default function AdminOrgPage() {
                         />
                     </div>
                     
-                    {editingDept && (
-                        <div className="space-y-1">
-                            <label className="text-sm font-medium text-gray-700">Assign Department Head</label>
-                            <select
-                                className="w-full px-3 py-2 border rounded-md"
-                                value={formData.headEmployeeId}
-                                onChange={(e) => setFormData(p => ({ ...p, headEmployeeId: e.target.value }))}
-                            >
-                                <option value="">-- No Department Head --</option>
-                                {employees.map((u: any) => (
-                                    <option key={u.id} value={u.employee?.id}>
-                                        {u.employee?.name} ({u.employeeId})
-                                    </option>
-                                ))}
-                            </select>
-                            <p className="text-xs text-gray-500 mt-1">
-                                Selecting an employee here will automatically promote them to the DEPARTMENT_HEAD role.
-                            </p>
-                        </div>
-                    )}
-
                     <div className="pt-4 flex justify-end gap-2">
                         <Button type="button" variant="ghost" onClick={closeModal}>Cancel</Button>
                         <Button 
                             type="submit" 
                             variant="primary" 
-                            disabled={createMutation.isPending || updateMutation.isPending || assignHeadMutation.isPending}
+                            disabled={createMutation.isPending || updateMutation.isPending}
                         >
                             Save
                         </Button>
                     </div>
                 </form>
             </Modal>
+        </div>
+    );
+}
+
+export default function AdminOrgPage() {
+    const [activeTab, setActiveTab] = useState<'colleges' | 'faculties' | 'departments'>('colleges');
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-2xl font-semibold text-gray-900">Organization Hierarchy</h1>
+                <p className="mt-1 text-sm text-gray-500">
+                    Manage the structure of your campus (Colleges → Faculties → Departments)
+                </p>
+            </div>
+
+            <div className="border-b border-gray-200">
+                <nav className="-mb-px flex space-x-8">
+                    {['colleges', 'faculties', 'departments'].map((tab) => (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab as any)}
+                            className={`${
+                                activeTab === tab
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                            } whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium capitalize`}
+                        >
+                            {tab}
+                        </button>
+                    ))}
+                </nav>
+            </div>
+
+            <div>
+                {activeTab === 'colleges' && <CollegesTab />}
+                {activeTab === 'faculties' && <FacultiesTab />}
+                {activeTab === 'departments' && <DepartmentsTab />}
+            </div>
         </div>
     );
 }

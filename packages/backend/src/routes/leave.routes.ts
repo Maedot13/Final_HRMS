@@ -24,7 +24,14 @@ router.use(authenticate);
  */
 router.post(
     '/apply',
-    authorize([UserRole.EMPLOYEE]),
+    authorize([
+        UserRole.EMPLOYEE,
+        UserRole.DEPARTMENT_HEAD,
+        UserRole.HR_OFFICER,
+        UserRole.ADMIN,
+        UserRole.SUPER_ADMIN,
+        UserRole.CLEARANCE_BODY,
+    ]),
     attachEmployee,
     upload.single('attachment'),
     validateBody(createLeaveRequestSchema),
@@ -36,7 +43,7 @@ router.post(
  */
 router.get(
     '/my-requests',
-    authorize([UserRole.EMPLOYEE, UserRole.HR_OFFICER, UserRole.ADMIN, UserRole.DEPARTMENT_HEAD]),
+    authorize([UserRole.EMPLOYEE, UserRole.HR_OFFICER, UserRole.ADMIN, UserRole.DEPARTMENT_HEAD, UserRole.CLEARANCE_BODY]),
     attachEmployee,
     leaveController.getMyRequests
 );

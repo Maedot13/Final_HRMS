@@ -36,7 +36,7 @@ router.patch('/:id',
 );
 
 router.patch('/:id/head',
-    authorize([UserRole.ADMIN]),
+    authorize([UserRole.ADMIN, UserRole.HR_OFFICER]),
     departmentController.assignHead
 );
 

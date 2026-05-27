@@ -14,7 +14,7 @@ const columns: Column<Department>[] = [
     {
         key: 'head',
         header: 'Head',
-        render: (r) => r.head ? `${r.head.name} (${r.head.employeeId})` : '—',
+        render: (r) => r.head ? `${r.head.name} (${r.head.employeeId})` : <span className="text-gray-400">Not assigned</span>,
     },
     {
         key: 'employees',
@@ -28,6 +28,8 @@ export default function DepartmentsPage() {
     const user = useAuthStore((state) => state.user);
     const campusId = user?.campusId;
     const [createOpen, setCreateOpen] = useState(false);
+    const [editOpen, setEditOpen] = useState(false);
+    const [editingDept, setEditingDept] = useState<Department | null>(null);
     const [createError, setCreateError] = useState<ApiError | null>(null);
 
     const { data: departments = [], isLoading } = useQuery({
@@ -50,10 +52,49 @@ export default function DepartmentsPage() {
         },
     });
 
+    const updateHeadMutation = useMutation({
+        mutationFn: ({ id, headEmployeeId }: { id: number, headEmployeeId: string }) => departmentApi.assignHead(id, headEmployeeId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['departments'] });
+            setEditOpen(false);
+            setEditingDept(null);
+            setCreateError(null);
+        },
+        onError: (err: { response?: { data?: ApiError } }) => {
+            setCreateError(err.response?.data ?? { code: 'ERROR', message: 'Failed to assign department head' });
+        },
+    });
+
     const handleCreate = async (data: { name: string; headEmployeeId?: string }) => {
         setCreateError(null);
         await createMutation.mutateAsync(data);
     };
+
+    const handleAssignHead = async (data: { name: string; headEmployeeId?: string }) => {
+        setCreateError(null);
+        if (editingDept && data.headEmployeeId !== undefined) {
+            await updateHeadMutation.mutateAsync({ id: editingDept.id, headEmployeeId: data.headEmployeeId });
+        }
+    };
+
+    const actionColumn: Column<Department> = {
+        key: 'actions',
+        header: 'Actions',
+        render: (r) => (
+            <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                    setEditingDept(r);
+                    setEditOpen(true);
+                }}
+            >
+                Assign Head
+            </Button>
+        ),
+    };
+
+    const displayColumns = user?.role === 'HR_OFFICER' ? [...columns, actionColumn] : columns;
 
     if (!campusId) {
         return (
@@ -72,14 +113,16 @@ export default function DepartmentsPage() {
                     title="Departments"
                     subtitle="Manage departments for your campus"
                     action={
-                        <Button onClick={() => setCreateOpen(true)}>
-                            Add department
-                        </Button>
+                        user?.role === 'ADMIN' && (
+                            <Button onClick={() => setCreateOpen(true)}>
+                                Add department
+                            </Button>
+                        )
                     }
                 />
             </Card>
             <DataTable
-                columns={columns}
+                columns={displayColumns}
                 data={departments}
                 isLoading={isLoading}
                 keyExtractor={(r) => r.id}
@@ -97,6 +140,27 @@ export default function DepartmentsPage() {
                     onCancel={() => { setCreateOpen(false); setCreateError(null); }}
                     apiError={createError}
                 />
+            </Modal>
+
+            <Modal
+                isOpen={editOpen}
+                onClose={() => { setEditOpen(false); setEditingDept(null); setCreateError(null); }}
+                title="Assign Department Head"
+                size="md"
+            >
+                {editingDept && (
+                    <DepartmentForm
+                        campusId={campusId}
+                        initialValues={{
+                            name: editingDept.name,
+                            headEmployeeId: editingDept.head?.employeeId || '',
+                        }}
+                        onSubmit={handleAssignHead}
+                        onCancel={() => { setEditOpen(false); setEditingDept(null); setCreateError(null); }}
+                        apiError={createError}
+                        submitLabel="Assign Head"
+                    />
+                )}
             </Modal>
         </div>
     );

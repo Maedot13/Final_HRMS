@@ -30,7 +30,7 @@ export const cacheMiddleware = (durationInSeconds: number) => {
             res.json = (body: any) => {
                 // If it's a successful 2xx response, cache it
                 if (res.statusCode >= 200 && res.statusCode < 300) {
-                    redis.setEx(key, durationInSeconds, JSON.stringify(body)).catch((err) => {
+                    redis.setEx(key, durationInSeconds, JSON.stringify(body)).catch((err: Error) => {
                         logger.error(`[Cache Middleware] Redis Set Error: ${err.message}`);
                     });
                 }

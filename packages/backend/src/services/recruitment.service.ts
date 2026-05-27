@@ -69,7 +69,7 @@ export const updateJobPosting = async (id: number, data: Partial<{
     });
 };
 
-export const getJobPostings = async (filters: { status?: JobStatus; departmentId?: number }, campusId?: number) => {
+export const getJobPostings = async (filters: { status?: JobStatus; departmentId?: number; facultyId?: number }, campusId?: number) => {
     return prisma.jobPosting.findMany({
         where: {
             ...(campusId ? {
@@ -79,7 +79,14 @@ export const getJobPostings = async (filters: { status?: JobStatus; departmentId
                 ]
             } : {}),
             ...(filters.status && { status: filters.status }),
-            ...(filters.departmentId && { departmentId: filters.departmentId })
+            ...(filters.departmentId && { departmentId: filters.departmentId }),
+            ...(filters.facultyId ? {
+                applications: {
+                    some: {
+                        assignedFacultyId: filters.facultyId
+                    }
+                }
+            } : {})
         },
         include: {
             _count: {
@@ -156,13 +163,6 @@ export const applyForJob = async (employeeId: number, userId: number, userRole: 
     const applicantUser = await prisma.user.findUnique({ where: { id: userId }, include: { employee: true } });
     if (!applicantUser || !applicantUser.employee) throw new Error('Applicant not found');
 
-    // Eligibility: Probation check (6 months)
-    const hireDate = new Date(applicantUser.employee.hireDate);
-    const probationEndDate = new Date(hireDate);
-    probationEndDate.setMonth(probationEndDate.getMonth() + 6);
-    if (new Date() < probationEndDate) {
-        throw new Error('You are not eligible: Probation period not completed');
-    }
 
     // Check for duplicate application
     const existing = await prisma.jobApplication.findUnique({
@@ -194,9 +194,13 @@ export const applyForJob = async (employeeId: number, userId: number, userRole: 
     });
 };
 
-export const getApplicationsForJob = async (jobPostingId: number) => {
+export const getApplicationsForJob = async (jobPostingId: number, facultyId?: number) => {
     return prisma.jobApplication.findMany({
-        where: { jobPostingId },
+        where: {
+            jobPostingId,
+            // If facultyId provided (committee role), only show apps assigned to them
+            ...(facultyId !== undefined ? { assignedFacultyId: facultyId } : {})
+        },
         include: {
             employee: {
                 select: {
@@ -213,7 +217,7 @@ export const getApplicationsForJob = async (jobPostingId: number) => {
 
 export const updateApplicationStatus = async (
     applicationId: number,
-    data: { status: ApplicationStatus; reviewedBy: number; reviewComment?: string }
+    data: { status: ApplicationStatus; reviewedBy: number; reviewComment?: string; assignedFacultyId?: number }
 ) => {
     const application = await prisma.jobApplication.findUnique({
         where: { id: applicationId }
@@ -221,7 +225,17 @@ export const updateApplicationStatus = async (
 
     if (!application) throw new Error('Application not found');
 
-    // Flow enforcement (simplified for service layer, controller should handle role checks)
+    // Flow enforcement for HR
+    if (data.status === ApplicationStatus.RECOMMENDED || data.status === ApplicationStatus.NOT_SELECTED || data.status === ApplicationStatus.EVALUATED) {
+        throw new Error('Only the recruitment committee can evaluate and recommend candidates');
+    }
+
+    if (data.status === ApplicationStatus.ACCEPTED || data.status === ApplicationStatus.REJECTED) {
+        if (application.status !== ApplicationStatus.PENDING) {
+            throw new Error('Can only accept or reject PENDING applications');
+        }
+    }
+
     if (data.status === ApplicationStatus.HIRED && application.status !== ApplicationStatus.RECOMMENDED) {
         throw new Error('Can only hire applicants who have been recommended by the committee');
     }
@@ -232,6 +246,7 @@ export const updateApplicationStatus = async (
             status: data.status,
             reviewedBy: data.reviewedBy,
             reviewComment: data.reviewComment,
+            ...(data.assignedFacultyId ? { assignedFacultyId: data.assignedFacultyId } : {}),
             updatedAt: new Date()
         },
         include: {
@@ -294,6 +309,11 @@ export const evaluateApplication = async (
     // Only accepted applications can be evaluated
     if (application.status !== ApplicationStatus.ACCEPTED && application.status !== ApplicationStatus.EVALUATED) {
         throw new Error('Only accepted applications can be evaluated by the committee');
+    }
+
+    // Committee can only use specific evaluation statuses
+    if (data.status !== ApplicationStatus.RECOMMENDED && data.status !== ApplicationStatus.NOT_SELECTED && data.status !== ApplicationStatus.EVALUATED) {
+        throw new Error('Committee can only set status to RECOMMENDED, NOT_SELECTED, or EVALUATED');
     }
 
     const updated = await prisma.jobApplication.update({

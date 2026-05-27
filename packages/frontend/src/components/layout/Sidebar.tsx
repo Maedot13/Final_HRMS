@@ -1,7 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore';
-import { useQuery } from '@tanstack/react-query';
-import { getPendingEvaluations } from '../../api/appraisals';
+
 import {
     FiGrid,
     FiLayers,
@@ -53,13 +52,19 @@ const navItems: NavItem[] = [
     {
         label: 'Employees',
         to: '/users',
-        roles: ['HR_OFFICER', 'DEPARTMENT_HEAD'],   // ADMIN excluded — Admin uses /admin/org for structure
+        roles: ['HR_OFFICER', 'DEPARTMENT_HEAD', 'ADMIN'], // ADMIN included to create HR Officers
         icon: <FiUsers className="w-4 h-4" />,
+    },
+    {
+        label: 'Departments',
+        to: '/departments',
+        roles: ['HR_OFFICER'], // HR Officer manages department assignments
+        icon: <FiLayers className="w-4 h-4" />,
     },
     {
         label: 'Leave',
         to: '/leave',
-        roles: ['EMPLOYEE', 'HR_OFFICER'],
+        roles: ['EMPLOYEE', 'HR_OFFICER', 'CLEARANCE_BODY'],
         icon: <FiCalendar className="w-4 h-4" />,
     },
     {
@@ -87,7 +92,7 @@ const navItems: NavItem[] = [
     {
         label: 'Recruitment',
         to: '/jobs',
-        roles: ['HR_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE', 'DEPARTMENT_HEAD'],
+        roles: ['HR_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE', 'DEPARTMENT_HEAD', 'CLEARANCE_BODY'],
         icon: <FiBriefcase className="w-4 h-4" />,
     },
 
@@ -141,11 +146,11 @@ const navItems: NavItem[] = [
         icon: <FiShield className="w-4 h-4" />,
     },
 
-    // ── Contacts directory ────────────────────────────────────────────────────
+    // ── Contacts directory — DEPARTMENT_HEAD only, HR Officer excluded ──────────
     {
         label: 'Contacts',
         to: '/contacts',
-        roles: ['HR_OFFICER', 'DEPARTMENT_HEAD'],
+        roles: ['DEPARTMENT_HEAD'],
         icon: <FiPhone className="w-4 h-4" />,
     },
 
@@ -156,16 +161,16 @@ const navItems: NavItem[] = [
         icon: <FiUser className="w-4 h-4" />,
     },
     {
+        label: 'Performance',
+        to: '/evaluations',
+        roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'CLEARANCE_BODY'],
+        icon: <FiTrendingUp className="w-4 h-4" />,
+    },
+    {
         label: 'Perf. Approvals',
         to: '/evaluations/approvals',
         roles: ['HR_OFFICER'],
         icon: <FiCheckSquare className="w-4 h-4" />,
-    },
-    {
-        label: 'Performance',
-        to: '/evaluations',
-        roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR_OFFICER'],
-        icon: <FiTrendingUp className="w-4 h-4" />,
     },
 ];
 
@@ -175,12 +180,6 @@ const linkBase = 'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-me
 
 export function Sidebar() {
     const user = useAuthStore((state) => state.user);
-
-    const { data: pending } = useQuery({
-        queryKey: ['pending-evaluations'],
-        queryFn: getPendingEvaluations,
-        enabled: !!user && user.role === 'HR_OFFICER',
-    });
 
     const filteredItems = navItems.filter((item) => {
         if (!user) return false;
@@ -195,6 +194,16 @@ export function Sidebar() {
         // Extra protection: Only show 'Campuses' and 'Privileges' to University-scoped Admins
         if (['Campuses', 'Privileges'].includes(item.label)) {
             return (hasRole || hasPriv) && user.scope === 'UNIVERSITY';
+        }
+
+        if (user.isHeadHR) {
+            const excludedForHeadHR = [
+                'Employees', 'Departments', 'Leave', 'Clearance', 'Recruitment', 
+                'Payroll', 'Audit Logs', 'Performance', 'Perf. Approvals', 'Contacts'
+            ];
+            if (excludedForHeadHR.includes(item.label)) {
+                return false;
+            }
         }
 
         return hasRole || hasPriv;
@@ -213,26 +222,21 @@ export function Sidebar() {
                                 to={item.to}
                                 end={item.to === '/' || item.to === '/evaluations'}
                                 className={({ isActive }) =>
-                                    `${linkBase} ${isActive ? activeClass : inactiveClass} ${item.label === 'Perf. Approvals' ? 'w-full' : ''}`
+                                    `${linkBase} ${isActive ? activeClass : inactiveClass}`
                                 }
                             >
                                 {item.icon}
                                 <span className="flex-1">
-                                    {item.to === '/jobs' && user?.role === 'EMPLOYEE'
+                                    {item.to === '/jobs' && (user?.role === 'EMPLOYEE' || user?.role === 'CLEARANCE_BODY')
                                         ? 'Internal Careers'
                                         : item.label}
                                 </span>
-                                {item.label === 'Perf. Approvals' && pending && pending.length > 0 && (
-                                    <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                                        {pending.length}
-                                    </span>
-                                )}
                             </NavLink>
                         </li>
                     ))}
 
                     {/* ── Head HR section (isHeadHR flag) ──────────────────── */}
-                    {user?.isHeadHR && (
+                    {user?.isHeadHR && user?.role !== 'SUPER_ADMIN' && (
                         <div className="pt-4 mt-4 border-t border-gray-200">
                             <span className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                 Head HR Control
@@ -244,6 +248,7 @@ export function Sidebar() {
                                 <li><NavLink to="/hr/payroll" className={({ isActive }) => `${linkBase} ${isActive ? activeClass : inactiveClass}`}><FiGrid className="w-4 h-4" /> Payroll</NavLink></li>
                                 <li><NavLink to="/hr/clearance" className={({ isActive }) => `${linkBase} ${isActive ? activeClass : inactiveClass}`}><FiCheckSquare className="w-4 h-4" /> Clearance</NavLink></li>
                                 <li><NavLink to="/hr/experience" className={({ isActive }) => `${linkBase} ${isActive ? activeClass : inactiveClass}`}><FiBriefcase className="w-4 h-4" /> Experience</NavLink></li>
+                                <li><NavLink to="/admin/privileges" className={({ isActive }) => `${linkBase} ${isActive ? activeClass : inactiveClass}`}><FiShield className="w-4 h-4" /> AVP Management</NavLink></li>
                             </ul>
                         </div>
                     )}

@@ -9,6 +9,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { FormField } from '../../components/shared/FormField';
+import { useAuthStore } from '../../store/useAuthStore';
 
 const changePasswordSchema = z
     .object({
@@ -25,6 +26,10 @@ type ChangePasswordValues = z.infer<typeof changePasswordSchema>;
 
 export function ChangePasswordForm() {
     const navigate = useNavigate();
+    const setAuth = useAuthStore((state) => state.setAuth);
+    const storeUser = useAuthStore((state) => state.user);
+    const updateUser = useAuthStore((state) => state.updateUser);
+    const logout = useAuthStore((state) => state.logout);
     const [formError, setFormError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -47,12 +52,26 @@ export function ChangePasswordForm() {
         setSuccessMessage(null);
 
         try {
-            await apiClient.post('/auth/change-password', {
+            const res = await apiClient.post<{ token: string; refreshToken: string }>('/auth/change-password', {
                 currentPassword: values.currentPassword,
                 newPassword: values.newPassword,
             });
 
             setSuccessMessage('Password changed successfully. You can now continue to the dashboard.');
+
+            // ✅ Update the store with fresh tokens (mustChangePassword: false is now baked in the new JWT)
+            const data = (res as any).data?.data ?? (res as any).data;
+            if (data?.token && data?.refreshToken && storeUser) {
+                setAuth(
+                    { ...storeUser, mustChangePassword: false },
+                    data.token,
+                    data.refreshToken
+                );
+            } else {
+                // Fallback: just patch the user object in the store
+                updateUser({ mustChangePassword: false });
+            }
+
             reset({
                 currentPassword: '',
                 newPassword: '',
@@ -131,6 +150,13 @@ export function ChangePasswordForm() {
                 <Button type="submit" fullWidth isLoading={isSubmitting}>
                     Change password
                 </Button>
+                <button
+                    type="button"
+                    onClick={() => { logout(); navigate('/login', { replace: true }); }}
+                    className="w-full text-center text-sm text-gray-500 hover:text-gray-700 underline underline-offset-2 mt-1"
+                >
+                    Back to login
+                </button>
             </form>
         </Card>
     );
