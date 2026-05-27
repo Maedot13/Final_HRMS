@@ -41,7 +41,7 @@ rm -rf node_modules
 
 # Install production dependencies natively inside packages/backend
 echo "Installing production dependencies locally..."
-npm install --omit=dev
+npm install --omit=dev --no-package-lock
 
 # Restore package.json to leave the repo clean
 mv ../../package.json.bak ../../package.json
