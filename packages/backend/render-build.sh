@@ -13,10 +13,13 @@ npm install --include=dev
 echo "2. Generating Prisma Client..."
 npm run prisma:generate --workspace=packages/backend
 
-echo "3. Building Backend..."
+echo "3. Building Types..."
+npm run build --workspace=packages/types
+
+echo "4. Building Backend..."
 npm run build:backend
 
-echo "4. Deploying Migrations..."
+echo "5. Deploying Migrations..."
 npm run migrate:deploy --workspace=packages/backend
 
 echo "Build complete!"
