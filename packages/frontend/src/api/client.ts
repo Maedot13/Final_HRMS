@@ -3,13 +3,10 @@ import { useAuthStore } from '../store/useAuthStore';
 
 const defaultBase = import.meta.env.DEV ? '/api/v1' : 'https://final-hrms-ty3d.onrender.com/api/v1';
 
-let resolvedBaseUrl = import.meta.env.VITE_API_BASE_URL;
-if (!import.meta.env.DEV && resolvedBaseUrl && resolvedBaseUrl.startsWith('/')) {
-    resolvedBaseUrl = 'https://final-hrms-ty3d.onrender.com/api/v1';
-}
+let resolvedBaseUrl = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE_URL || defaultBase) : 'https://final-hrms-ty3d.onrender.com/api/v1';
 
 const apiClient = axios.create({
-    baseURL: resolvedBaseUrl || defaultBase,
+    baseURL: resolvedBaseUrl,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -23,12 +20,7 @@ const getCsrfToken = async () => {
     if (csrfToken) return csrfToken;
     if (csrfTokenPromise) return csrfTokenPromise;
 
-    const defaultBase = import.meta.env.DEV ? '/api/v1' : 'https://final-hrms-ty3d.onrender.com/api/v1';
-    let resolvedBaseUrl = import.meta.env.VITE_API_BASE_URL;
-    if (!import.meta.env.DEV && resolvedBaseUrl && resolvedBaseUrl.startsWith('/')) {
-        resolvedBaseUrl = 'https://final-hrms-ty3d.onrender.com/api/v1';
-    }
-    const base = resolvedBaseUrl || defaultBase;
+    const base = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE_URL || '/api/v1') : 'https://final-hrms-ty3d.onrender.com/api/v1';
     csrfTokenPromise = axios.get(`${base}/csrf-token`, { withCredentials: true }).then(res => {
         csrfToken = res.data.csrfToken;
         return csrfToken as string;
@@ -72,12 +64,7 @@ apiClient.interceptors.response.use(
                 const refreshToken = useAuthStore.getState().refreshToken;
                 const user = useAuthStore.getState().user;
                 if (refreshToken && user) {
-                    const defaultBase = import.meta.env.DEV ? '/api/v1' : 'https://final-hrms-ty3d.onrender.com/api/v1';
-                    let resolvedBaseUrl = import.meta.env.VITE_API_BASE_URL;
-                    if (!import.meta.env.DEV && resolvedBaseUrl && resolvedBaseUrl.startsWith('/')) {
-                        resolvedBaseUrl = 'https://final-hrms-ty3d.onrender.com/api/v1';
-                    }
-                    const base = resolvedBaseUrl || defaultBase;
+                    const base = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE_URL || '/api/v1') : 'https://final-hrms-ty3d.onrender.com/api/v1';
                     const res = await axios.post(`${base}/auth/refresh`, { refreshToken });
                     const { token: accessToken, refreshToken: newRefreshToken } = res.data;
 
