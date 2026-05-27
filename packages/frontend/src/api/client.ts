@@ -3,8 +3,13 @@ import { useAuthStore } from '../store/useAuthStore';
 
 const defaultBase = import.meta.env.DEV ? '/api/v1' : 'https://final-hrms-ty3d.onrender.com/api/v1';
 
+let resolvedBaseUrl = import.meta.env.VITE_API_BASE_URL;
+if (!import.meta.env.DEV && resolvedBaseUrl && resolvedBaseUrl.startsWith('/')) {
+    resolvedBaseUrl = 'https://final-hrms-ty3d.onrender.com/api/v1';
+}
+
 const apiClient = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || defaultBase,
+    baseURL: resolvedBaseUrl || defaultBase,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -19,7 +24,11 @@ const getCsrfToken = async () => {
     if (csrfTokenPromise) return csrfTokenPromise;
 
     const defaultBase = import.meta.env.DEV ? '/api/v1' : 'https://final-hrms-ty3d.onrender.com/api/v1';
-    const base = import.meta.env.VITE_API_BASE_URL || defaultBase;
+    let resolvedBaseUrl = import.meta.env.VITE_API_BASE_URL;
+    if (!import.meta.env.DEV && resolvedBaseUrl && resolvedBaseUrl.startsWith('/')) {
+        resolvedBaseUrl = 'https://final-hrms-ty3d.onrender.com/api/v1';
+    }
+    const base = resolvedBaseUrl || defaultBase;
     csrfTokenPromise = axios.get(`${base}/csrf-token`, { withCredentials: true }).then(res => {
         csrfToken = res.data.csrfToken;
         return csrfToken as string;
@@ -64,7 +73,11 @@ apiClient.interceptors.response.use(
                 const user = useAuthStore.getState().user;
                 if (refreshToken && user) {
                     const defaultBase = import.meta.env.DEV ? '/api/v1' : 'https://final-hrms-ty3d.onrender.com/api/v1';
-                    const base = import.meta.env.VITE_API_BASE_URL || defaultBase;
+                    let resolvedBaseUrl = import.meta.env.VITE_API_BASE_URL;
+                    if (!import.meta.env.DEV && resolvedBaseUrl && resolvedBaseUrl.startsWith('/')) {
+                        resolvedBaseUrl = 'https://final-hrms-ty3d.onrender.com/api/v1';
+                    }
+                    const base = resolvedBaseUrl || defaultBase;
                     const res = await axios.post(`${base}/auth/refresh`, { refreshToken });
                     const { token: accessToken, refreshToken: newRefreshToken } = res.data;
 
