@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-echo "Starting Render build from packages/backend..."
-
-# Render puts us in packages/backend, but we MUST run npm install from the repo root
-# so that it understands NPM workspaces and installs @hrms/types correctly!
-cd ../../
+echo "Starting Render build from monorepo root..."
 
 echo "1. Installing dependencies from monorepo root..."
 npm install --include=dev
