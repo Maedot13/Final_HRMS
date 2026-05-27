@@ -21,13 +21,30 @@ npm run build:backend
 echo "Deploying Migrations..."
 npm run migrate:deploy --workspace=packages/backend
 
-# 2. THE CRITICAL FIX FOR RENDER:
-# Because you set the Render Root Directory to `packages/backend`, Render will delete the 
-# root `node_modules` right after this script finishes. Since NPM workspaces stores Express, 
-# Prisma, and @hrms/types in the root, your app will crash when it starts.
-# To fix this, we physically copy the entire resolved root node_modules directly into the backend!
-echo "Copying resolved root node_modules into backend to prevent runtime crash..."
-rm -rf packages/backend/node_modules
-cp -RL node_modules packages/backend/node_modules
+# 2. ISOLATION FIX
+echo "Isolating backend for Render..."
 
-echo "Build complete! Backend is ready to run in isolation."
+# Pack the types package into a tarball
+cd packages/types
+npm pack
+mv hrms-types-*.tgz ../backend/hrms-types.tgz
+cd ../backend
+
+# Move the root package.json temporarily so NPM doesn't see the workspace
+mv ../../package.json ../../package.json.bak
+
+# Update package.json to point to the packed tarball instead of workspace
+sed -i 's/"@hrms\/types": "^1.0.0"/"@hrms\/types": "file:.\/hrms-types.tgz"/g' package.json
+
+# Remove the symlinked node_modules
+rm -rf node_modules
+
+# Install production dependencies natively inside packages/backend
+echo "Installing production dependencies locally..."
+npm install --omit=dev
+
+# Restore package.json to leave the repo clean
+mv ../../package.json.bak ../../package.json
+sed -i 's/"@hrms\/types": "file:.\/hrms-types.tgz"/"@hrms\/types": "^1.0.0"/g' package.json
+
+echo "Build complete! Backend is perfectly isolated and ready to run."
