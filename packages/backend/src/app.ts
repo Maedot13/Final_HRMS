@@ -42,6 +42,7 @@ import financeRoutes from './routes/finance.routes';
 // import './workers/notification.worker';
 
 const app = express();
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(helmet());
@@ -128,7 +129,13 @@ app.get('/health', async (req, res) => {
 });
 
 // CSRF Protection
-const csrfProtection = csrf({ cookie: true });
+const csrfProtection = csrf({
+    cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    },
+});
 
 // Endpoint to get CSRF token
 app.get('/api/v1/csrf-token', csrfProtection, (req, res) => {
