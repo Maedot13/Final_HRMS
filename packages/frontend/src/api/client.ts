@@ -1,15 +1,13 @@
+// ✅ FIXED client.ts
 import axios, { AxiosError } from 'axios';
 import { useAuthStore } from '../store/useAuthStore';
 
-const defaultBase = import.meta.env.DEV ? '/api/v1' : 'https://final-hrms-ty3d.onrender.com/api/v1';
-
-let resolvedBaseUrl = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE_URL || defaultBase) : 'https://final-hrms-ty3d.onrender.com/api/v1';
+// Single source of truth — set VITE_API_URL in Vercel dashboard
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://final-hrms-ty3d.onrender.com/api/v1';
 
 const apiClient = axios.create({
-    baseURL: resolvedBaseUrl,
-    headers: {
-        'Content-Type': 'application/json',
-    },
+    baseURL: BASE_URL,
+    headers: { 'Content-Type': 'application/json' },
     withCredentials: true,
 });
 
@@ -20,13 +18,12 @@ const getCsrfToken = async () => {
     if (csrfToken) return csrfToken;
     if (csrfTokenPromise) return csrfTokenPromise;
 
-    const base = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE_URL || '/api/v1') : 'https://final-hrms-ty3d.onrender.com/api/v1';
-    csrfTokenPromise = axios.get(`${base}/csrf-token`, { withCredentials: true }).then(res => {
-        csrfToken = res.data.csrfToken;
-        return csrfToken as string;
-    }).finally(() => {
-        csrfTokenPromise = null;
-    });
+    csrfTokenPromise = axios.get(`${BASE_URL}/csrf-token`, { withCredentials: true })
+        .then(res => {
+            csrfToken = res.data.csrfToken;
+            return csrfToken as string;
+        })
+        .finally(() => { csrfTokenPromise = null; });
 
     return csrfTokenPromise;
 };
@@ -37,16 +34,14 @@ apiClient.interceptors.request.use(
         if (token && config.headers) {
             config.headers.Authorization = `Bearer ${token}`;
         }
-
         const isMutation = ['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase() || '');
         if (isMutation) {
-            const token = await getCsrfToken();
-            if (token && config.headers) {
-                config.headers['X-CSRF-Token'] = token;
-                config.headers['csrf-token'] = token;
+            const csrf = await getCsrfToken();
+            if (csrf && config.headers) {
+                config.headers['X-CSRF-Token'] = csrf;
+                config.headers['csrf-token'] = csrf;
             }
         }
-
         return config;
     },
     (error) => Promise.reject(error)
@@ -55,25 +50,16 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
     (response) => response,
     async (error: AxiosError) => {
-        const originalRequest = error.config;
+        const originalRequest = error.config as typeof error.config & { _retry?: boolean };
 
-        // Handle 401 Unauthorized
-        if (error.response?.status === 401 && originalRequest && !(originalRequest as typeof originalRequest & { _retry?: boolean })._retry) {
-            (originalRequest as typeof originalRequest & { _retry?: boolean })._retry = true;
+        if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+            originalRequest._retry = true;
             try {
-                const refreshToken = useAuthStore.getState().refreshToken;
-                const user = useAuthStore.getState().user;
+                const { refreshToken, user } = useAuthStore.getState();
                 if (refreshToken && user) {
-                    const base = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE_URL || '/api/v1') : 'https://final-hrms-ty3d.onrender.com/api/v1';
-                    const res = await axios.post(`${base}/auth/refresh`, { refreshToken });
+                    const res = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
                     const { token: accessToken, refreshToken: newRefreshToken } = res.data;
-
-                    useAuthStore.getState().setAuth(
-                        user,
-                        accessToken,
-                        newRefreshToken
-                    );
-
+                    useAuthStore.getState().setAuth(user, accessToken, newRefreshToken);
                     if (originalRequest.headers) {
                         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                     }
@@ -86,7 +72,6 @@ apiClient.interceptors.response.use(
             }
         }
 
-        // Handle 403 Force Password Change
         if (error.response?.status === 403) {
             const data = error.response.data as { code?: string };
             if (data?.code === 'PASSWORD_CHANGE_REQUIRED') {

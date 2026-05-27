@@ -45,11 +45,14 @@ const app = express();
 
 // Middleware
 app.use(helmet());
+// ✅ FIXED app.ts
 app.use(cors({
     origin: function (origin, callback) {
-        if (!origin) return callback(null, true);
-        if (process.env.CORS_ORIGIN) return callback(null, process.env.CORS_ORIGIN);
-        return callback(null, true);
+        const allowed = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim());
+        if (!origin || allowed.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(new Error(`CORS blocked: ${origin}`));
     },
     credentials: true
 }));
@@ -190,8 +193,8 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
     // Prisma Connection/Schema Errors
     if (
-        err.name === 'PrismaClientInitializationError' || 
-        err.code === 'P1001' || 
+        err.name === 'PrismaClientInitializationError' ||
+        err.code === 'P1001' ||
         err.message?.includes('not exist in the current database') ||
         err.message?.includes('ETIMEDOUT')
     ) {
@@ -248,9 +251,9 @@ if (process.env.NODE_ENV !== 'test') {
     setInterval(() => {
         const backendUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 3000}`;
         const url = `${backendUrl}/health`;
-        
+
         logger.info(`[Keep-Alive] Sending ping to ${url}`);
-        
+
         const client = url.startsWith('https') ? require('https') : require('http');
         client.get(url, (res: any) => {
             if (res.statusCode === 200) {
