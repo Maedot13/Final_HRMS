@@ -1,8 +1,10 @@
 import axios, { AxiosError } from 'axios';
 import { useAuthStore } from '../store/useAuthStore';
 
+const defaultBase = import.meta.env.DEV ? '/api/v1' : 'https://final-hrms-ty3d.onrender.com/api/v1';
+
 const apiClient = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
+    baseURL: import.meta.env.VITE_API_BASE_URL || defaultBase,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -16,7 +18,8 @@ const getCsrfToken = async () => {
     if (csrfToken) return csrfToken;
     if (csrfTokenPromise) return csrfTokenPromise;
 
-    const base = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+    const defaultBase = import.meta.env.DEV ? '/api/v1' : 'https://final-hrms-ty3d.onrender.com/api/v1';
+    const base = import.meta.env.VITE_API_BASE_URL || defaultBase;
     csrfTokenPromise = axios.get(`${base}/csrf-token`, { withCredentials: true }).then(res => {
         csrfToken = res.data.csrfToken;
         return csrfToken as string;
@@ -60,7 +63,8 @@ apiClient.interceptors.response.use(
                 const refreshToken = useAuthStore.getState().refreshToken;
                 const user = useAuthStore.getState().user;
                 if (refreshToken && user) {
-                    const base = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+                    const defaultBase = import.meta.env.DEV ? '/api/v1' : 'https://final-hrms-ty3d.onrender.com/api/v1';
+                    const base = import.meta.env.VITE_API_BASE_URL || defaultBase;
                     const res = await axios.post(`${base}/auth/refresh`, { refreshToken });
                     const { token: accessToken, refreshToken: newRefreshToken } = res.data;
 
