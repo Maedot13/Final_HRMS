@@ -46,7 +46,11 @@ const app = express();
 // Middleware
 app.use(helmet());
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+        if (process.env.CORS_ORIGIN) return callback(null, process.env.CORS_ORIGIN);
+        return callback(null, true);
+    },
     credentials: true
 }));
 app.use(express.json());
@@ -236,6 +240,29 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
         req
     );
 });
+
+// Render Keep-Alive Ping (prevents free tier sleep)
+// Render sleeps after 15 minutes of inactivity. Pinging every 12 minutes keeps it awake.
+if (process.env.NODE_ENV !== 'test') {
+    const PING_INTERVAL = 12 * 60 * 1000; // 12 minutes
+    setInterval(() => {
+        const backendUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 3000}`;
+        const url = `${backendUrl}/health`;
+        
+        logger.info(`[Keep-Alive] Sending ping to ${url}`);
+        
+        const client = url.startsWith('https') ? require('https') : require('http');
+        client.get(url, (res: any) => {
+            if (res.statusCode === 200) {
+                logger.info(`[Keep-Alive] Ping successful`);
+            } else {
+                logger.warn(`[Keep-Alive] Ping returned status ${res.statusCode}`);
+            }
+        }).on('error', (err: any) => {
+            logger.error(`[Keep-Alive] Ping failed: ${err.message}`);
+        });
+    }, PING_INTERVAL);
+}
 
 export default app;
 
