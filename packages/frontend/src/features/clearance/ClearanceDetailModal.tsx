@@ -76,7 +76,7 @@ export function ClearanceDetailModal({ isOpen, onClose, requestId }: Props) {
 
 
 
-    // Group checks by campus name
+    // Group checks by campus name, sorted by priorityOrder, with computed displayOrder
     const groupedByCampus: Record<string, any[]> = {};
     if (request?.checks) {
         for (const check of request.checks) {
@@ -84,13 +84,20 @@ export function ClearanceDetailModal({ isOpen, onClose, requestId }: Props) {
             if (!groupedByCampus[campusName]) groupedByCampus[campusName] = [];
             groupedByCampus[campusName].push(check);
         }
-        // Sort within each campus by priorityOrder, then by id for stability
+        // Sort within each campus by priorityOrder, then assign a dense displayOrder (1-N).
+        // Duplicate priorityOrder values share the same display step (parallel).
         for (const campus of Object.keys(groupedByCampus)) {
-            groupedByCampus[campus].sort((a: any, b: any) => {
-                const pDiff = (a.unit?.priorityOrder ?? 0) - (b.unit?.priorityOrder ?? 0);
-                if (pDiff !== 0) return pDiff;
-                return (a.unit?.id ?? 0) - (b.unit?.id ?? 0);
-            });
+            groupedByCampus[campus].sort(
+                (a: any, b: any) => (a.unit?.priorityOrder ?? 0) - (b.unit?.priorityOrder ?? 0)
+            );
+            // Dense rank: same priorityOrder → same step number
+            let step = 0;
+            let lastOrder: number | null = null;
+            for (const check of groupedByCampus[campus]) {
+                const order = check.unit?.priorityOrder ?? 0;
+                if (order !== lastOrder) { step++; lastOrder = order; }
+                check._displayStep = step;
+            }
         }
     }
 
@@ -179,7 +186,7 @@ export function ClearanceDetailModal({ isOpen, onClose, requestId }: Props) {
                                             <span>Action</span>
                                         </div>
 
-                                        {checks.map((check: any, index: number) => (
+                                        {checks.map((check: any) => (
                                             <div key={check.unitId}>
                                                 <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center px-4 py-3 hover:bg-gray-50 transition-colors">
                                                     {/* Unit name + comment */}
@@ -194,9 +201,9 @@ export function ClearanceDetailModal({ isOpen, onClose, requestId }: Props) {
                                                         )}
                                                     </div>
 
-                                                    {/* Priority badge */}
-                                                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded font-mono" title={`Priority: ${check.unit?.priorityOrder ?? 0}`}>
-                                                        Seq {index + 1}
+                                                    {/* Display step badge — sequential 1-N, shared for parallel units */}
+                                                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded font-mono">
+                                                        Step {check._displayStep ?? (check.unit?.displayOrder ?? check.unit?.priorityOrder ?? 0)}
                                                     </span>
 
                                                     {/* Status */}

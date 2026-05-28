@@ -92,8 +92,16 @@ export default function ClearanceBodiesPage() {
         },
         {
             key: 'priorityOrder',
-            header: 'Order (Seq)',
-            render: (r: any) => r.priorityOrder || 0,
+            header: 'Step (Seq)',
+            render: (r: any) => (
+                <span className="font-mono text-sm">
+                    {r.displayOrder ?? r.priorityOrder ?? 0}
+                    {/* show raw value as subscript hint when duplicates exist */}
+                    {r.displayOrder !== undefined && r.displayOrder !== (r.priorityOrder ?? 0) && (
+                        <span className="text-[10px] text-gray-400 ml-1">(raw: {r.priorityOrder})</span>
+                    )}
+                </span>
+            ),
         },
         {
             key: 'status',
@@ -216,6 +224,9 @@ export default function ClearanceBodiesPage() {
                             value={formData.priorityOrder}
                             onChange={(e: any) => setFormData(p => ({ ...p, priorityOrder: parseInt(e.target.value) || 0 }))}
                         />
+                        <p className="text-xs text-gray-400 mt-0.5">
+                            Units with the same value run in <strong>parallel</strong> (same step). The displayed Step number is always normalized 1–N automatically.
+                        </p>
                     </div>
 
                     <div className="p-3 bg-gray-50 border rounded-md space-y-4">
