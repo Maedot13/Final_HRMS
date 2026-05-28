@@ -49,11 +49,15 @@ app.use(helmet());
 // ✅ FIXED app.ts
 app.use(cors({
     origin: function (origin, callback) {
-        const allowed = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim());
-        if (!origin || allowed.includes(origin)) {
+        if (!origin) return callback(null, true);
+        
+        const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim());
+        if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.startsWith('http://localhost:')) {
             return callback(null, true);
         }
-        return callback(new Error(`CORS blocked: ${origin}`));
+        
+        logger.warn(`CORS blocked request from origin: ${origin}`);
+        return callback(null, false); // Block without throwing 500
     },
     credentials: true
 }));
