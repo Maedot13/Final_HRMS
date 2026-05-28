@@ -274,7 +274,6 @@ export const getDeptHeadPending = async (headDepartmentId: number | null) => {
 export const getHROfficerPending = async (campusId: number | null) => {
     return prisma.leaveRequest.findMany({
         where: {
-            status: LeaveStatus.PENDING,
             currentStage: LeaveStage.HR_OFFICER,
             ...(campusId ? { campusId } : {}),
         },
@@ -290,7 +289,6 @@ export const getHROfficerPending = async (campusId: number | null) => {
 export const getDeanPending = async (campusId: number | null) => {
     return prisma.leaveRequest.findMany({
         where: {
-            status: LeaveStatus.PENDING,
             currentStage: LeaveStage.DEAN,
             leaveType: { in: [LeaveType.SABBATICAL, LeaveType.RESEARCH, LeaveType.UNPAID] },
             ...(campusId ? { campusId } : {}),
@@ -307,7 +305,6 @@ export const getDeanPending = async (campusId: number | null) => {
 export const getVPPending = async () => {
     return prisma.leaveRequest.findMany({
         where: {
-            status: LeaveStatus.PENDING,
             currentStage: LeaveStage.VICE_PRESIDENT,
             leaveType: { in: [LeaveType.SABBATICAL, LeaveType.RESEARCH, LeaveType.UNPAID] },
         },

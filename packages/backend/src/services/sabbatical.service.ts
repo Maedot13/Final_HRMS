@@ -84,7 +84,6 @@ export const getSabbaticalRequests = async (employeeId?: number, campusId?: numb
 export const getPendingRequests = async (approverDepartment: string, campusId?: number) => {
     return prisma.sabbaticalRequest.findMany({
         where: {
-            status: LeaveStatus.PENDING,
             ...(campusId ? { campusId } : {}),
             employee: {
                 deptLegacy: approverDepartment
@@ -98,7 +97,7 @@ export const getPendingRequests = async (approverDepartment: string, campusId?: 
 // For HR Officers and Admins - see all requests
 export const getAllPendingRequests = async (campusId?: number) => {
     return prisma.sabbaticalRequest.findMany({
-        where: { status: LeaveStatus.PENDING, ...(campusId ? { campusId } : {}) },
+        where: { ...(campusId ? { campusId } : {}) },
         include: { employee: true },
         orderBy: { createdAt: 'asc' }
     });

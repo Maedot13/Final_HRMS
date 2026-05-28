@@ -128,6 +128,8 @@ export const listClearanceRequests = async (params: { status?: string; campusId?
     if (params.status && params.status !== 'ALL') {
         if (params.status === 'PENDING') {
             where.status = { in: ['IN_PROGRESS', 'BODY_APPROVAL_PENDING', 'HR_APPROVAL_PENDING'] };
+        } else if (params.status === 'APPROVED') {
+            where.status = { in: ['APPROVED', 'HR_APPROVED', 'COMPLETED'] };
         } else {
             where.status = params.status;
         }
