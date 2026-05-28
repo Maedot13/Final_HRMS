@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore';
 import { Button } from '../ui/Button';
 import apiClient from '../../api/client';
@@ -124,6 +125,7 @@ export function Topbar() {
     const user = useAuthStore((state) => state.user);
     const refreshToken = useAuthStore((state) => state.refreshToken);
     const logout = useAuthStore((state) => state.logout);
+    const navigate = useNavigate();
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const bellRef = useRef<HTMLDivElement>(null);
     const queryClient = useQueryClient();
@@ -168,7 +170,7 @@ export function Topbar() {
             // Ignore logout errors
         } finally {
             logout();
-            window.location.href = '/login';
+            navigate('/login');
         }
     };
 
