@@ -177,7 +177,10 @@ export const getClearance = async (id: number) => {
                         include: { campus: { select: { name: true } } }
                     }
                 },
-                orderBy: { unit: { priorityOrder: 'asc' } }
+                orderBy: [
+                    { unit: { priorityOrder: 'asc' } },
+                    { unit: { id: 'asc' } }
+                ]
             }
         }
     });
@@ -200,14 +203,14 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
         // Enforce sequential clearance logic globally
         const currentUnit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
         if (currentUnit) {
-            // Only block if units with STRICTLY LOWER priority have non-approved non-rejected checks
-            // Units with same priority (parallel) are never a blocker
-            // Units already REJECTED don't block same-priority peers but do block higher-priority ones
             const earlierPending = await tx.clearanceCheck.count({
                 where: {
                     clearanceId,
                     status: { not: ClearanceStatus.APPROVED },
-                    unit: { priorityOrder: { lt: currentUnit.priorityOrder } }
+                    OR: [
+                        { unit: { priorityOrder: { lt: currentUnit.priorityOrder } } },
+                        { unit: { priorityOrder: currentUnit.priorityOrder, id: { lt: currentUnit.id } } }
+                    ]
                 }
             });
             if (earlierPending > 0) {
@@ -320,7 +323,10 @@ export const rejectCheck = async (clearanceId: number, unitId: number, approverI
                 where: {
                     clearanceId,
                     status: { not: ClearanceStatus.APPROVED },
-                    unit: { priorityOrder: { lt: currentUnit.priorityOrder } }
+                    OR: [
+                        { unit: { priorityOrder: { lt: currentUnit.priorityOrder } } },
+                        { unit: { priorityOrder: currentUnit.priorityOrder, id: { lt: currentUnit.id } } }
+                    ]
                 }
             });
             if (earlierPending > 0) {
