@@ -12,6 +12,13 @@ const redisUrl = process.env.REDIS_URL;
 if (redisUrl) {
     connection = new Redis(redisUrl, {
         maxRetriesPerRequest: null,
+        retryStrategy(times) {
+            if (times > 3) {
+                logger.warn('BullMQ Redis: Max retries reached, giving up.');
+                return null;
+            }
+            return Math.min(times * 100, 3000);
+        }
     });
 
     connection.on('error', (err) => {

@@ -15,6 +15,13 @@ let systemWorker: Worker | null = null;
 if (redisUrl) {
     const connection = new Redis(redisUrl, {
         maxRetriesPerRequest: null,
+        retryStrategy(times) {
+            if (times > 3) {
+                logger.warn('Worker Redis: Max retries reached, giving up.');
+                return null;
+            }
+            return Math.min(times * 100, 3000);
+        }
     });
 
     systemWorker = new Worker('SystemEvents', async (job: Job) => {

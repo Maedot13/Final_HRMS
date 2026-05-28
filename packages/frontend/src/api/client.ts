@@ -2,8 +2,10 @@
 import axios, { AxiosError } from 'axios';
 import { useAuthStore } from '../store/useAuthStore';
 
-// Single source of truth — set VITE_API_URL in Vercel dashboard
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://final-hrms-ty3d.onrender.com/api/v1';
+// Strictly force Render URL in production to bypass any Vercel misconfigurations
+const BASE_URL = import.meta.env.DEV 
+    ? (import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1') 
+    : 'https://final-hrms-ty3d.onrender.com/api/v1';
 
 const apiClient = axios.create({
     baseURL: BASE_URL,
