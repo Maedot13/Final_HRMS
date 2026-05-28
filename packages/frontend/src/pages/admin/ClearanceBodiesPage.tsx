@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -12,7 +12,7 @@ export default function ClearanceBodiesPage() {
     const queryClient = useQueryClient();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUnit, setEditingUnit] = useState<ClearanceUnit | null>(null);
-    const [formData, setFormData] = useState({ name: '', fullName: '', description: '', priorityOrder: 0, loginId: '', loginPassword: '' });
+    const [formData, setFormData] = useState({ name: '', fullName: '', description: '', priorityOrder: 1, loginId: '', loginPassword: '' });
 
     const { data: units = [], isLoading } = useQuery({
         queryKey: ['clearanceUnits'],
@@ -21,6 +21,19 @@ export default function ClearanceBodiesPage() {
             return Array.isArray(res.data) ? res.data : [];
         },
     });
+
+    // Compute the next available priority order for new units
+    const nextAvailableOrder = useMemo(() => {
+        if (units.length === 0) return 1;
+        const maxOrder = Math.max(...units.map((u: any) => u.priorityOrder || 0));
+        return maxOrder + 1;
+    }, [units]);
+
+    // Max valid priority order value (for new unit = total + 1, for edit = total)
+    const maxValidOrder = useMemo(() => {
+        const activeCount = units.filter((u: any) => u.isActive).length;
+        return editingUnit ? activeCount : activeCount + 1;
+    }, [units, editingUnit]);
 
     const createMutation = useMutation({
         mutationFn: clearanceApi.createUnit,
@@ -62,11 +75,24 @@ export default function ClearanceBodiesPage() {
     const closeModal = () => {
         setIsModalOpen(false);
         setEditingUnit(null);
-        setFormData({ name: '', fullName: '', description: '', priorityOrder: 0, loginId: '', loginPassword: '' });
+        setFormData({ name: '', fullName: '', description: '', priorityOrder: 1, loginId: '', loginPassword: '' });
+    };
+
+    const openCreateModal = () => {
+        setEditingUnit(null);
+        setFormData({ name: '', fullName: '', description: '', priorityOrder: nextAvailableOrder, loginId: '', loginPassword: '' });
+        setIsModalOpen(true);
     };
 
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Client-side validation: priority must be >= 1
+        if (!Number.isFinite(formData.priorityOrder) || formData.priorityOrder < 1) {
+            toast.error('Priority order must be a positive number starting from 1');
+            return;
+        }
+
         if (editingUnit) {
             updateMutation.mutate({ id: editingUnit.id, data: formData });
         } else {
@@ -75,6 +101,15 @@ export default function ClearanceBodiesPage() {
     };
 
     const columns: Column<ClearanceUnit>[] = [
+        {
+            key: 'priorityOrder',
+            header: 'Order',
+            render: (r: any) => (
+                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-bold">
+                    {r.priorityOrder || '—'}
+                </span>
+            ),
+        },
         {
             key: 'fullName',
             header: 'Full Name',
@@ -89,19 +124,6 @@ export default function ClearanceBodiesPage() {
             key: 'description',
             header: 'Description',
             render: (r) => r.description || '—',
-        },
-        {
-            key: 'priorityOrder',
-            header: 'Step (Seq)',
-            render: (r: any) => (
-                <span className="font-mono text-sm">
-                    {r.displayOrder ?? r.priorityOrder ?? 0}
-                    {/* show raw value as subscript hint when duplicates exist */}
-                    {r.displayOrder !== undefined && r.displayOrder !== (r.priorityOrder ?? 0) && (
-                        <span className="text-[10px] text-gray-400 ml-1">(raw: {r.priorityOrder})</span>
-                    )}
-                </span>
-            ),
         },
         {
             key: 'status',
@@ -132,7 +154,7 @@ export default function ClearanceBodiesPage() {
                                 name: r.name, 
                                 fullName: (r as any).fullName || '', 
                                 description: r.description || '', 
-                                priorityOrder: (r as any).priorityOrder || 0, 
+                                priorityOrder: (r as any).priorityOrder || 1, 
                                 loginId, 
                                 loginPassword: '' 
                             });
@@ -161,12 +183,22 @@ export default function ClearanceBodiesPage() {
                     title="Clearance Bodies"
                     subtitle="Configure departments and units involved in employee clearance"
                     action={
-                        <Button variant="primary" onClick={() => setIsModalOpen(true)}>
+                        <Button variant="primary" onClick={openCreateModal}>
                             Add New Unit
                         </Button>
                     }
                 />
             </Card>
+
+            {/* Info banner explaining priority ordering */}
+            <div className="px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700 flex items-start gap-2">
+                <span className="mt-0.5 shrink-0">ℹ️</span>
+                <span>
+                    <strong>Sequential Approval Order:</strong> Clearance units are approved in strict priority order.
+                    A unit with order 2 cannot approve until order 1 is complete, and so on.
+                    Orders must start from 1 with no gaps. The system auto-reorders when units are added or moved.
+                </span>
+            </div>
 
             <DataTable
                 columns={columns}
@@ -220,12 +252,18 @@ export default function ClearanceBodiesPage() {
                         <label className="text-sm font-medium text-gray-700">Priority Order (Sequential)</label>
                         <Input 
                             type="number"
+                            required
+                            min={1}
+                            max={maxValidOrder}
                             placeholder="e.g. 1"
                             value={formData.priorityOrder}
-                            onChange={(e: any) => setFormData(p => ({ ...p, priorityOrder: parseInt(e.target.value) || 0 }))}
+                            onChange={(e: any) => {
+                                const val = parseInt(e.target.value);
+                                setFormData(p => ({ ...p, priorityOrder: Number.isNaN(val) ? 1 : Math.max(1, val) }));
+                            }}
                         />
-                        <p className="text-xs text-gray-400 mt-0.5">
-                            Units with the same value run in <strong>parallel</strong> (same step). The displayed Step number is always normalized 1–N automatically.
+                        <p className="text-xs text-gray-500">
+                            Must be between 1 and {maxValidOrder}. Other units will shift automatically to maintain sequence.
                         </p>
                     </div>
 

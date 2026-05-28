@@ -6,25 +6,6 @@ import { canApproveForUnit } from './authorization.service';
 import { logger } from '../utils/logger';
 import { dispatchEvent, SystemEventTypes } from './eventBus.service';
 
-// ─── Dense-rank helper ───────────────────────────────────────────────────────
-/**
- * Computes a dense rank for each unit participating in a clearance.
- * Units with the same `priorityOrder` receive the SAME rank (parallel step).
- * The next distinct `priorityOrder` value gets rank + 1.
- * Returns a Map<unitId, rank> (1-based).
- */
-function computeDenseRanks(
-    checks: Array<{ unitId: number; unit: { priorityOrder: number } }>
-): Map<number, number> {
-    const uniqueOrders = [...new Set(checks.map(c => c.unit.priorityOrder))].sort((a, b) => a - b);
-    const orderToRank = new Map<number, number>(uniqueOrders.map((order, idx) => [order, idx + 1]));
-    const result = new Map<number, number>();
-    for (const c of checks) {
-        result.set(c.unitId, orderToRank.get(c.unit.priorityOrder) ?? 1);
-    }
-    return result;
-}
-
 
 // 1. Initiate Clearance
 export const initiateClearance = async (employeeId: number, reason: string, lastWorkingDay: Date) => {
@@ -216,20 +197,22 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
 
 
     return prisma.$transaction(async (tx) => {
-        // Enforce sequential clearance using dense-rank normalization.
-        // Duplicate priorityOrder values share the same rank (parallel steps).
-        // A unit at rank N cannot be evaluated until ALL units at rank < N are APPROVED.
-        const allChecks = await tx.clearanceCheck.findMany({
-            where: { clearanceId },
-            select: { unitId: true, status: true, unit: { select: { priorityOrder: true } } }
-        });
-        const rankMap = computeDenseRanks(allChecks);
-        const currentRank = rankMap.get(unitId) ?? 1;
-        const blockedByEarlier = allChecks.some(
-            c => (rankMap.get(c.unitId) ?? 1) < currentRank && c.status !== ClearanceStatus.APPROVED
-        );
-        if (blockedByEarlier) {
-            throw new Error('Sequential clearance enforcement: You cannot evaluate this check until all prior units have approved.');
+        // Enforce sequential clearance logic globally
+        const currentUnit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
+        if (currentUnit) {
+            // Only block if units with STRICTLY LOWER priority have non-approved non-rejected checks
+            // Units with same priority (parallel) are never a blocker
+            // Units already REJECTED don't block same-priority peers but do block higher-priority ones
+            const earlierPending = await tx.clearanceCheck.count({
+                where: {
+                    clearanceId,
+                    status: { not: ClearanceStatus.APPROVED },
+                    unit: { priorityOrder: { lt: currentUnit.priorityOrder } }
+                }
+            });
+            if (earlierPending > 0) {
+                throw new Error('Sequential clearance enforcement: You cannot evaluate this check until all prior units have approved.');
+            }
         }
         // Find the specific check
         const check = await tx.clearanceCheck.findUnique({
@@ -330,18 +313,19 @@ export const rejectCheck = async (clearanceId: number, unitId: number, approverI
 
 
     return prisma.$transaction(async (tx) => {
-        // Enforce sequential clearance using dense-rank normalization (same logic as approveCheck).
-        const allChecks = await tx.clearanceCheck.findMany({
-            where: { clearanceId },
-            select: { unitId: true, status: true, unit: { select: { priorityOrder: true } } }
-        });
-        const rankMap = computeDenseRanks(allChecks);
-        const currentRank = rankMap.get(unitId) ?? 1;
-        const blockedByEarlier = allChecks.some(
-            c => (rankMap.get(c.unitId) ?? 1) < currentRank && c.status !== ClearanceStatus.APPROVED
-        );
-        if (blockedByEarlier) {
-            throw new Error('Sequential clearance enforcement: You cannot evaluate this check until all prior units have approved.');
+        // Enforce sequential clearance logic globally
+        const currentUnit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
+        if (currentUnit) {
+            const earlierPending = await tx.clearanceCheck.count({
+                where: {
+                    clearanceId,
+                    status: { not: ClearanceStatus.APPROVED },
+                    unit: { priorityOrder: { lt: currentUnit.priorityOrder } }
+                }
+            });
+            if (earlierPending > 0) {
+                throw new Error('Sequential clearance enforcement: You cannot evaluate this check until all prior units have approved.');
+            }
         }
         
         // Find the specific check
@@ -418,34 +402,41 @@ export const getPendingChecksForUnit = async (unitId: number, _campusId?: number
     });
 };
 
+/**
+ * Reorder all active clearance units on a campus so priorityOrders are a
+ * gapless sequence starting from 1. Called inside transactions after any
+ * create / update that touches priorityOrder.
+ */
+const reorderCampusUnits = async (tx: any, campusId: number) => {
+    const units = await tx.clearanceUnit.findMany({
+        where: { campusId, isActive: true },
+        orderBy: { priorityOrder: 'asc' },
+        select: { id: true, priorityOrder: true }
+    });
+
+    for (let i = 0; i < units.length; i++) {
+        const expected = i + 1;
+        if (units[i].priorityOrder !== expected) {
+            await tx.clearanceUnit.update({
+                where: { id: units[i].id },
+                data: { priorityOrder: expected }
+            });
+        }
+    }
+};
+
 export const listClearanceUnits = async (campusId?: number) => {
-    const rawUnits = await prisma.clearanceUnit.findMany({
+    return prisma.clearanceUnit.findMany({
         where: {
             ...(campusId ? { campusId } : {}),
             campus: { isActive: true }
         },
-        orderBy: [
-            { priorityOrder: 'asc' },
-            { name: 'asc' },          // stable tie-break within same priorityOrder
-        ],
+        orderBy: { priorityOrder: 'asc' },
         include: {
             users: {
                 select: { employeeId: true }
             }
         }
-    });
-
-    // Compute displayOrder: a sequential 1-N label based on dense rank of priorityOrder.
-    // Units sharing the same priorityOrder receive the same rank (parallel step),
-    // the next distinct value advances the counter by 1.
-    let rank = 0;
-    let lastOrder: number | null = null;
-    return rawUnits.map(unit => {
-        if (unit.priorityOrder !== lastOrder) {
-            rank++;
-            lastOrder = unit.priorityOrder;
-        }
-        return { ...unit, displayOrder: rank };
     });
 };
 
@@ -456,7 +447,30 @@ export const createClearanceUnit = async (data: { name: string; fullName?: strin
         passwordHash = await bcrypt.hash(data.loginPassword, 10);
     }
 
+    // Validate: priorityOrder must be >= 1
+    const requestedOrder = data.priorityOrder ?? 1;
+    if (requestedOrder < 1) {
+        throw new Error('Priority order must be at least 1');
+    }
+
     return prisma.$transaction(async (tx) => {
+        // Count existing active units to clamp the requested position
+        const existingCount = await tx.clearanceUnit.count({
+            where: { campusId: data.campusId, isActive: true }
+        });
+        // New unit can be at most existingCount + 1 (appended at end)
+        const clampedOrder = Math.min(requestedOrder, existingCount + 1);
+
+        // Shift units at or after the requested position up by 1 to make room
+        await tx.clearanceUnit.updateMany({
+            where: {
+                campusId: data.campusId,
+                isActive: true,
+                priorityOrder: { gte: clampedOrder }
+            },
+            data: { priorityOrder: { increment: 1 } }
+        });
+
         const unit = await tx.clearanceUnit.create({
             data: {
                 name: data.name,
@@ -465,9 +479,12 @@ export const createClearanceUnit = async (data: { name: string; fullName?: strin
                 campusId: data.campusId,
                 isSystemGenerated: false,
                 isActive: true,
-                priorityOrder: data.priorityOrder || 0
+                priorityOrder: clampedOrder
             }
         });
+
+        // Normalize the full sequence to ensure no gaps
+        await reorderCampusUnits(tx, data.campusId);
 
         if (data.loginId) {
             const existingUser = await tx.user.findUnique({ where: { employeeId: data.loginId } });
@@ -495,7 +512,9 @@ export const createClearanceUnit = async (data: { name: string; fullName?: strin
                 });
             }
         }
-        return unit;
+
+        // Re-fetch to return the final (possibly reordered) priorityOrder
+        return tx.clearanceUnit.findUnique({ where: { id: unit.id } });
     }, { timeout: 15000 });
 };
 
@@ -506,12 +525,53 @@ export const updateClearanceUnit = async (unitId: number, data: { name?: string;
         passwordHash = await bcrypt.hash(data.loginPassword, 10);
     }
 
+    // Validate: priorityOrder must be >= 1 when provided
+    if (data.priorityOrder !== undefined && data.priorityOrder < 1) {
+        throw new Error('Priority order must be at least 1');
+    }
+
     return prisma.$transaction(async (tx) => {
         const unit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
         if (!unit) throw new Error('Clearance unit not found');
 
         if (unit.isSystemGenerated && data.name) {
             throw new Error('Cannot rename system-generated clearance units');
+        }
+
+        // If priorityOrder is changing, handle the shift logic
+        if (data.priorityOrder !== undefined && data.priorityOrder !== unit.priorityOrder) {
+            const totalUnits = await tx.clearanceUnit.count({
+                where: { campusId: unit.campusId, isActive: true }
+            });
+            const clampedOrder = Math.min(data.priorityOrder, totalUnits);
+            data.priorityOrder = Math.max(1, clampedOrder);
+
+            const oldOrder = unit.priorityOrder;
+            const newOrder = data.priorityOrder;
+
+            if (newOrder > oldOrder) {
+                // Moving down: shift units between (old, new] up by -1
+                await tx.clearanceUnit.updateMany({
+                    where: {
+                        campusId: unit.campusId,
+                        isActive: true,
+                        id: { not: unitId },
+                        priorityOrder: { gt: oldOrder, lte: newOrder }
+                    },
+                    data: { priorityOrder: { decrement: 1 } }
+                });
+            } else if (newOrder < oldOrder) {
+                // Moving up: shift units between [new, old) down by +1
+                await tx.clearanceUnit.updateMany({
+                    where: {
+                        campusId: unit.campusId,
+                        isActive: true,
+                        id: { not: unitId },
+                        priorityOrder: { gte: newOrder, lt: oldOrder }
+                    },
+                    data: { priorityOrder: { increment: 1 } }
+                });
+            }
         }
 
         const updatedUnit = await tx.clearanceUnit.update({
@@ -524,6 +584,9 @@ export const updateClearanceUnit = async (unitId: number, data: { name?: string;
                 priorityOrder: data.priorityOrder
             }
         });
+
+        // Normalize the full sequence to ensure no gaps
+        if (unit.campusId) await reorderCampusUnits(tx, unit.campusId);
 
         if (data.loginId) {
             const existingUserInUnit = await tx.user.findFirst({
@@ -574,7 +637,8 @@ export const updateClearanceUnit = async (unitId: number, data: { name?: string;
             }
         }
 
-        return updatedUnit;
+        // Re-fetch to return the final (possibly reordered) priorityOrder
+        return tx.clearanceUnit.findUnique({ where: { id: updatedUnit.id } });
     }, { timeout: 15000 });
 };
 export const deleteClearanceUnit = async (unitId: number) => {

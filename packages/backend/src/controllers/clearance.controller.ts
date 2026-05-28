@@ -383,12 +383,17 @@ export const createClearanceUnit = async (req: Request, res: Response) => {
              return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Login ID and Password strictly required for new bodies', null, req);
         }
 
+        const parsedOrder = priorityOrder ? parseInt(priorityOrder) : 1;
+        if (!Number.isFinite(parsedOrder) || parsedOrder < 1) {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Priority order must be a positive integer starting from 1', null, req);
+        }
+
         const unit = await clearanceService.createClearanceUnit({
             name,
             fullName,
             description,
             campusId: campusCtx.campusId,
-            priorityOrder: priorityOrder ? parseInt(priorityOrder) : 0,
+            priorityOrder: parsedOrder,
             loginId,
             loginPassword
         });
@@ -404,6 +409,13 @@ export const updateClearanceUnit = async (req: Request, res: Response) => {
     try {
         const id = parseInt(req.params.unitId);
         const { name, fullName, description, isActive, priorityOrder, loginId, loginPassword } = req.body;
+
+        if (priorityOrder !== undefined) {
+            const parsedOrder = parseInt(priorityOrder);
+            if (!Number.isFinite(parsedOrder) || parsedOrder < 1) {
+                return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Priority order must be a positive integer starting from 1', null, req);
+            }
+        }
         
         const unit = await clearanceService.updateClearanceUnit(id, { 
             name, 
