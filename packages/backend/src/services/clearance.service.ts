@@ -195,27 +195,21 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
 
 
     return prisma.$transaction(async (tx) => {
-        // Enforce sequential clearance logic if active
-        const reqData = await tx.clearanceRequest.findUnique({
-            where: { id: clearanceId },
-            include: { campus: { select: { isClearanceSequential: true } } }
-        });
-        if (reqData?.campus?.isClearanceSequential) {
-            const currentUnit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
-            if (currentUnit) {
-                // Only block if units with STRICTLY LOWER priority have non-approved non-rejected checks
-                // Units with same priority (parallel) are never a blocker
-                // Units already REJECTED don't block same-priority peers but do block higher-priority ones
-                const earlierPending = await tx.clearanceCheck.count({
-                    where: {
-                        clearanceId,
-                        status: { not: ClearanceStatus.APPROVED },
-                        unit: { priorityOrder: { lt: currentUnit.priorityOrder } }
-                    }
-                });
-                if (earlierPending > 0) {
-                    throw new Error('Sequential clearance enforcement: You cannot evaluate this check until all prior units have approved.');
+        // Enforce sequential clearance logic globally
+        const currentUnit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
+        if (currentUnit) {
+            // Only block if units with STRICTLY LOWER priority have non-approved non-rejected checks
+            // Units with same priority (parallel) are never a blocker
+            // Units already REJECTED don't block same-priority peers but do block higher-priority ones
+            const earlierPending = await tx.clearanceCheck.count({
+                where: {
+                    clearanceId,
+                    status: { not: ClearanceStatus.APPROVED },
+                    unit: { priorityOrder: { lt: currentUnit.priorityOrder } }
                 }
+            });
+            if (earlierPending > 0) {
+                throw new Error('Sequential clearance enforcement: You cannot evaluate this check until all prior units have approved.');
             }
         }
         // Find the specific check
@@ -317,24 +311,18 @@ export const rejectCheck = async (clearanceId: number, unitId: number, approverI
 
 
     return prisma.$transaction(async (tx) => {
-        // Enforce sequential clearance logic if active
-        const reqData = await tx.clearanceRequest.findUnique({
-            where: { id: clearanceId },
-            include: { campus: { select: { isClearanceSequential: true } } }
-        });
-        if (reqData?.campus?.isClearanceSequential) {
-            const currentUnit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
-            if (currentUnit) {
-                const earlierPending = await tx.clearanceCheck.count({
-                    where: {
-                        clearanceId,
-                        status: { not: ClearanceStatus.APPROVED },
-                        unit: { priorityOrder: { lt: currentUnit.priorityOrder } }
-                    }
-                });
-                if (earlierPending > 0) {
-                    throw new Error('Sequential clearance enforcement: You cannot evaluate this check until all prior units have approved.');
+        // Enforce sequential clearance logic globally
+        const currentUnit = await tx.clearanceUnit.findUnique({ where: { id: unitId } });
+        if (currentUnit) {
+            const earlierPending = await tx.clearanceCheck.count({
+                where: {
+                    clearanceId,
+                    status: { not: ClearanceStatus.APPROVED },
+                    unit: { priorityOrder: { lt: currentUnit.priorityOrder } }
                 }
+            });
+            if (earlierPending > 0) {
+                throw new Error('Sequential clearance enforcement: You cannot evaluate this check until all prior units have approved.');
             }
         }
         
