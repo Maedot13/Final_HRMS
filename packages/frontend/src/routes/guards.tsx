@@ -40,6 +40,11 @@ export function RequireAuth({ children }: RequireAuthProps) {
         ) {
             navigate('/clearance-body', { replace: true });
         }
+
+        // FINANCE_OFFICER: redirect to dedicated finance dashboard.
+        if (user?.role === 'FINANCE_OFFICER' && location.pathname === '/') {
+            navigate('/hr/finance', { replace: true });
+        }
     }, [isAuthenticated, user, location, navigate]);
 
     if (!isAuthenticated || (user?.mustChangePassword && location.pathname !== '/force-password-change')) {

@@ -4,6 +4,7 @@ import * as clearanceService from '../services/clearance.service';
 import { UserRole } from '@hrms/types';
 import { z } from 'zod';
 import { sanitizeInput } from '../utils/sanitize';
+import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx';
 
 import {
     initiateClearanceSchema,
@@ -291,6 +292,89 @@ export const finalApproveClearance = async (req: Request, res: Response) => {
         sendSuccess(res, result);
     } catch (error: any) {
         sendError(res, 400, ErrorCode.INTERNAL_ERROR, error.message, null, req);
+    }
+};
+
+export const generateCertificate = async (req: Request, res: Response) => {
+    try {
+        const clearanceId = parseInt(req.params.id);
+        const user = req.user;
+        if (!user) return sendError(res, 401, ErrorCode.UNAUTHORIZED, 'Unauthorized', null, req);
+
+        // Fetch clearance
+        const clearance = await clearanceService.getClearance(clearanceId);
+        if (!clearance) return sendError(res, 404, ErrorCode.NOT_FOUND, 'Clearance request not found', null, req);
+
+        // Check if final status is COMPLETED
+        if (clearance.status !== 'COMPLETED') {
+            return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Clearance must be fully completed to generate a certificate', null, req);
+        }
+
+        // Only Head HR (or Admin) can generate the clearance certificate
+        if (!user.isHeadHR && user.role !== UserRole.ADMIN) {
+             return sendError(res, 403, ErrorCode.FORBIDDEN, 'Only Head HR can generate the clearance certificate', null, req);
+        }
+
+        const doc = new Document({
+            sections: [
+                {
+                    properties: {},
+                    children: [
+                        new Paragraph({
+                            text: "CLEARANCE CERTIFICATE",
+                            heading: HeadingLevel.HEADING_1,
+                            alignment: AlignmentType.CENTER,
+                        }),
+                        new Paragraph({
+                            text: "Bahir Dar University",
+                            heading: HeadingLevel.HEADING_2,
+                            alignment: AlignmentType.CENTER,
+                        }),
+                        new Paragraph({ text: "" }),
+                        new Paragraph({ text: "" }),
+                        new Paragraph({
+                            text: "Employee Information",
+                            heading: HeadingLevel.HEADING_3,
+                        }),
+                        new Paragraph({
+                            children: [
+                                new TextRun({ text: "Full Name: ", bold: true }),
+                                new TextRun(clearance.employee.name),
+                            ],
+                        }),
+                        new Paragraph({
+                            children: [
+                                new TextRun({ text: "Employee ID: ", bold: true }),
+                                new TextRun(clearance.employee.employeeId),
+                            ],
+                        }),
+                        new Paragraph({
+                            children: [
+                                new TextRun({ text: "Campus: ", bold: true }),
+                                new TextRun(clearance.campus?.name || "N/A"),
+                            ],
+                        }),
+                        new Paragraph({ text: "" }),
+                        new Paragraph({ text: "" }),
+                        new Paragraph({
+                            text: "Clearance Summary",
+                            heading: HeadingLevel.HEADING_3,
+                        }),
+                        new Paragraph({
+                            text: "This is to certify that the above-named employee has successfully completed all required clearance procedures and has no outstanding obligations to the university.",
+                        }),
+                    ],
+                },
+            ],
+        });
+
+        const buffer = await Packer.toBuffer(doc);
+
+        res.setHeader('Content-Disposition', `attachment; filename=Clearance_Certificate_${clearance.employee.employeeId}.docx`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.send(buffer);
+    } catch (error: any) {
+        sendError(res, 500, ErrorCode.INTERNAL_ERROR, error.message, null, req);
     }
 };
 

@@ -76,7 +76,7 @@ export function ClearanceDetailModal({ isOpen, onClose, requestId }: Props) {
 
 
 
-    // Group checks by campus name, sorted by priorityOrder, with computed displayOrder
+    // Group checks by campus name
     const groupedByCampus: Record<string, any[]> = {};
     if (request?.checks) {
         for (const check of request.checks) {
@@ -84,20 +84,11 @@ export function ClearanceDetailModal({ isOpen, onClose, requestId }: Props) {
             if (!groupedByCampus[campusName]) groupedByCampus[campusName] = [];
             groupedByCampus[campusName].push(check);
         }
-        // Sort within each campus by priorityOrder, then assign a dense displayOrder (1-N).
-        // Duplicate priorityOrder values share the same display step (parallel).
+        // Sort within each campus by priorityOrder
         for (const campus of Object.keys(groupedByCampus)) {
-            groupedByCampus[campus].sort(
-                (a: any, b: any) => (a.unit?.priorityOrder ?? 0) - (b.unit?.priorityOrder ?? 0)
+            groupedByCampus[campus].sort((a: any, b: any) =>
+                (a.unit?.priorityOrder ?? 0) - (b.unit?.priorityOrder ?? 0)
             );
-            // Dense rank: same priorityOrder → same step number
-            let step = 0;
-            let lastOrder: number | null = null;
-            for (const check of groupedByCampus[campus]) {
-                const order = check.unit?.priorityOrder ?? 0;
-                if (order !== lastOrder) { step++; lastOrder = order; }
-                check._displayStep = step;
-            }
         }
     }
 
@@ -201,9 +192,9 @@ export function ClearanceDetailModal({ isOpen, onClose, requestId }: Props) {
                                                         )}
                                                     </div>
 
-                                                    {/* Display step badge — sequential 1-N, shared for parallel units */}
+                                                    {/* Priority badge */}
                                                     <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded font-mono">
-                                                        Step {check._displayStep ?? (check.unit?.displayOrder ?? check.unit?.priorityOrder ?? 0)}
+                                                        P{check.unit?.priorityOrder ?? 0}
                                                     </span>
 
                                                     {/* Status */}

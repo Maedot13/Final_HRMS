@@ -183,6 +183,11 @@ router.patch('/requests/:id/final-approve',
     clearanceController.finalApproveClearance
 );
 
+router.get('/requests/:id/certificate',
+    authorize([UserRole.HR_OFFICER, UserRole.ADMIN]),
+    clearanceController.generateCertificate
+);
+
 /**
  * @swagger
  * /api/v1/clearance/units/{unitId}/pending:

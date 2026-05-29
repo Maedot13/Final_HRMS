@@ -8,7 +8,7 @@ import { DataTable, type Column } from '../components/shared/DataTable';
 import { Modal } from '../components/ui/Modal';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
-import { FiCheckCircle, FiXCircle, FiClock, FiUser, FiMapPin, FiFileText } from 'react-icons/fi';
+import { FiCheckCircle, FiXCircle, FiClock, FiUser, FiMapPin, FiFileText, FiDownload } from 'react-icons/fi';
 
 export default function HeadHRClearancePage() {
     const queryClient = useQueryClient();
@@ -63,6 +63,21 @@ export default function HeadHRClearancePage() {
         }
         if (modal.requestId && modal.action) {
             approveMutation.mutate({ id: modal.requestId, action: modal.action, reason: reason || undefined });
+        }
+    };
+
+    const handleDownloadCertificate = async (requestId: number) => {
+        try {
+            const response = await clearanceApi.downloadCertificate(requestId);
+            const url = window.URL.createObjectURL(new Blob([response.data as any]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Clearance_Certificate.docx`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (error) {
+            toast.error('Failed to download certificate');
         }
     };
 
@@ -137,27 +152,41 @@ export default function HeadHRClearancePage() {
             key: 'actions',
             header: 'Actions',
             render: (r: any) => {
-                if (r.status !== 'HR_APPROVED') {
+                if (r.status !== 'HR_APPROVED' && r.status !== 'COMPLETED') {
                     return <span className="text-xs text-gray-400 italic">No action needed</span>;
                 }
                 return (
                     <div className="flex gap-2">
-                        <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => openModal(r.id, 'APPROVE', r.employee?.name || 'Employee')}
-                        >
-                            <FiCheckCircle className="w-3.5 h-3.5 mr-1" />
-                            Approve
-                        </Button>
-                        <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() => openModal(r.id, 'REJECT', r.employee?.name || 'Employee')}
-                        >
-                            <FiXCircle className="w-3.5 h-3.5 mr-1" />
-                            Reject
-                        </Button>
+                        {r.status === 'COMPLETED' && (
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => handleDownloadCertificate(r.id)}
+                            >
+                                <FiDownload className="w-3.5 h-3.5 mr-1" />
+                                Certificate
+                            </Button>
+                        )}
+                        {r.status === 'HR_APPROVED' && (
+                            <>
+                                <Button
+                                    variant="primary"
+                                    size="sm"
+                                    onClick={() => openModal(r.id, 'APPROVE', r.employee?.name || 'Employee')}
+                                >
+                                    <FiCheckCircle className="w-3.5 h-3.5 mr-1" />
+                                    Approve
+                                </Button>
+                                <Button
+                                    variant="danger"
+                                    size="sm"
+                                    onClick={() => openModal(r.id, 'REJECT', r.employee?.name || 'Employee')}
+                                >
+                                    <FiXCircle className="w-3.5 h-3.5 mr-1" />
+                                    Reject
+                                </Button>
+                            </>
+                        )}
                     </div>
                 );
             },

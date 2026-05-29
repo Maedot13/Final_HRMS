@@ -58,6 +58,9 @@ export const clearanceApi = {
     finalApprove: (requestId: number, data: { action: 'APPROVE' | 'REJECT'; reason?: string }) =>
         apiClient.patch(`/clearance/requests/${requestId}/final-approve`, data),
         
+    downloadCertificate: (requestId: number) => 
+        apiClient.get(`/clearance/requests/${requestId}/certificate`, { responseType: 'blob' }),
+
     // Campus HR - approve stage
     approveCampusHR: (requestId: number, data: { action: 'APPROVE' | 'REJECT'; notes?: string }) =>
         apiClient.patch(`/clearance/requests/${requestId}/hr-approve`, data),

@@ -207,7 +207,10 @@ export const approveCheck = async (clearanceId: number, unitId: number, approver
                 where: {
                     clearanceId,
                     status: { not: ClearanceStatus.APPROVED },
-                    unit: { priorityOrder: { lt: currentUnit.priorityOrder } }
+                    unit: { 
+                        campusId: currentUnit.campusId,
+                        priorityOrder: { lt: currentUnit.priorityOrder } 
+                    }
                 }
             });
             if (earlierPending > 0) {
@@ -320,7 +323,10 @@ export const rejectCheck = async (clearanceId: number, unitId: number, approverI
                 where: {
                     clearanceId,
                     status: { not: ClearanceStatus.APPROVED },
-                    unit: { priorityOrder: { lt: currentUnit.priorityOrder } }
+                    unit: { 
+                        campusId: currentUnit.campusId,
+                        priorityOrder: { lt: currentUnit.priorityOrder } 
+                    }
                 }
             });
             if (earlierPending > 0) {
@@ -408,21 +414,7 @@ export const getPendingChecksForUnit = async (unitId: number, _campusId?: number
  * create / update that touches priorityOrder.
  */
 const reorderCampusUnits = async (tx: any, campusId: number) => {
-    const units = await tx.clearanceUnit.findMany({
-        where: { campusId, isActive: true },
-        orderBy: { priorityOrder: 'asc' },
-        select: { id: true, priorityOrder: true }
-    });
-
-    for (let i = 0; i < units.length; i++) {
-        const expected = i + 1;
-        if (units[i].priorityOrder !== expected) {
-            await tx.clearanceUnit.update({
-                where: { id: units[i].id },
-                data: { priorityOrder: expected }
-            });
-        }
-    }
+    // No-op: We now allow shared priorities and gaps, so we don't force reordering.
 };
 
 export const listClearanceUnits = async (campusId?: number) => {
@@ -449,28 +441,11 @@ export const createClearanceUnit = async (data: { name: string; fullName?: strin
 
     // Validate: priorityOrder must be >= 1
     const requestedOrder = data.priorityOrder ?? 1;
-    if (requestedOrder < 1) {
+    if (isNaN(requestedOrder) || requestedOrder < 1) {
         throw new Error('Priority order must be at least 1');
     }
 
     return prisma.$transaction(async (tx) => {
-        // Count existing active units to clamp the requested position
-        const existingCount = await tx.clearanceUnit.count({
-            where: { campusId: data.campusId, isActive: true }
-        });
-        // New unit can be at most existingCount + 1 (appended at end)
-        const clampedOrder = Math.min(requestedOrder, existingCount + 1);
-
-        // Shift units at or after the requested position up by 1 to make room
-        await tx.clearanceUnit.updateMany({
-            where: {
-                campusId: data.campusId,
-                isActive: true,
-                priorityOrder: { gte: clampedOrder }
-            },
-            data: { priorityOrder: { increment: 1 } }
-        });
-
         const unit = await tx.clearanceUnit.create({
             data: {
                 name: data.name,
@@ -479,12 +454,9 @@ export const createClearanceUnit = async (data: { name: string; fullName?: strin
                 campusId: data.campusId,
                 isSystemGenerated: false,
                 isActive: true,
-                priorityOrder: clampedOrder
+                priorityOrder: requestedOrder
             }
         });
-
-        // Normalize the full sequence to ensure no gaps
-        await reorderCampusUnits(tx, data.campusId);
 
         if (data.loginId) {
             const existingUser = await tx.user.findUnique({ where: { employeeId: data.loginId } });
@@ -526,7 +498,7 @@ export const updateClearanceUnit = async (unitId: number, data: { name?: string;
     }
 
     // Validate: priorityOrder must be >= 1 when provided
-    if (data.priorityOrder !== undefined && data.priorityOrder < 1) {
+    if (data.priorityOrder !== undefined && (isNaN(data.priorityOrder) || data.priorityOrder < 1)) {
         throw new Error('Priority order must be at least 1');
     }
 
@@ -536,42 +508,6 @@ export const updateClearanceUnit = async (unitId: number, data: { name?: string;
 
         if (unit.isSystemGenerated && data.name) {
             throw new Error('Cannot rename system-generated clearance units');
-        }
-
-        // If priorityOrder is changing, handle the shift logic
-        if (data.priorityOrder !== undefined && data.priorityOrder !== unit.priorityOrder) {
-            const totalUnits = await tx.clearanceUnit.count({
-                where: { campusId: unit.campusId, isActive: true }
-            });
-            const clampedOrder = Math.min(data.priorityOrder, totalUnits);
-            data.priorityOrder = Math.max(1, clampedOrder);
-
-            const oldOrder = unit.priorityOrder;
-            const newOrder = data.priorityOrder;
-
-            if (newOrder > oldOrder) {
-                // Moving down: shift units between (old, new] up by -1
-                await tx.clearanceUnit.updateMany({
-                    where: {
-                        campusId: unit.campusId,
-                        isActive: true,
-                        id: { not: unitId },
-                        priorityOrder: { gt: oldOrder, lte: newOrder }
-                    },
-                    data: { priorityOrder: { decrement: 1 } }
-                });
-            } else if (newOrder < oldOrder) {
-                // Moving up: shift units between [new, old) down by +1
-                await tx.clearanceUnit.updateMany({
-                    where: {
-                        campusId: unit.campusId,
-                        isActive: true,
-                        id: { not: unitId },
-                        priorityOrder: { gte: newOrder, lt: oldOrder }
-                    },
-                    data: { priorityOrder: { increment: 1 } }
-                });
-            }
         }
 
         const updatedUnit = await tx.clearanceUnit.update({
@@ -584,9 +520,6 @@ export const updateClearanceUnit = async (unitId: number, data: { name?: string;
                 priorityOrder: data.priorityOrder
             }
         });
-
-        // Normalize the full sequence to ensure no gaps
-        if (unit.campusId) await reorderCampusUnits(tx, unit.campusId);
 
         if (data.loginId) {
             const existingUserInUnit = await tx.user.findFirst({

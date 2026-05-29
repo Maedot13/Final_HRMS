@@ -44,7 +44,7 @@ const navItems: NavItem[] = [
     {
         label: 'Dashboard',
         to: '/',
-        roles: ['HR_OFFICER', 'DEPARTMENT_HEAD', 'FINANCE_OFFICER', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE', 'CLEARANCE_BODY'],
+        roles: ['HR_OFFICER', 'DEPARTMENT_HEAD', 'RECRUITMENT_COMMITTEE', 'EMPLOYEE', 'CLEARANCE_BODY'],
         icon: <FiGrid className="w-4 h-4" />,
     },
 
